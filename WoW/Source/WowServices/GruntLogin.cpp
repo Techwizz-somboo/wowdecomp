@@ -73,7 +73,7 @@ void GruntLogin::GetLogonMethod() {
     logon.m_versionMajor = 3;
     logon.m_versionMinor = 3;
     logon.m_versionPatch = 5;
-    logon.m_build = 12340;
+    logon.m_build = 12359;
     logon.m_locale = SFile::s_locale;
     logon.m_timeZone = OsGetTimeZone();
 
