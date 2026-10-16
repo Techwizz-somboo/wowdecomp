@@ -77,7 +77,6 @@ class CM2Shared {
     /* 019C */ uint32_t m_lastUsedTime;
     /* 01A0 */ TSLink<CM2Shared> m_updateLink;
     HoT::Models::ModernModel* m_modern;
-    M2SkinSection* m_skinSectionData;
     uint32_t m_maxBones;
 
     static void LoadFailedCallback(void* param);

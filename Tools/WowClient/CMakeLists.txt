@@ -14,6 +14,7 @@ if (WOWCLIENT_OUTPUT_OVERRIDE)
 endif ()
 
 option(WOWCLIENT_CRASH_LOG "Crash logger with console window and WowClient_crash.log (re/tools/build release mode turns it off)" ON)
+option(WOWCLIENT_CONSOLE "Crash logger also opens a console window" OFF)
 set(CLIENT_TOOL_SOURCES "")
 if (WOWCLIENT_CRASH_LOG)
     list(APPEND CLIENT_TOOL_SOURCES crash_log.cpp)
@@ -37,6 +38,10 @@ target_include_directories(WowClient
 )
 
 target_link_options(WowClient PRIVATE "/INCREMENTAL:NO" "/ENTRY:start")
+
+if (WOWCLIENT_CONSOLE)
+    target_compile_definitions(WowClient PRIVATE WOWCLIENT_CONSOLE)
+endif ()
 
 target_link_libraries(WowClient
     PRIVATE

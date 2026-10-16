@@ -1337,7 +1337,26 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
         SIMD::FreeA16(this->m_skinData);
         this->m_skinData = skin;
     } else {
-        M2SkinProfile* skinData = this->m_skinData;
+        // FIX: file sections are widened into the tail of a grown skin buffer so legacy skins need no near allocation.
+        uint32_t sectionCount = this->m_skinData->m_skinSections.m_count;
+
+        if (sectionCount > size / sizeof(M2SkinSectionFile)) {
+            DebugLog("Corrupt skin profile data: %s", this->m_fileName);
+            return 0;
+        }
+
+        uint32_t tail = (size + 15) & ~15u;
+        M2SkinProfile* skinData = static_cast<M2SkinProfile*>(SIMD::AllocA16(tail + sizeof(M2SkinSection) * sectionCount, __FILE__, __LINE__));
+
+        if (!skinData) {
+            DebugLog("Corrupt skin profile data: %s", this->m_fileName);
+            return 0;
+        }
+
+        memcpy(skinData, this->m_skinData, size);
+        SIMD::FreeA16(this->m_skinData);
+        this->m_skinData = skinData;
+
         uint8_t* base = reinterpret_cast<uint8_t*>(skinData);
         M2Array<M2SkinSectionFile>& sections = reinterpret_cast<M2Array<M2SkinSectionFile>&>(skinData->m_skinSections);
 
@@ -1346,14 +1365,8 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
             return 0;
         }
 
-        // FIX: file sections are widened into the runtime layout with the stock id and starts.
         if (sections.m_count) {
-            M2SkinSection* runtime = static_cast<M2SkinSection*>(AllocNear(&skinData->m_skinSections, sizeof(M2SkinSection) * sections.m_count));
-
-            if (!runtime) {
-                DebugLog("Corrupt skin profile data: %s", this->m_fileName);
-                return 0;
-            }
+            M2SkinSection* runtime = reinterpret_cast<M2SkinSection*>(base + tail);
 
             for (uint32_t i = 0; i < sections.m_count; i++) {
                 const M2SkinSectionFile& file = sections[i];
@@ -1372,7 +1385,6 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
                 section.m_sortRadius = file.m_sortRadius;
             }
 
-            this->m_skinSectionData = runtime;
             skinData->m_skinSections.Set(runtime);
         }
     }
@@ -1590,7 +1602,6 @@ CM2Shared::CM2Shared(CM2Cache* cache) {
     this->m_lastUsedTime = 0;
     this->m_fileName[0] = '\0';
     this->m_modern = nullptr;
-    this->m_skinSectionData = nullptr;
     this->m_maxBones = 256;
 }
 
@@ -1976,11 +1987,6 @@ CM2Shared::~CM2Shared() {
 
     if (this->m_skinSections) {
         SMemFree(this->m_skinSections, __FILE__, __LINE__, 0);
-    }
-
-    if (this->m_skinSectionData) {
-        FreeNear(this->m_skinSectionData);
-        this->m_skinSectionData = nullptr;
     }
 
     if (this->m_skinData) {

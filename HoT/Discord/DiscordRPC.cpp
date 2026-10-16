@@ -17,6 +17,7 @@ static const auto IDLE_SLEEP = std::chrono::milliseconds(500);
 static const auto CONNECTED_SLEEP = std::chrono::milliseconds(100);
 
 static bool IsWine() {
+    return true;
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
 
     return ntdll && GetProcAddress(ntdll, "wine_get_version") != nullptr;
