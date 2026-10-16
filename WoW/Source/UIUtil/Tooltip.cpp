@@ -1247,7 +1247,7 @@ void CGItemStatsSummary::AddEnchantEffect(int32_t type, int32_t arg, int32_t amo
         }
 
         case 4:
-            // FIX: the server picks the index, keep it inside the table.
+            // HoT: the server picks the index, keep it inside the table.
             if (arg >= 0 && arg < static_cast<int32_t>(sizeof(this->m_stats) / sizeof(this->m_stats[0]))) {
                 this->m_stats[arg] += amount;
             }
@@ -1936,7 +1936,7 @@ int32_t CGTooltip::SetUnit(const WOWGUID& guid, int32_t showHealth, const WOWGUI
 
     if (unit) {
         dead = unit->m_unit->m_unitFieldHealth <= 0 || (unit->m_unit->m_unitDynamicFlags & 0x20);
-        // FIX: HoT shows scaled levels.
+        // HoT: shows scaled levels.
         unitLevel = HoT::UnitLevel::GetDisplayLevel(unit, unit->m_unit->m_unitFieldLevel);
 
         if (unit->GetCreatureType() != 10) {
@@ -1947,7 +1947,7 @@ int32_t CGTooltip::SetUnit(const WOWGUID& guid, int32_t showHealth, const WOWGUI
             }
         }
 
-        // FIX: HoT only hides the level of bosses, the ten levels above skull is gone.
+        // HoT: only hides the level of bosses, the ten levels above skull is gone.
         if (showLevel && unit->IsBossMob()) {
             showLevel = 0;
         }
@@ -2967,7 +2967,7 @@ static void AddSpellEquippedItemLine(CGTooltip* tooltip, const SpellRec* spell, 
     tooltip->AddLine(text, nullptr, color, color, 1);
 }
 
-// FIX: HoT spells can require a weapon in each hand.
+// HoT: spells can require a weapon in each hand.
 static void AddSpellDualWieldLine(CGTooltip* tooltip, const SpellRec* spell, CGPlayer_C* player) {
     if (!(HoT::DB::GetSpellCustomAttributes(spell->m_id) & HoT::DB::SPELL_ATTR0_CU_REQ_DUAL_WIELD)) {
         return;
@@ -4197,7 +4197,7 @@ static void AddItemNameLines(CGTooltip* tooltip, const ItemStats_C* stats, int32
 
     if (colorblindMode && colorblindMode->m_intValue) {
         if (stats->m_flags[0] & 8) {
-            // FIX: HoT items can carry a legendary, heirloom, paradoxical or corrupted label instead.
+            // HoT: items can carry a legendary, heirloom, paradoxical or corrupted label instead.
             tooltip->AddLine(FrameScript_GetText(HoT::Items::GetHeroicLabelKey(stats, "ITEM_HEROIC_EPIC"), -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
         } else {
             SStrPrintf(format, sizeof(format), "ITEM_QUALITY%d_DESC", destroyGem ? 0 : stats->m_quality);
@@ -5812,7 +5812,7 @@ static void AddItemSpellStatLines(CGTooltip* tooltip, const ItemStats_C* stats, 
                         SStrPrintf(bonus, sizeof(bonus), format, value);
                     }
 
-                    // FIX: HoT shows scaling stats as plain bonuses rather than equip effects.
+                    // HoT: shows scaling stats as plain bonuses rather than equip effects.
                     SStrPrintf(text, sizeof(text), "%s%s", FrameScript_GetText("ITEM_PLUS", -1, GENDER_NOT_APPLICABLE), bonus);
                     tooltip->AddLine(text, nullptr, greenColor, greenColor, 1);
                 }
@@ -5917,7 +5917,7 @@ static int32_t AddItemSpellTriggerLines(CGTooltip* tooltip, const ItemStats_C* s
                 SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONPROC", -1, GENDER_NOT_APPLICABLE), format);
                 break;
 
-            // FIX: HoT gems show their socket spell.
+            // HoT: gems show their socket spell.
             case 3:
                 SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONSOCKET", -1, GENDER_NOT_APPLICABLE), format);
                 break;
@@ -7397,13 +7397,13 @@ void TooltipAchievementCallback(int32_t id, const WOWGUID& guid, void* param, bo
 void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
     const CImVector& textColor = *reinterpret_cast<const CImVector*>(&s_tooltipTextColor);
 
-    // FIX: HoT staff see the creature entry and display id.
+    // HoT: staff see the creature entry and display id.
     if (HoT::Session::HasClearance(1) && !(unit->m_obj->m_type & TYPEMASK_PLAYER)) {
         SStrPrintf(buffer, size, "Entry: %u | Display %u", unit->m_obj->m_entryID, unit->m_unit->m_unitFieldDisplayid);
         this->AddLine(buffer, nullptr, textColor, textColor, 0);
     }
 
-    // FIX: HoT rounds the minimum damage up like the maximum.
+    // HoT: rounds the minimum damage up like the maximum.
     int32_t minDamage = static_cast<int32_t>(ceil(static_cast<double>(unit->m_unit->m_unitFieldMindamage)));
     int32_t maxDamage = static_cast<int32_t>(ceil(static_cast<double>(unit->m_unit->m_unitFieldMaxdamage)));
 
@@ -7419,7 +7419,7 @@ void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
     SStrPrintf(buffer, size, FrameScript_GetText("ARMOR_TEMPLATE", -1, GENDER_NOT_APPLICABLE), armor);
     this->AddLine(buffer, nullptr, textColor, textColor, 0);
 
-    // FIX: HoT shows maximum health.
+    // HoT: shows maximum health.
     SStrPrintf(buffer, size, FrameScript_GetText("HP_TEMPLATE", -1, GENDER_NOT_APPLICABLE), unit->m_unit->m_unitFieldMaxhealth);
     this->AddLine(buffer, nullptr, textColor, textColor, 0);
 
@@ -7438,7 +7438,7 @@ void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
         }
     }
 
-    // FIX: HoT ends the empathy text at the resistances, the pet diet and taming lines are gone.
+    // HoT: ends the empathy text at the resistances, the pet diet and taming lines are gone.
 }
 
 // VERIFY: fa5a7b6d auto
@@ -7781,7 +7781,7 @@ void CGTooltip::SetFrameStack(bool showHidden) {
 // VERIFY: 21654104 auto
 // OFFSET: 0x00625350
 void CGTooltip::SetBuff(int32_t spellId, int32_t a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6) {
-    // FIX: HoT spell descriptions read live aura amounts from the server while this tooltip builds.
+    // HoT: spell descriptions read live aura amounts from the server while this tooltip builds.
     HoT::AuraValues::TooltipScope auraValues(this, spellId);
     const CImVector& titleColor = *reinterpret_cast<const CImVector*>(&s_tooltipTitleColor);
     const CImVector& textColor = *reinterpret_cast<const CImVector*>(&s_tooltipTextColor);

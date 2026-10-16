@@ -354,7 +354,7 @@ static void ConvertTextureComboEntry(TextureComboList* list, int32_t adjust, uin
 // VERIFY: 59c9e83f manual
 // OFFSET: 0x008360A0
 int32_t CM2Shared::SetIndices() {
-    // FIX: a skin past 65535 vertex slots draws from a 32-bit index buffer.
+    // HoT: a skin past 65535 vertex slots draws from a 32-bit index buffer.
     int32_t wide = this->m_skinData->IsWide();
     uint32_t indexSize = wide ? sizeof(uint32_t) : sizeof(uint16_t);
 
@@ -771,7 +771,7 @@ CShaderEffect* CM2Shared::GetEffect(M2Batch* batch) {
                 alphaOp = static_cast<EGxTexOp>(3);
                 break;
             default:
-                // FIX: an unknown effect index falls back to the plain combiner instead of reading a null shader name.
+                // HoT: an unknown effect index falls back to the plain combiner instead of reading a null shader name.
                 return this->GetEffect(batch->m_textureCount, 0x11, batch->m_textureCoordComboIndex);
         }
 
@@ -901,7 +901,7 @@ void CM2Shared::ConvertTextureValuesToCombos() {
         }
     }
 
-    // FIX: grown lists get their own near block instead of moving the model, so arrays outside the file buffer stay valid.
+    // HoT: grown lists get their own near block instead of moving the model, so arrays outside the file buffer stay valid.
     if (combos.m_count > this->m_data->m_textureCombos.m_count) {
         this->m_data->m_textureCombos.Set(static_cast<uint16_t*>(AllocNear(&this->m_data->m_textureCombos, sizeof(uint16_t) * combos.m_count)));
         this->m_data->m_flags |= 0x20;
@@ -1143,7 +1143,7 @@ int32_t CM2Shared::InitializeSkinProfile() {
 
     this->m_maxInstances = skinData->m_indices.m_count ? 0x10000 / skinData->m_indices.m_count : 1;
 
-    // FIX: instances of a skin past 65535 vertex slots would overflow the vertex range.
+    // HoT: instances of a skin past 65535 vertex slots would overflow the vertex range.
     if (skinData->IsWide()) {
         this->m_maxInstances = 1;
     }
@@ -1188,7 +1188,7 @@ int32_t CM2Shared::InitializeSkinProfile() {
         memset(this->m_effects, 0, sizeof(CShaderEffect*) * this->m_skinData->m_batches.m_count);
     }
 
-    // FIX: a modern skin arrives with its final packed shaders already.
+    // HoT: a modern skin arrives with its final packed shaders already.
     if (!this->m_modern) {
         this->SubstituteSimpleShaders();
     }
@@ -1326,7 +1326,7 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
     M2Data* data = this->m_data;
 
     if (this->m_modern) {
-        // FIX: a modern skin is rebuilt into the runtime layout, split to the bone palette and widened past 65535 vertices.
+        // HoT: a modern skin is rebuilt into the runtime layout, split to the bone palette and widened past 65535 vertices.
         M2SkinProfile* skin = HoT::Models::BuildSkin(this->m_modern, data, this->m_skinData, size, this->m_maxBones);
 
         if (!skin) {
@@ -1337,7 +1337,7 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
         SIMD::FreeA16(this->m_skinData);
         this->m_skinData = skin;
     } else {
-        // FIX: file sections are widened into the tail of a grown skin buffer so legacy skins need no near allocation.
+        // HoT: file sections are widened into the tail of a grown skin buffer so legacy skins need no near allocation.
         uint32_t sectionCount = this->m_skinData->m_skinSections.m_count;
 
         if (sectionCount > size / sizeof(M2SkinSectionFile)) {
@@ -1650,7 +1650,7 @@ int32_t CM2Shared::FinishLoadingLowPrioritySequence(uint32_t sequenceIndex, uint
 int32_t CM2Shared::FinishLoadingLowPrioritySequence(uint32_t sequenceIndex, CAsyncObject* object) {
     M2Sequence* sequence = &this->m_data->m_sequences[sequenceIndex];
 
-    // FIX: a chunked AFM2 anim file carries the raw key data inside its first chunk.
+    // HoT: a chunked AFM2 anim file carries the raw key data inside its first chunk.
     if (this->m_modern) {
         object->m_size = HoT::Models::UnwrapAnim(object->m_buffer, object->m_size);
     }
@@ -1686,7 +1686,7 @@ int32_t CM2Shared::LoadSkinProfile(uint32_t profile) {
     SFileImpl* file;
     int32_t opened = SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file);
 
-    // FIX: a modern model names its skins by FileDataID when the side by side file is missing.
+    // HoT: a modern model names its skins by FileDataID when the side by side file is missing.
     if (!opened && this->m_modern) {
         const char* path = HoT::Models::SkinFilePath(this->m_modern, profile);
         opened = path && SFile::OpenEx(nullptr, path, (this->m_flags & 4) >> 2, &file);
@@ -1756,7 +1756,7 @@ int32_t CM2Shared::Initialize() {
     this->m_skinData = nullptr;
     this->m_maxBones = maxBones;
 
-    // FIX: a modern model always takes its full detail skin since sections past the palette are split.
+    // HoT: a modern model always takes its full detail skin since sections past the palette are split.
     uint32_t profile = this->m_modern ? 0 : this->GetSkinProfileIndex(maxBones);
 
     if (profile == 0xFFFFFFFF) {
@@ -1821,7 +1821,7 @@ int32_t CM2Shared::FinishLoading() {
         return 1;
     }
 
-    // FIX: a modern MD21 container is read natively into the 3.3.5 shape before relocation.
+    // HoT: a modern MD21 container is read natively into the 3.3.5 shape before relocation.
     if (!this->m_modern && HoT::Models::IsModernContainer(this->m_data, this->m_fileSize)) {
         this->m_modern = HoT::Models::PrepareModel(this->m_data, this->m_fileSize, this->m_fileName);
 
@@ -2123,7 +2123,7 @@ CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
     SFileImpl* file;
     int32_t opened = SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file);
 
-    // FIX: a modern model finds its anim files by FileDataID or by the sequence id the file was exported with.
+    // HoT: a modern model finds its anim files by FileDataID or by the sequence id the file was exported with.
     if (!opened && this->m_modern) {
         uint32_t sourceIndex = static_cast<uint32_t>(source - this->m_data->m_sequences.Data());
         const char* path = HoT::Models::AnimFilePath(this->m_modern, this->m_fileName, sourceIndex, source->m_id, source->m_variationIndex);

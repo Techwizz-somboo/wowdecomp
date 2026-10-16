@@ -1724,7 +1724,7 @@ static int32_t GetConditionalGeoset(CharacterPreferences* prefs) {
 // VERIFY: 4a5d8b79 manual
 // OFFSET: 0x004EA0B0
 void CCharacterComponent::ReplaceExtraSkinTexture(const char* debug) {
-    // FIX: an HD component takes its extra skin texture from the HD manifest.
+    // HoT: an HD component takes its extra skin texture from the HD manifest.
     if (HoT::HD::ReplaceExtraSkinTexture(this)) {
         return;
     }
@@ -1740,7 +1740,7 @@ void CCharacterComponent::ReplaceExtraSkinTexture(const char* debug) {
     }
 
     strcpy(s_pathEnd, textureName);
-    // FIX: HD components load the HD texture when there is one.
+    // HoT: HD components load the HD texture when there is one.
     CTexture* texture = CreateTexture(HoT::HD::ExtraSkinTexture(this, s_path), &s_status);
 
     if (texture) {
@@ -1763,7 +1763,7 @@ void CCharacterComponent::ReplaceHairTexture(int32_t hairStyleID, const char* de
     }
 
     strcpy(s_pathEnd, textureName);
-    // FIX: HD components load the HD texture when there is one.
+    // HoT: HD components load the HD texture when there is one.
     CTexture* texture = CreateTexture(HoT::HD::HairTexture(this, hairStyleID, s_path), &s_status);
 
     if (texture) {
@@ -1790,7 +1790,7 @@ void CCharacterComponent::LoadBaseVariation(COMPONENT_VARIATIONS variation, int3
 
     if (*textureName) {
         strcpy(s_pathEnd, textureName);
-        // FIX: HD components load the HD texture when there is one.
+        // HoT: HD components load the HD texture when there is one.
         texture = TextureCacheCreateTexture(HoT::HD::BaseVariationTexture(this, variation, textureIndex, variationIndex, colorIndex, s_path));
 
         if (!texture) {
@@ -1833,7 +1833,7 @@ void CCharacterComponent::SetHairColor(int32_t hairColorID, bool loadHair, const
 // VERIFY: 2d880572 manual
 // OFFSET: 0x004EA3E0
 void CCharacterComponent::SetHairStyle(int32_t hairStyleID, const char* debug) {
-    // FIX: HD components apply the manifest customization geosets on every way out.
+    // HoT: HD components apply the manifest customization geosets on every way out.
     HoT::HD::CustomizationScope hdScope(this);
 
     if (!ComponentValidateBase(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID, this->m_data.m_preferences.m_hairColorId)) {
@@ -1886,7 +1886,7 @@ void CCharacterComponent::SetFace(int32_t faceID, bool loadHair, const char* deb
 // VERIFY: 336da2ea auto
 // OFFSET: 0x004EA590
 void CCharacterComponent::SetBeardStyle(int32_t facialHairID, bool loadVariation, const char* debug) {
-    // FIX: HD components apply the manifest customization geosets on every way out.
+    // HoT: HD components apply the manifest customization geosets on every way out.
     HoT::HD::CustomizationScope hdScope(this);
 
     if (facialHairID < 0 || facialHairID > static_cast<int32_t>(CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID])) {
@@ -1947,7 +1947,7 @@ void CCharacterComponent::SetSkinColor(int32_t skinID, bool loadHair, bool rende
         }
 
         if (*underwearRec->m_textureName[0] && CopyStringToBuffer(underwearRec->m_textureName[0], s_pathEnd)) {
-            // FIX: HD components load the HD texture when there is one.
+            // HoT: HD components load the HD texture when there is one.
             this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[0] = TextureCacheCreateTexture(HoT::HD::NamedTexture(this, s_path));
 
             if (!this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[0]) {
@@ -2056,7 +2056,7 @@ void CCharacterComponent::AddLink(CM2Model* parent, GEOCOMPONENTLINKS link, cons
         return;
     }
 
-    // FIX: an HD character wears the HD helm model when there is one.
+    // HoT: an HD character wears the HD helm model when there is one.
     char hdPath[260];
     CM2Model* model = parent->m_scene->CreateModel(HoT::HD::HelmModelPath(parent, link, modelPath, hdPath), 0);
 
@@ -2146,7 +2146,7 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
         return ATTACH_NONE;
     }
 
-    // FIX: the folder follows where the model file is, so a shield can sit in either hand.
+    // HoT: the folder follows where the model file is, so a shield can sit in either hand.
     bool shieldFolder = HoT::HandItemDisplay::UsesShieldFolder(displayRec, shield);
     const char* folder = shieldFolder ? "Item\\ObjectComponents\\Shield\\" : "Item\\ObjectComponents\\Weapon\\";
     GEOCOMPONENTLINKS hand;
@@ -2169,7 +2169,7 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
         return ATTACH_NONE;
     }
 
-    // FIX: an off hand model can be on either the shield or the left hand attachment.
+    // HoT: an off hand model can be on either the shield or the left hand attachment.
     if (invSlot == INVSLOT_OFFHAND) {
         CCharacterComponent::RemoveLinkpt(model, ATTACH_SHIELD);
         CCharacterComponent::RemoveLinkpt(model, ATTACH_HANDLEFT);
@@ -2196,7 +2196,7 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
 
     CCharacterComponent::AddLink(model, link, s_path, s_path2, itemVisual ? itemVisual : displayRec->m_itemVisual, displayRec);
 
-    // FIX: a shield held in the right hand is mirrored to face out.
+    // HoT: a shield held in the right hand is mirrored to face out.
     if (shieldFolder && link == ATTACH_HANDRIGHT) {
         HoT::HandItemDisplay::MirrorMainHandShield(model);
     }
@@ -2254,7 +2254,7 @@ void CCharacterComponent::RemoveHandItem(CM2Model* model, INVENTORY_SLOTS invSlo
         }
     }
 
-    // FIX: an off hand model can be on either the shield or the left hand attachment.
+    // HoT: an off hand model can be on either the shield or the left hand attachment.
     if (invSlot == INVSLOT_OFFHAND) {
         CCharacterComponent::RemoveLinkpt(model, ATTACH_SHIELD);
         hand = ATTACH_HANDLEFT;
@@ -3576,14 +3576,14 @@ void CCharacterComponent::GeosRenderPrep() {
 
     this->m_data.m_model->OptimizeVisibleGeometry();
     this->m_flags &= ~0x4;
-    // FIX: HD components apply the manifest geosets after the stock ones.
+    // HoT: HD components apply the manifest geosets after the stock ones.
     HoT::HD::ApplyGeosets(this);
 }
 
 // VERIFY: f3bbc113 manual
 // OFFSET: 0x004EE0D0
 void CCharacterComponent::PrepSections() {
-    // FIX: HD components upload the composited HD sheet instead.
+    // HoT: HD components upload the composited HD sheet instead.
     if (HoT::HD::PrepSections(this)) {
         return;
     }
@@ -3886,7 +3886,7 @@ bool CCharacterComponent::IsHelmModelCorrect() {
 // VERIFY: 9417cc2f manual
 // OFFSET: 0x004EF0D0
 void CCharacterComponent::AddHelm(int32_t itemVisual) {
-    // FIX: HD components fix their helm geosets and placement on every way out.
+    // HoT: HD components fix their helm geosets and placement on every way out.
     HoT::HD::HelmScope hdScope(this);
     ItemDisplayInfoRec rec;
     const ItemDisplayInfoRec* displayRec;
@@ -4275,7 +4275,7 @@ CCharacterComponent::~CCharacterComponent() {
     }
 
     this->m_link.Unlink();
-    // FIX: frees the HD sheet state.
+    // HoT: frees the HD sheet state.
     HoT::HD::OnComponentDestroyed(this);
 }
 
@@ -4354,7 +4354,7 @@ void CCharacterComponent::Prep() {
 // VERIFY: f0225731 auto
 // OFFSET: 0x004EFF10
 void CCharacterComponent::CreateBaseTexture() {
-    // FIX: HD components get a 1024x512 sheet fed by the HD compositor.
+    // HoT: HD components get a 1024x512 sheet fed by the HD compositor.
     if (HoT::HD::CreateBaseTexture(this)) {
         return;
     }
@@ -5239,7 +5239,7 @@ int32_t CCharacterComponent::ThreadInitialize() {
 // VERIFY: 672afabf manual
 // OFFSET: 0x004F1790
 void CCharacterComponent::CreateComponentRequest() {
-    // FIX: HD components composite their sheet on the HD worker threads instead.
+    // HoT: HD components composite their sheet on the HD worker threads instead.
     if (HoT::HD::RequestSheet(this)) {
         return;
     }
@@ -5568,7 +5568,7 @@ bool CCharacterComponent::Destroy() {
 // VERIFY: 0acf5d15 manual
 // OFFSET: 0x004F24D0
 bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
-    // FIX: marks the component HD from its model before anything loads textures.
+    // HoT: marks the component HD from its model before anything loads textures.
     HoT::HD::OnComponentInit(this, data);
 
     if (this->m_data.m_model) {
@@ -5612,7 +5612,7 @@ bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
     this->SetSkinColor(this->m_data.m_preferences.m_skinID, false, true, debug);
     this->SetHairStyle(this->m_data.m_preferences.m_hairStyleId, debug);
     this->SetBeardStyle(this->m_data.m_preferences.m_facialHairId, false, debug);
-    // FIX: HD components set the manifest texture slots once the stock ones are in.
+    // HoT: HD components set the manifest texture slots once the stock ones are in.
     HoT::HD::OnComponentInitDone(this);
 
     return true;

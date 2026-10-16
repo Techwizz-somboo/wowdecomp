@@ -1901,7 +1901,7 @@ int32_t GetNearbyModels(lua_State* L) {
 
     size_t show = models.size() < 40 ? models.size() : 40;
 
-    // FIX: 40 returns is past the 20 slots Lua guarantees a C function, so grow the stack first.
+    // HoT: 40 returns is past the 20 slots Lua guarantees a C function, so grow the stack first.
     if (!lua_checkstack(L, static_cast<int>(show))) {
         return 0;
     }

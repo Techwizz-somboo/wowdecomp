@@ -1298,7 +1298,7 @@ intptr_t OsWindowProc(void* window, uint32_t message, uintptr_t wparam, intptr_t
     HWND hwnd = static_cast<HWND>(window);
     UINT_PTR timer = 0;
 
-    // FIX: drop HoT's cached display modes when the display configuration changes.
+    // HoT: drop HoT's cached display modes when the display configuration changes.
     if (message == WM_DISPLAYCHANGE) {
         HoT::Display::InvalidateMonitorModes();
     }

@@ -54,7 +54,7 @@ void CharacterSelectionDisplay::SetCharacterFacing(float rotation) {
 
     if (display.m_component->m_data.m_model) {
         C3Vector position(0.0f, 0.0f, 0.0f);
-        // FIX: an HD character model is scaled to match the stock one.
+        // HoT: an HD character model is scaled to match the stock one.
         display.m_component->m_data.m_model->SetWorldTransform(position, rotation, HoT::HD::GlueScale(display.m_component->m_data.m_model));
     }
 }

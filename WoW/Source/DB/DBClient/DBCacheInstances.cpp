@@ -33,14 +33,14 @@ DBCache<GameObjectStats_C, int32_t, HASHKEY_INT> g_gameObjectDBCache('WGOB', "ga
 // STATIC: 0x00C5D7A0
 DBCache<ItemNameCache_C, int32_t, HASHKEY_INT> g_itemNameDBCache('WNDB', "itemnamecache.wdb", CMSG_ITEM_NAME_QUERY, 0, true, true, 0);
 
-// FIX: no query throttle, HoT servers answer item and name queries in bulk.
+// HoT: no query throttle, HoT servers answer item and name queries in bulk.
 // STATIC: 0x00C5D828
 DBCache<ItemStats_C, int32_t, HASHKEY_INT> g_itemDBCache('WIDB', "itemcache.wdb", CMSG_ITEM_QUERY_SINGLE, CMSG_ITEM_QUERY_MULTIPLE, false, true, 0);
 
 // STATIC: 0x00C5D8B0
 DBCache<NPCText, int32_t, HASHKEY_INT> g_npcTextDBCache('WNPC', "npccache.wdb", CMSG_QUERY_NPC_TEXT, 0, true, true, 0);
 
-// FIX: no query throttle, see g_itemDBCache.
+// HoT: no query throttle, see g_itemDBCache.
 // STATIC: 0x00C5D938
 DBCache<NameCache, uint64_t, CHashKeyGUID> g_nameDBCache('WNAM', "namecache.wdb", CMSG_NAME_QUERY, 0, false, false, 0);
 

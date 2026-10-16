@@ -24,7 +24,7 @@
 #include "Engine/Source/Tempest/NTempest.h"
 
 // STATIC: 0x00A45374
-// FIX: blend 7 is the modern BlendAdd material and 8 is the internal Screen blend modern particles use.
+// HoT: blend 7 is the modern BlendAdd material and 8 is the internal Screen blend modern particles use.
 const uint32_t s_localLighting[9] = { 1, 1, 1, 1, 1, 0, 0, 1, 0 };
 
 // STATIC: 0x00A453B0
@@ -453,7 +453,7 @@ void M2BlendBoneMatrices(const C44Matrix* bones, ubyte4 weights, ubyte4 indices,
 // OFFSET: 0x0081D510
 M2HitRec* CM2Scene::IntersectHitTestTriangles(const uint16_t* indices, const uint16_t* end, uint32_t vertexStart, const C3Vector& start, uint32_t pass, M2HitRec* rec, float& t, M2HitRec* best) {
     for (; indices < end; indices += 3) {
-        // FIX: triangle values keep only the low 16 bits past 65535 vertices, so the section offset wraps the same way.
+        // HoT: triangle values keep only the low 16 bits past 65535 vertices, so the section offset wraps the same way.
         const C3Vector& v0 = this->m_hitVerts[static_cast<uint16_t>(indices[0] - vertexStart)];
         const C3Vector& v1 = this->m_hitVerts[static_cast<uint16_t>(indices[1] - vertexStart)];
         const C3Vector& v2 = this->m_hitVerts[static_cast<uint16_t>(indices[2] - vertexStart)];
@@ -1558,7 +1558,7 @@ CM2Model* CM2Scene::DuplicateModel(CM2Model* source, uint32_t flags) {
         return nullptr;
     }
 
-    // FIX: a copied HD helm keeps its HD placement.
+    // HoT: a copied HD helm keeps its HD placement.
     HoT::HD::CopyHelmPlacement(model, source);
 
     return model;

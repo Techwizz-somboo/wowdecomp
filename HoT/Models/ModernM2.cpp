@@ -297,7 +297,7 @@ static void FixSequences(uint8_t* base, uint32_t size, M2Data* header, ModernMod
         uint16_t anim = id;
         model.m_sourceSequenceIds[i] = id;
 
-        // FIX: the mount flight ids 548 to 562 keep their own id since the client plays them natively now.
+        // HoT: the mount flight ids 548 to 562 keep their own id since the client plays them natively now.
         switch (id) {
             case 564:
                 anim = 37;
@@ -322,7 +322,7 @@ static void FixSequences(uint8_t* base, uint32_t size, M2Data* header, ModernMod
     }
 }
 
-// FIX: blend mode 7 is kept for the new Gx blend state and the shadow flags 0x40 and 0x80 survive the mask.
+// HoT: blend mode 7 is kept for the new Gx blend state and the shadow flags 0x40 and 0x80 survive the mask.
 static void FixMaterials(uint8_t* base, uint32_t size, M2Data* header) {
     uint32_t count = header->m_materials.m_count;
 

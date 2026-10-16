@@ -799,7 +799,7 @@ void Grunt::ClientLink::GetRealmList() {
 // VERIFY: 58cb67ed manual
 // OFFSET: 0x008CE720
 void Grunt::ClientLink::ProveVersion(const uint8_t* versionChecksum) {
-    // FIX: HoT servers identify the build by its commit instead of the executable checksum.
+    // HoT: servers identify the build by its commit instead of the executable checksum.
     versionChecksum = HoT::Version::CommitBytes();
     CDataStoreCache<1024> msg;
     Grunt::CdKey cdKeys;

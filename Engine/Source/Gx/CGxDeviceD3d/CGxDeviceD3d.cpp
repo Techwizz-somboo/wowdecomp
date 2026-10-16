@@ -281,7 +281,7 @@ LPDIRECT3DINDEXBUFFER9 CGxDeviceD3d::ICreateD3dIB(EGxPoolUsage usage, uint32_t s
     }
 
     LPDIRECT3DINDEXBUFFER9 indexBuffer = nullptr;
-    // FIX: a pool hinted Index32 holds 32-bit indices.
+    // HoT: a pool hinted Index32 holds 32-bit indices.
     HRESULT hr = this->m_d3dDevice->CreateIndexBuffer(size, d3dUsage, wide ? D3DFMT_INDEX32 : D3DFMT_INDEX16, d3dPool, &indexBuffer, nullptr);
 
     return SUCCEEDED(hr) ? indexBuffer : nullptr;

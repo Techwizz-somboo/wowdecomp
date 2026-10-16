@@ -14,7 +14,7 @@ static int32_t FREETYPE_RenderGlyph(FT_Face face, uint32_t code, bool monochrome
         return 0;
     }
 
-    // FIX: FreeType 2.14 renumbered FT_Render_Mode, 1 is LIGHT there, so name the modes.
+    // HoT: FreeType 2.14 renumbered FT_Render_Mode, 1 is LIGHT there, so name the modes.
     return FT_Render_Glyph(face->glyph, monochrome ? ft_render_mode_mono : ft_render_mode_normal) == 0;
 }
 
@@ -25,7 +25,7 @@ static void CalculateYOffset(uint32_t pixelSize, int32_t baseline, FT_Face face,
     int32_t start;
 
     if (glyphHeight <= pixelSize) {
-        // FIX: MSDF quads carry their own bitmap top, so they measure from the baseline itself.
+        // HoT: MSDF quads carry their own bitmap top, so they measure from the baseline itself.
         int32_t top = msdf ? 0 : face->glyph->bitmap_top;
 
         if (top <= baseline) {
@@ -117,7 +117,7 @@ bool IGxuFontGlyphRenderGlyph(FT_Face face, uint32_t pixelSize, uint32_t code, u
     if (width && data && !placeholder) {
         CalculateYOffset(pixelSize, baseline, face, height, &dataPtr->m_yOffset, &dataPtr->m_yStart, msdf);
 
-        // FIX: MSDF quads want the offset from the top of the cell to the baseline.
+        // HoT: MSDF quads want the offset from the top of the cell to the baseline.
         if (msdf) {
             dataPtr->m_yOffset -= dataPtr->m_yStart;
         }

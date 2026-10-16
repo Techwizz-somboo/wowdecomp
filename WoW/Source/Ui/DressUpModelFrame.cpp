@@ -629,7 +629,7 @@ void CGDressUpModelFrame::SetModel(CM2Model* model) {
     data.m_model = model;
     SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
     data.m_model->m_refCount++;
-    // FIX: an HD model drops the stock baked NPC texture so the sheet is composited.
+    // HoT: an HD model drops the stock baked NPC texture so the sheet is composited.
     HoT::HD::ApplyNpcBake(nullptr, &data);
     this->m_component->Init(&data, nullptr);
 

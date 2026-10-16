@@ -59,7 +59,7 @@ static int32_t Script_GetBankSlotCost(lua_State* L) {
     const BankBagSlotPricesRec* rec;
     int32_t cost;
 
-    // FIX: HoT bank slots are free.
+    // HoT: bank slots are free.
     if (player && (rec = g_bankBagSlotPricesDB.GetRecord(player->m_player->m_playerBytes2[2] + 1))) {
         cost = 0;
     } else {
@@ -83,7 +83,7 @@ static int32_t Script_CloseBankFrame(lua_State* L) {
 static uint32_t GetBankSlotCost(int32_t slot) {
     BankBagSlotPricesRec* rec = g_bankBagSlotPricesDB.GetRecord(slot);
 
-    // FIX: HoT bank slots are free.
+    // HoT: bank slots are free.
     if (rec) {
         return 0;
     }

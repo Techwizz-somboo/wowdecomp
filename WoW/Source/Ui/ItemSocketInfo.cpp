@@ -89,7 +89,7 @@ int32_t CGItemSocketInfo::SetGem(uint32_t slot, WOWGUID item, WOWGUID container,
     ItemStats_C* socketStats = CGItemSocketInfo::m_socketItemStats;
     GemPropertiesRec* properties = g_gemPropertiesDB.GetRecord(stats->m_gemProperties);
 
-    // FIX: HoT meta sockets take any gem and other sockets need a matching color, a gem without properties is refused.
+    // HoT: meta sockets take any gem and other sockets need a matching color, a gem without properties is refused.
     if (!properties) {
         return 0;
     }

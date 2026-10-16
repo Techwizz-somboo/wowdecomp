@@ -838,7 +838,7 @@ void CGPartyInfo::RemoveAll(int32_t a1) {
         Script_SendUniqueSignal(SCRIPT_EVENT_PLAYER_ROLES_ASSIGNED);
     }
 
-    // FIX: HoT drops the party quest lists the server sent.
+    // HoT: drops the party quest lists the server sent.
     HoT::QuestLog::ClearPartyQuests();
 }
 

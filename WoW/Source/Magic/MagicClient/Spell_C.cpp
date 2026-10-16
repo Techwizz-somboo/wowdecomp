@@ -148,7 +148,7 @@ static uint32_t s_lastFailedTime;
 // STATIC: 0x00A439C8
 static const UIErrors s_powerErrors[] = { ERR_OUT_OF_MANA, ERR_OUT_OF_RAGE, ERR_OUT_OF_FOCUS, ERR_OUT_OF_ENERGY, ERR_NOT_HAPPY_ENOUGH, ERR_OUT_OF_RUNES, ERR_OUT_OF_RUNIC_POWER };
 
-// FIX: the tables are keyed by spell family as well and hold the custom ops, HoT servers send modifiers for every family.
+// HoT: the tables are keyed by spell family as well and hold the custom ops, HoT servers send modifiers for every family.
 // STATIC: 0x00D397D8
 static int32_t s_spellPctModifiers[NUM_SPELL_MOD_FAMILIES][NUM_SPELL_MOD_BITS][NUM_SPELL_MOD_OPS];
 
@@ -982,7 +982,7 @@ void StartSpellCastVisuals(CGUnit_C* unit, PendingSpellCast* cast, const SpellRe
     }
 }
 
-// FIX: spell modifiers only describe the active player's spells, other casters read the row as authored.
+// HoT: spell modifiers only describe the active player's spells, other casters read the row as authored.
 static int32_t Spell_C_GetCasterRecord(const WOWGUID& caster, int32_t spellId, SpellRec* rec) {
     s_suspendRowOverrides = !(caster == ClntObjMgrGetActivePlayer());
     int32_t found = g_spellDB.GetRecord(spellId, rec);
@@ -1320,7 +1320,7 @@ void Spell_C_ApplyRowOverrides(SpellRec* rec) {
 // VERIFY: 936f6df8 manual
 // OFFSET: 0x007FD970
 bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t& flat, int32_t& pct) {
-    // FIX: the class set gate is gone, modifiers are looked up per family for the spell and its mask extensions.
+    // HoT: the class set gate is gone, modifiers are looked up per family for the spell and its mask extensions.
     if (spell->m_attributesExC & 0x20000000) {
         flat = 0;
         pct = 100;
@@ -3043,14 +3043,14 @@ int32_t Packet_Group_32(void* param, NETMESSAGE msgId, uint32_t time, CDataStore
     msg->Get(op);
     msg->Get(value);
 
-    // FIX: HoT servers append the spell family, stock servers only send modifiers for the player's own class set.
+    // HoT: servers append the spell family, stock servers only send modifiers for the player's own class set.
     uint32_t family = static_cast<uint32_t>(s_spellClassSet);
 
     if (msg->m_read + sizeof(family) <= msg->m_size) {
         msg->Get(family);
     }
 
-    // FIX: drop out of range indices from the server, they used to overwrite s_spellWorldObject.
+    // HoT: drop out of range indices from the server, they used to overwrite s_spellWorldObject.
     if (msg->m_read > msg->m_size || family >= NUM_SPELL_MOD_FAMILIES || group >= NUM_SPELL_MOD_BITS || op >= NUM_SPELL_MOD_OPS) {
         return 1;
     }
@@ -4782,7 +4782,7 @@ void Spell_C_ClearCooldowns() {
         s_spellHistory[i].ClearAll();
     }
 
-    // FIX: HoT servers can scale cooldowns, the rate goes back to normal with the history.
+    // HoT: servers can scale cooldowns, the rate goes back to normal with the history.
     HoT::CooldownRate::Forget();
 }
 
@@ -5774,7 +5774,7 @@ void Spell_C_CancelCastingSpellByMovement() {
         if (cast != s_targetingSpell) {
             SpellRec spell;
 
-            // FIX: HoT lets spell modifiers waive the movement interrupt.
+            // HoT: lets spell modifiers waive the movement interrupt.
             if (g_spellDB.GetRecord(cast->m_data.m_spellId, &spell) && (spell.m_interruptFlags & 0x1) && !Spell_C_CanCastWhileMoving(&spell)) {
                 Spell_C_CancelSpell(cast, false, true, 40);
             }
@@ -7110,7 +7110,7 @@ bool Spell_C_HaveEquippedSpellItems(CGUnit_C* unit, const SpellRec* spell, bool 
         return true;
     }
 
-    // FIX: HoT spells can require a weapon in each hand.
+    // HoT: spells can require a weapon in each hand.
     if (HoT::DB::GetSpellCustomAttributes(spell->m_id) & HoT::DB::SPELL_ATTR0_CU_REQ_DUAL_WIELD) {
         bool mainHand = Spell_C_IsWeaponEquipped(static_cast<CGPlayer_C*>(unit), 15);
 
@@ -7158,7 +7158,7 @@ bool Spell_C_HaveEquippedSpellItems(CGUnit_C* unit, const SpellRec* spell, bool 
         return false;
     }
 
-    // FIX: HoT ranged weapons need no ammo.
+    // HoT: ranged weapons need no ammo.
     if (!checkAmmo || true) {
         return true;
     }

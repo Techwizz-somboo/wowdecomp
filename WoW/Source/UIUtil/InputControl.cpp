@@ -824,7 +824,7 @@ void CheckToCancelCurrentChannelSpell() {
 
     SpellRec spell;
 
-    // FIX: HoT lets spell modifiers waive the movement interrupt.
+    // HoT: lets spell modifiers waive the movement interrupt.
     if (g_spellDB.GetRecord(channelSpell, &spell) && (spell.m_channelInterruptFlags & 0x8) && !Spell_C_CanCastWhileMoving(&spell)) {
         Spell_C_CancelChannelSpell(channelSpell);
     }

@@ -383,7 +383,7 @@ void CGNamePlateFrame::UpdateLevelDisplay(CGUnit_C* unit) {
         return;
     }
 
-    // FIX: HoT shows scaled levels, skulls only bosses and colors against the player's item level.
+    // HoT: shows scaled levels, skulls only bosses and colors against the player's item level.
     int32_t level = HoT::UnitLevel::GetDisplayLevel(unit, GetAdjustedLevel(player, unit));
     int32_t playerLevel = HoT::UnitLevel::GetDisplayLevel(player, player->m_unit->m_unitFieldLevel);
 

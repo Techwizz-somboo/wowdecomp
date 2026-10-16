@@ -1367,7 +1367,7 @@ void ClientConnection::RequestCharacterCreate(const CHARACTER_CREATE_INFO& info)
     msg.Put(info.m_hairColorID);
     msg.Put(info.m_facialHairStyleID);
     msg.Put(info.m_outfitID);
-    // FIX: HoT servers read the game mode picked on the create screen.
+    // HoT: servers read the game mode picked on the create screen.
     msg.Put(HoT::Session::CharCreateGameMode());
     msg.Finalize();
     this->Send(&msg);

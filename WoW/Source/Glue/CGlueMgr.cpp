@@ -2243,7 +2243,7 @@ void CGlueMgr::StatusDialogClick() {
 // VERIFY: 4eb1c510 auto
 // OFFSET: 0x004DA9D0
 int32_t CGlueMgr::NetDisconnectHandler(NetClient* client) {
-    // FIX: HoT holds the world through a game server drop and resumes the session.
+    // HoT: holds the world through a game server drop and resumes the session.
     if (HoT::WorldResume::OnDisconnect(client)) {
         return 1;
     }

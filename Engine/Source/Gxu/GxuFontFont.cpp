@@ -119,7 +119,7 @@ bool CGxFont::GetGlyphData(GLYPHBITMAPDATA* data, uint32_t code) {
         padding = 2;
     }
 
-    // FIX: MSDF fonts measure the glyph against the raw baseline.
+    // HoT: MSDF fonts measure the glyph against the raw baseline.
     return IGxuFontGlyphRenderGlyph(face, this->m_pixelSize, code, this->m_baseline, data, this->m_fontFlags & 2, padding, this->GetMsdfFont() != nullptr);
 }
 
@@ -353,7 +353,7 @@ CHARCODEDESC* CGxFont::NewCodeDesc(uint32_t code) {
         return nullptr;
     }
 
-    // FIX: MSDF glyphs live in the MSDF atlas, so the descriptor only carries metrics and stays on page 0.
+    // HoT: MSDF glyphs live in the MSDF atlas, so the descriptor only carries metrics and stays on page 0.
     if (this->GetMsdfFont()) {
         desc = new (__FILE__, __LINE__) CHARCODEDESC;
         desc->m_textureNumber = 0;

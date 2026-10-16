@@ -1052,7 +1052,7 @@ static int32_t Script_CastSpellByID(lua_State* L) {
 // VERIFY: c96444c2 manual
 // OFFSET: 0x00540310
 static int32_t Script_CastSpellByName(lua_State* L) {
-    // FIX: HoT takes "cursor" and "self" as ground targets.
+    // HoT: takes "cursor" and "self" as ground targets.
     if (HoT::Spells::CastSpellByNameAt(L, Script_CastSpellByName)) {
         return 0;
     }

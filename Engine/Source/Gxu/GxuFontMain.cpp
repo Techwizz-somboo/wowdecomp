@@ -4,7 +4,7 @@
 #include <cstring>
 #include <malloc.h>
 #include <typeinfo>
-// FIX: FreeType 2.14 moved the module API from ftmodule.h to ftmodapi.h.
+// HoT: FreeType 2.14 moved the module API from ftmodule.h to ftmodapi.h.
 #include <freetype/ftmodapi.h>
 #include "Engine/Source/Gxu/GxuFont.h"
 #include "Engine/Source/Base/ConvertUTF.h"
@@ -958,7 +958,7 @@ void GxuFontInitialize() {
     FT_New_Library(&s_GxuMemoryRecord, &g_FTLibrary);
     FT_Add_Default_Modules(g_FTLibrary);
 
-    // FIX: start MSDF before any font face is opened.
+    // HoT: start MSDF before any font face is opened.
     HoT::MSDF::Initialize();
 
     GxuFontWindowSizeChanged();
@@ -1177,7 +1177,7 @@ void GxuFontShutdown() {
     TEXTLINETEXTURE::Shutdown();
     BATCHEDRENDERFONTDESC::Shutdown();
 
-    // FIX: release the MSDF fonts, atlases and shaders before FreeType goes away.
+    // HoT: release the MSDF fonts, atlases and shaders before FreeType goes away.
     HoT::MSDF::Shutdown();
 
     if (g_FTLibrary) {

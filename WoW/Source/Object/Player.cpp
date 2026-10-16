@@ -171,6 +171,6 @@ bool CGPlayer::HasAuraVision(uint8_t vision) {
 // VERIFY: d70d997f manual
 // OFFSET: 0x005E0870
 PlayerQuestLogEntry* CGPlayer::GetQuestLogEntry(uint32_t slot) {
-    // FIX: HoT serves its 100 server pushed slots instead of the 25 descriptor slots.
+    // HoT: serves its 100 server pushed slots instead of the 25 descriptor slots.
     return HoT::QuestLog::GetSlot(slot);
 }

@@ -941,7 +941,7 @@ void CMovement_C::SetUpdateInfo(uint32_t time, const CClientMoveUpdate* update, 
     }
 
     if ((this->m_flags & 0xC0100F) && this->m_unit->m_obj->m_guid == CGUnit_C::s_activeMover) {
-        // FIX: heartbeats every 250 ms instead of 500 so other clients see smoother movement.
+        // HoT: heartbeats every 250 ms instead of 500 so other clients see smoother movement.
         MovementGetGlobals()->m_timeCounterMaybe = time + 250;
     }
 
@@ -1898,7 +1898,7 @@ void CMovement_C::SplineToggleEnableFlying(int32_t enable) {
 // OFFSET: 0x006E9B70
 void CMovement_C::UpdateHeartbeatTimerA(uint32_t time) {
     if (this->m_unit->m_obj->m_guid == CGUnit_C::s_activeMover) {
-        // FIX: heartbeats every 250 ms instead of 500 so other clients see smoother movement.
+        // HoT: heartbeats every 250 ms instead of 500 so other clients see smoother movement.
         MovementGetGlobals()->m_timeCounterMaybe = time + 250;
     }
 }

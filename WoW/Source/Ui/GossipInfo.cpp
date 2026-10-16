@@ -475,7 +475,7 @@ void CGGossipInfo::ShutdownGame() {
 int32_t Packet_SMSG_GOSSIP_COMPLETE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     CGGossipInfo::SetGossip(WOWGUID());
 
-    // FIX: a quest frame still waiting on a reply would hang with dead buttons, so close it through the stock path.
+    // HoT: a quest frame still waiting on a reply would hang with dead buttons, so close it through the stock path.
     if (CGQuestInfo::m_npc && CGQuestInfo::m_responseSent) {
         CGQuestInfo::QuestGiverFinished(0, CGQuestInfo::m_currentQuest, 0);
     }

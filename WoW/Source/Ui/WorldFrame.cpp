@@ -291,7 +291,7 @@ int32_t CGWorldFrame::GetLineSegment(float mouseX, float mouseY, C3Vector* start
     *start += position;
     *end += position;
 
-    // FIX: HoT pulls ground targeting back inside the spell range.
+    // HoT: pulls ground targeting back inside the spell range.
     HoT::Spells::ClampGroundTarget(this, start, end);
 
     return 1;
@@ -306,7 +306,7 @@ void CGWorldFrame::GetCameraPosition(C3Vector* position) {
 // VERIFY: c8cc818e auto
 // OFFSET: 0x004F66C0
 void CGWorldFrame::OnLayerTrackTerrain(const HITTESTRESULT& result) {
-    // FIX: HoT casts a CastSpellByName "cursor" spell at the first tracked terrain point.
+    // HoT: casts a CastSpellByName "cursor" spell at the first tracked terrain point.
     if (HoT::Spells::ConsumeCastAtCursor(result)) {
         return;
     }
@@ -1183,7 +1183,7 @@ int32_t CGWorldFrame::HitTest(const C3Vector& start, const C3Vector& end, uint32
 // OFFSET: 0x004F9DA0
 int32_t CGWorldFrame::HitTestPoint(float x, float y, int32_t a3, HITTESTRESULT* result) {
     if (!(CGInputControl::GetActive()->m_mouseModeFlags & 0x1)) {
-        // FIX: HoT editor tracks the last mouse hit for its Lua functions.
+        // HoT: editor tracks the last mouse hit for its Lua functions.
         return HoT::Editor::OnHitTestPoint(0, result);
     }
 
@@ -1218,7 +1218,7 @@ int32_t CGWorldFrame::HitTestPoint(float x, float y, int32_t a3, HITTESTRESULT* 
 
     g_theGxDevicePtr->XformSetProjection(projection);
     g_theGxDevicePtr->XformSetView(view);
-    // FIX: HoT editor tracks the last mouse hit for its Lua functions.
+    // HoT: editor tracks the last mouse hit for its Lua functions.
     return HoT::Editor::OnHitTestPoint(kind, result);
 }
 
@@ -1622,7 +1622,7 @@ void CGWorldFrame::UpdateDayNight(float deltaSec) {
 // VERIFY: 1381402d manual
 // OFFSET: 0x004F8D10
 void CGWorldFrame::UpdateObject(CGObject_C* object, uint32_t flags) {
-    // FIX: players over the render limit skip the whole update.
+    // HoT: players over the render limit skip the whole update.
     if (HoT::PlayerRenderLimit::SuppressUpdate(object)) {
         return;
     }
@@ -1679,7 +1679,7 @@ void CGWorldFrame::UpdateObject(CGObject_C* object, uint32_t flags) {
 // VERIFY: 2ea40d3b manual
 // OFFSET: 0x004F8EA0
 void CGWorldFrame::OnWorldRender() {
-    // FIX: HoT map editor points the spell cursor decal at its brush.
+    // HoT: map editor points the spell cursor decal at its brush.
     HoT::Editor::BeforeWorldRender(this, s_spellShadowPos, s_spellShadowSize, s_spellShadowStyle);
 
     CRect window = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -1816,7 +1816,7 @@ void CGWorldFrame::OnWorldRender() {
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
     FFX::Finish();
     CVehiclePassenger_C::PostRenderUpdateAll();
-    // FIX: HoT editors draw their gizmos once the world is done.
+    // HoT: editors draw their gizmos once the world is done.
     HoT::Editor::AfterWorldRender(this);
 }
 

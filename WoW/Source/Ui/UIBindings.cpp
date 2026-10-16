@@ -1013,7 +1013,7 @@ int32_t CGUIBindings::ExecKey(uint32_t modifiers, const char* key, int32_t isDow
     int32_t result = 0;
     const char* command = this->GetBindingCommand(binding, mode);
 
-    // FIX: HoT can repeat a held action button, the release then must not use it once more.
+    // HoT: can repeat a held action button, the release then must not use it once more.
     HoT::ActionRepeat::KeyScope actionRepeat(key, command, isDown);
 
     if (!SStrCmpI(command, "SPELL ", 6)) {

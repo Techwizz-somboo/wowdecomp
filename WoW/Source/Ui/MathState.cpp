@@ -33,7 +33,7 @@ static const MathFunction s_mathFunctions[12] = {
     { "clamp", 3 },
 };
 
-// FIX: HoT appends its own variables, their ops follow MATHOP_BONUS_COEFFICIENT_3_UPPER.
+// HoT: appends its own variables, their ops follow MATHOP_BONUS_COEFFICIENT_3_UPPER.
 // STATIC: 0x00ACE8F8
 static const char* s_mathVariables[162] = {
     "STR", "AGI", "STA", "INT", "SPI", "str", "agi", "sta", "int", "spi",
@@ -480,7 +480,7 @@ void MathState::GetVariableValue(uint32_t op, MathStack* stack, const SpellRec* 
     float value = 0.0f;
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-    // FIX: HoT resolves its own variables and the unrounded ranged damage and speed first.
+    // HoT: resolves its own variables and the unrounded ranged damage and speed first.
     if (player && !HoT::Spells::GetDescriptionVariable(op, player, spell, value)) {
         switch (op) {
             case MATHOP_STAT_STRENGTH:

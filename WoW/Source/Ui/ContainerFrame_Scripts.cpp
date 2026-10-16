@@ -267,7 +267,7 @@ static int32_t Script_GetContainerItemCooldown(lua_State* L) {
 // VERIFY: 0244abbb manual
 // OFFSET: 0x005D8650
 static int32_t Script_UseContainerItem(lua_State* L) {
-    // FIX: HoT crafting and gem sockets take bag clicks while their windows are open.
+    // HoT: crafting and gem sockets take bag clicks while their windows are open.
     if (HoT::OnUseContainerItem(L)) {
         return 0;
     }

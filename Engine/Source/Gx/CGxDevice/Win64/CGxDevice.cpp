@@ -568,7 +568,7 @@ int32_t CGxDevice::D3d9ExAdapterFormats(TSGrowableArray<CGxFormat>& formats) {
 
 // OFFSET: 0x0068A4C0
 int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
-    // FIX: reuse the modes until the display changes, enumerating them is slow.
+    // HoT: reuse the modes until the display changes, enumerating them is slow.
     if (HoT::Display::GetCachedMonitorModes(modes)) {
         return 1;
     }

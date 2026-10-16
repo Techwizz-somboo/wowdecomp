@@ -38,7 +38,7 @@
 #include "Engine/Source/Tempest/CMath.h"
 #include "WoW/Source/DB/Rec/WorldMapAreaRec.h"
 
-// FIX: sized for the HoT 100 slot quest log.
+// HoT: sized for the HoT 100 slot quest log.
 // STATIC: 0x00C23618
 int32_t CGQuestLog::m_sortTypes[HoT::QuestLog::NUM_SORT_TYPES];
 
@@ -72,7 +72,7 @@ static const int32_t s_questGreenRange[20] = { 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 8, 
 // STATIC: 0x00C23680
 QuestWatch CGQuestLog::m_questWatches[25];
 
-// FIX: sized for the HoT 100 slot quest log.
+// HoT: sized for the HoT 100 slot quest log.
 // STATIC: 0x00C237B0
 QuestLogEntry CGQuestLog::m_quests[HoT::QuestLog::NUM_ENTRIES];
 
@@ -94,7 +94,7 @@ int32_t CGQuestLog::m_nextQuestUpdate;
 // STATIC: 0x00C23AFC
 static CVar* s_cvPOIShiftComplete;
 
-// FIX: sized for the HoT 100 slot quest log.
+// HoT: sized for the HoT 100 slot quest log.
 // STATIC: 0x00C23B00
 QuestPOIInfo CGQuestLog::m_questPOIs[HoT::QuestLog::NUM_POIS];
 
@@ -169,7 +169,7 @@ void CGQuestLog::InitializeGame() {
     ClientServices::SetMessageHandler(SMSG_QUERY_TIME_RESPONSE, Packet_SMSG_QUERY_TIME_RESPONSE, nullptr);
     s_cvPOIShiftComplete = CVar::Register("POIShiftComplete", nullptr, 0, "0.6", nullptr, 0, false, nullptr, false);
     ConsoleCommandRegister("UpdatePOI", UpdateQuestPOIHandler, CATEGORY_GAME, "Updates Quest POI from User Server");
-    // FIX: HoT clears its server pushed slots and party quest cache.
+    // HoT: clears its server pushed slots and party quest cache.
     HoT::QuestLog::Reset();
 }
 
@@ -1082,7 +1082,7 @@ void CGQuestLog::Update(int32_t a1) {
     int32_t unknown[HoT::QuestLog::NUM_SLOTS] = { 0 };
     int32_t timeOffset = CGQuestLog::m_timeOffset;
 
-    // FIX: HoT reads its 100 server pushed slots and stops before the entry and sort type arrays overflow.
+    // HoT: reads its 100 server pushed slots and stops before the entry and sort type arrays overflow.
     for (uint32_t slot = 0; slot < HoT::QuestLog::NUM_SLOTS; slot++) {
         PlayerQuestLogEntry* entry = player->GetQuestLogEntry(slot);
         int32_t questId = entry->m_questId;
@@ -1322,7 +1322,7 @@ int32_t CGQuestLog::IsOnQuest(int32_t questId) {
         return 0;
     }
 
-    // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+    // HoT: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
     for (uint32_t slot = 0; slot < HoT::QuestLog::NUM_SLOTS; slot++) {
         PlayerQuestLogEntry* entry = player->GetQuestLogEntry(slot);
 
@@ -2122,7 +2122,7 @@ void CGQuestLog::ShutdownGame() {
 
     CGQuestLog::m_trackedQuestsLoaded = 0;
     ConsoleCommandUnregister("UpdatePOI");
-    // FIX: HoT clears its server pushed slots and party quest cache.
+    // HoT: clears its server pushed slots and party quest cache.
     HoT::QuestLog::Reset();
 }
 
@@ -2275,7 +2275,7 @@ void CGQuestLog::UpdatePOIIcons() {
     C3Vector position = player->GetPosition();
     int32_t numActive = 0;
     int32_t numComplete = 0;
-    // FIX: the scratch arrays cover every HoT POI slot, the DLL only widened the loop and overran them.
+    // HoT: the scratch arrays cover every HoT POI slot, the DLL only widened the loop and overran them.
     int32_t chain[HoT::QuestLog::NUM_POIS];
     int32_t completeList[HoT::QuestLog::NUM_POIS];
     memset(chain, 0, sizeof(chain));

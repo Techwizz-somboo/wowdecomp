@@ -81,7 +81,7 @@ CSimpleFrame* CGCooldown::Create(CSimpleFrame* parent) {
 // VERIFY: 8c34e1ec auto
 // OFFSET: [0x005EB040, 0x005EBE60, 0x005EBEF0]
 CGCooldown::~CGCooldown() {
-    // FIX: HoT tracks frames by address for cooldown rate scaling.
+    // HoT: tracks frames by address for cooldown rate scaling.
     HoT::CooldownRate::OnCooldownDestroyed(this);
 
     if (this->m_starTexture) {
@@ -640,7 +640,7 @@ void CGCooldown::OnFrameSizeChanged(const CRect& rect) {
 // VERIFY: 9f3e3bf6 manual
 // OFFSET: 0x005EC8F0
 void CGCooldown::OnLayerUpdate(float elapsedSec) {
-    // FIX: HoT follows the spell history when the server scales cooldown rates.
+    // HoT: follows the spell history when the server scales cooldown rates.
     HoT::CooldownRate::OnCooldownUpdate(this, this->m_startTime);
 
     CSimpleFrame::OnLayerUpdate(elapsedSec);
@@ -700,6 +700,6 @@ void CGCooldown::SetCooldown(uint32_t start, uint32_t duration) {
     this->ResetVerts();
     this->Show();
 
-    // FIX: HoT remembers which spell history entry this frame shows so the rate scaling can follow it.
+    // HoT: remembers which spell history entry this frame shows so the rate scaling can follow it.
     HoT::CooldownRate::OnCooldownSet(this, start, duration);
 }

@@ -1890,7 +1890,7 @@ int32_t AsyncTextureStatus() {
 // VERIFY: f4a9a3e6 manual
 // OFFSET: 0x004B7F80
 void TextureInitialize() {
-    // FIX: modern models use 2048 px textures, which overran the 1024 px mip scratch.
+    // HoT: modern models use 2048 px textures, which overran the 1024 px mip scratch.
     s_mipBits = static_cast<MipBits*>(SMemAlloc(MippedImgCalcSize(PIXEL_ARGB8888, 2048, 2048), __FILE__, __LINE__, 0));
     AsyncFileReadAddPollHandler(AsyncTextureHandler);
     AsyncFileReadAddStatusHandler(AsyncTextureStatus);

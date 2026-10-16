@@ -1607,7 +1607,7 @@ int32_t CGChat::ChatMessageReceived(CDataStore* msg, bool isGM) {
             } else if (chatTag & 0x4) {
                 flags = "GM";
             } else if (chatTag & 0x20) {
-                // FIX: HoT tags messages relayed from Discord.
+                // HoT: tags messages relayed from Discord.
                 flags = "DISCORD";
             } else if (chatTag & 0x2) {
                 flags = "DND";

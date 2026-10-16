@@ -3977,7 +3977,7 @@ void CGxDeviceOpenGl::Draw(CGxBatch* batch, int32_t count) {
     this->IStateSync();
 
     if (count) {
-        // FIX: a 4 byte index buffer draws with 32-bit indices.
+        // HoT: a 4 byte index buffer draws with 32-bit indices.
         uint32_t indexSize = this->m_primIndexBuf->m_itemSize == sizeof(uint32_t) ? sizeof(uint32_t) : sizeof(uint16_t);
         GLenum indexType = indexSize == sizeof(uint32_t) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
 

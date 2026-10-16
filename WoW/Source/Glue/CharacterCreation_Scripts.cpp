@@ -339,7 +339,7 @@ static int32_t Script_CreateCharacter(lua_State* L) {
         lua_tolstring(L, 1, nullptr);
     }
 
-    // FIX: HoT adds CreateCharacter(name, gameMode).
+    // HoT: adds CreateCharacter(name, gameMode).
     HoT::Session::SetCharCreateGameMode(static_cast<uint8_t>(lua_tonumber(L, 2)));
     CCharacterCreation::CreateCharacter(lua_tolstring(L, 1, nullptr));
     return 0;

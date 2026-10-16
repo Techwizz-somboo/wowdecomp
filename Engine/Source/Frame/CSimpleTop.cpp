@@ -41,7 +41,7 @@ static void PaintScreen(void* param, const RECTF* rect, const RECTF* visible, fl
     CSimpleTop* top = CSimpleTop::s_instance;
     top->OnLayerUpdate(elapsedSec);
     top->OnLayerRender();
-    // FIX: HoT paces the Lua GC here instead of stepping it from CGGameUI::Idle.
+    // HoT: paces the Lua GC here instead of stepping it from CGGameUI::Idle.
     HoT::LuaRuntime::EndPaint();
 }
 
@@ -758,7 +758,7 @@ void CSimpleTop::RegisterForCleanup(CSimpleFrame* frame) {
 // VERIFY: cfde847a manual
 // OFFSET: 0x00495060
 void CSimpleTop::CompressStrata(int32_t strata) {
-    // FIX: one pass compaction from HoT, this version rescans every frame for every level.
+    // HoT: one pass compaction from HoT, this version rescans every frame for every level.
     HoT::Layout::CompressStrata(this, strata);
     return;
 

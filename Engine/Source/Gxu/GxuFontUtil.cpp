@@ -506,7 +506,7 @@ static float SnapToPixel(float value, float minimum) {
     return rounded < minimum ? minimum : rounded;
 }
 
-// FIX: embedded textures in scaled text snap to whole pixels so they do not blur or shimmer.
+// HoT: embedded textures in scaled text snap to whole pixels so they do not blur or shimmer.
 bool ParseEmbeddedTexture(const char* text, GXUEMBEDDEDTEXTUREINFO* info, float fontPixelHeight, float scale, float fontHeight) {
     if (!ParseEmbeddedTextureInfo(text, info, fontPixelHeight, scale, fontHeight)) {
         return false;

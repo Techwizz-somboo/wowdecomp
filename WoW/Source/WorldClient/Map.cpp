@@ -2452,7 +2452,7 @@ int32_t CMap::SafeOpen(const char* fileName, SFileImpl** file) {
         DebugLog("CMap::SafeOpen() failed %s\n", fileName);
 
         if (!--tries) {
-            // FIX: a model removed from the files loads the error cube and is logged instead of a fatal error.
+            // HoT: a model removed from the files loads the error cube and is logged instead of a fatal error.
             LOG_ERROR << "missing file " << fileName << ", using Spells\\ErrorCube.mdx";
 
             if (SFileOpenFile("Spells\\ErrorCube.mdx", file)) {

@@ -2666,7 +2666,7 @@ int32_t CGCamera::UpdateCallback(const void* data, void* param) {
         return 1;
     }
 
-    // FIX: HoT free camera overrides the camera after every update path.
+    // HoT: free camera overrides the camera after every update path.
     HoT::Editor::CameraUpdateScope freeCam(camera);
 
     uint32_t time = OsGetAsyncTimeMs();

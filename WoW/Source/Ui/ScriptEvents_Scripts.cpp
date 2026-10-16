@@ -1223,7 +1223,7 @@ static int32_t Script_GetRangedCritChance(lua_State* L) {
 // VERIFY: a05d6e3f manual
 // OFFSET: 0x0060E3B0
 static int32_t Script_GetSpellBonusHealing(lua_State* L) {
-    // FIX: HoT servers track healing per school, GetSpellBonusHealing(school) reads it.
+    // HoT: servers track healing per school, GetSpellBonusHealing(school) reads it.
     if (lua_gettop(L) >= 1) {
         int32_t school = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
 
@@ -2629,7 +2629,7 @@ static int32_t Script_TrueLevel(lua_State* L) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
         level = unit->m_unit->m_unitFieldLevel;
 
-        // FIX: HoT only hides the level of bosses.
+        // HoT: only hides the level of bosses.
         if (unit->IsBossMob()) {
             level = -1;
         } else if (level > 0 && player && (player->m_player->m_playerBytes3[1] || player->m_player->m_playerFakeInebriation) && player->CanAttack(unit)) {
@@ -2656,7 +2656,7 @@ static int32_t Script_TrueLevel(lua_State* L) {
     return 1;
 }
 
-// FIX: HoT reports the scaled level for everything but bosses, TrueLevel keeps the stock answer.
+// HoT: reports the scaled level for everything but bosses, TrueLevel keeps the stock answer.
 static int32_t Script_UnitLevel(lua_State* L) {
     if (lua_isstring(L, 1) && HoT::UnitLevel::PushScaledLevel(L)) {
         return 1;
@@ -2956,7 +2956,7 @@ static int32_t Script_GetComboPoints(lua_State* L) {
     double points = 0.0;
 
     if (unit == ClntObjMgrGetActivePlayer()) {
-        // FIX: HoT combo points work for every class, not just rogues and druids.
+        // HoT: combo points work for every class, not just rogues and druids.
         points = CGGameUI::GetComboPoints(target);
     } else if (unit == CGPetInfo::GetPet(0)) {
         points = CGPetInfo::GetComboPoints(target);

@@ -230,7 +230,7 @@ void TEXTLINETEXTURE::WriteGeometry(CGxVertexPCT* buf, const CImVector& fontColo
 // VERIFY: 4249ae07 auto
 // OFFSET: 0x006C47B0
 void BATCHEDRENDERFONTDESC::Initialize() {
-    // FIX: room for 16383 quads so an MSDF batch of up to 65532 vertices draws in one call.
+    // HoT: room for 16383 quads so an MSDF batch of up to 65532 vertices draws in one call.
     BATCHEDRENDERFONTDESC::s_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Static, 0x30000, GxPoolHintBit_Unk0, "BATCHEDRENDERFONTDESC_idx");
     BATCHEDRENDERFONTDESC::s_indexBuf = g_theGxDevicePtr->BufCreate(BATCHEDRENDERFONTDESC::s_indexPool, sizeof(uint16_t), 16383 * 6, 0);
 }
@@ -242,7 +242,7 @@ void BATCHEDRENDERFONTDESC::InitializeIndexBuff() {
 
     uint16_t vertex = 0;
 
-    // FIX: fill every quad of the enlarged buffer.
+    // HoT: fill every quad of the enlarged buffer.
     for (uint32_t i = 0; i < 16383; i++) {
         indices[0] = vertex;
         indices[1] = vertex + 2;
@@ -304,7 +304,7 @@ void BATCHEDRENDERFONTDESC::RenderBatch() {
         return;
     }
 
-    // FIX: a rebuild can evict glyph pages another string uses, rebuild the evicted strings until the cache settles.
+    // HoT: a rebuild can evict glyph pages another string uses, rebuild the evicted strings until the cache settles.
     for (int32_t pass = 0; pass < 4; pass++) {
         bool rebuilt = false;
 
@@ -328,7 +328,7 @@ void BATCHEDRENDERFONTDESC::RenderBatch() {
         string->CheckGeometry();
     }
 
-    // FIX: MSDF fonts draw through their own shaders and atlas.
+    // HoT: MSDF fonts draw through their own shaders and atlas.
     if (this->m_face->GetMsdfFont()) {
         this->RenderBatchMsdf();
         return;
@@ -581,7 +581,7 @@ static uint32_t ComputeWidestFreeSlot(TEXTURECACHEROW* row) {
 // VERIFY: 2ccd62da manual
 // OFFSET: 0x006C5120
 CHARCODEDESC* TEXTURECACHEROW::CreateNewDesc(GLYPHBITMAPDATA* data, uint32_t rowNumber, uint32_t cellHeight) {
-    // FIX: the stored widest slot goes stale after evictions, measure the free gaps again.
+    // HoT: the stored widest slot goes stale after evictions, measure the free gaps again.
     this->m_widestFreeSlot = ComputeWidestFreeSlot(this);
     uint32_t width = data->m_glyphCellWidth;
 

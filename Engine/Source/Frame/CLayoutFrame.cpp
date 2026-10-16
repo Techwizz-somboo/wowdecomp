@@ -542,7 +542,7 @@ void CLayoutFrame::AddToResizeList() {
         return;
     }
 
-    // FIX: only frames anchored to this one can depend on it, so look at those before walking the whole pending list.
+    // HoT: only frames anchored to this one can depend on it, so look at those before walking the whole pending list.
     CLayoutFrame* dependent = nullptr;
     uint32_t dependents = 0;
 

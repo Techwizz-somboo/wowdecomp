@@ -21,7 +21,7 @@
 #include "Engine/Source/Tempest/CImVector.h"
 
 // STATIC: 0x00A45390
-// FIX: the modern BlendAdd and Screen blends fog like the additive blends.
+// HoT: the modern BlendAdd and Screen blends fog like the additive blends.
 const uint32_t s_fogModes[9] = { 1, 1, 1, 2, 2, 3, 4, 2, 2 };
 
 // STATIC: 0x00AF58A8
@@ -298,7 +298,7 @@ void CM2SceneRender::SetupMaterial() {
         if (!this->m_curMaterial->m_blendMode) {
             alphaRef = 0.0f;
         } else if (this->m_curMaterial->m_blendMode == 1) {
-            // FIX: modern alpha key textures are authored for a half coverage reference.
+            // HoT: modern alpha key textures are authored for a half coverage reference.
             alphaRef = this->m_curElement->m_alpha * (this->m_curModel->m_shared->m_modern ? 0.5f : 0.87843138f);
         } else {
             alphaRef = 0.0039215689f;

@@ -7,10 +7,10 @@
 
 static const uintptr_t s_nearRange = 0x60000000;
 
-// FIX: walks resume past the last block handed out, so an allocation no longer scans every live block before it.
+// HoT: walks resume past the last block handed out, so an allocation no longer scans every live block before it.
 static std::atomic<uintptr_t> s_nearHint;
 
-// FIX: only the pages the caller asked for are committed instead of the whole 64KB granule.
+// HoT: only the pages the caller asked for are committed instead of the whole 64KB granule.
 static void* AllocAt(uintptr_t candidate, uintptr_t bytes, size_t size) {
     void* ptr = VirtualAlloc(reinterpret_cast<void*>(candidate), bytes, MEM_RESERVE, PAGE_READWRITE);
 

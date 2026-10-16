@@ -207,7 +207,7 @@ static int32_t Script_AcceptContest(lua_State* L) {
 // VERIFY: 37439067 auto
 // OFFSET: 0x004DC260
 static int32_t Script_DefaultServerLogin(lua_State* L) {
-    // FIX: HoT refuses the login while the background downloader is still patching or needs a restart.
+    // HoT: refuses the login while the background downloader is still patching or needs a restart.
     if (HoT::Streaming::PatchStatusUI::BlockLogin()) {
         return 0;
     }

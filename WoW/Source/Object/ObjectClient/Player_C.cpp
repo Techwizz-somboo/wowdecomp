@@ -1045,7 +1045,7 @@ void CGPlayer_C::ShouldRender(uint32_t flags, int32_t& culled, int32_t& hidden) 
         hidden = 1;
     }
 
-    // FIX: players over the render limit are not drawn.
+    // HoT: players over the render limit are not drawn.
     HoT::PlayerRenderLimit::OnShouldRender(this, hidden);
 }
 
@@ -2535,7 +2535,7 @@ int32_t CGPlayer_C::OnPetitionShowList(CDataStore* msg) {
         msg->Get(petitionList[i].m_itemID);
         msg->Get(petitionList[i].m_displayID);
         msg->Get(petitionList[i].m_cost);
-        // FIX: HoT guild and arena charters are free.
+        // HoT: guild and arena charters are free.
         petitionList[i].m_cost = 0;
         msg->Get(petitionList[i].m_charterType);
         msg->Get(petitionList[i].m_requiredSignatures);
@@ -3069,7 +3069,7 @@ void CGPlayer_C::PostInitActivePlayer() {
     CGClassTrainer::RefreshList();
 
     if (!ClntObjMgrGetPlayerType()) {
-        // FIX: HoT keeps spells on the action bar even when they are not known yet.
+        // HoT: keeps spells on the action bar even when they are not known yet.
         for (uint32_t i = 0; i < sizeof(s_actionButtons) / sizeof(s_actionButtons[0]); i++) {
             CGActionBar::SetAction(i, s_actionButtons[i], 0, 1);
         }
@@ -3811,7 +3811,7 @@ int32_t Packet_Group_17(void* param, NETMESSAGE msgId, uint32_t time, CDataStore
             return 1;
         }
 
-        // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+        // HoT: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
         for (int32_t i = 0; i < static_cast<int32_t>(HoT::QuestLog::NUM_SLOTS); i++) {
             PlayerQuestLogEntry* entry = player->GetQuestLogEntry(i);
 
@@ -4093,7 +4093,7 @@ int32_t Packet_SMSG_ACTION_BUTTONS(void* param, NETMESSAGE msgId, uint32_t time,
         for (uint32_t i = 0; i < sizeof(s_actionButtons) / sizeof(s_actionButtons[0]); i++) {
             int32_t action = s_actionButtons[i];
 
-            // FIX: HoT keeps spells on the action bar even when they are not known yet.
+            // HoT: keeps spells on the action bar even when they are not known yet.
             if ((action & 0xF0000000) != 0x20000000 || CGActionBar::IsEquipmentSetValid(action & 0xDFFFFFFF)) {
                 CGActionBar::SetAction(i, action, 0, 1);
             } else {
@@ -8038,7 +8038,7 @@ void CGPlayer_C::DelKnownSpell(int32_t spellId, int32_t silent) {
     }
 
     CGSpellBook::DelKnownSpell(spellId, 0);
-    // FIX: HoT leaves unlearned spells on the action bar and only refreshes their usable state.
+    // HoT: leaves unlearned spells on the action bar and only refreshes their usable state.
     CGActionBar::UpdateUsable();
 
     if (!silent) {
@@ -8390,7 +8390,7 @@ int32_t CGPlayer_C::AutoCombatModeEventHandler(const void* data, void* param) {
         return 1;
     }
 
-    // FIX: HoT makes the melee range that stops auto shot configurable with autoRepeatMeleeDeadzone.
+    // HoT: makes the melee range that stops auto shot configurable with autoRepeatMeleeDeadzone.
     if (HoT::AutoRepeatDeadzone::IsInMeleeRange(player, target)) {
         if (!player->CGUnit_C::IsInMelee()) {
             WOWGUID guid = target->m_obj->m_guid;
@@ -8433,7 +8433,7 @@ int32_t CGPlayer_C::AutoCombatModeEventHandler(const void* data, void* param) {
 
         C3Vector direction = player->m_movementData.GetDirection();
 
-        // FIX: HoT leaves moving to CheckToCancelSpellsDueToMovement, which honours the interrupt flags.
+        // HoT: leaves moving to CheckToCancelSpellsDueToMovement, which honours the interrupt flags.
         if (direction.y * toTarget.y + direction.z * toTarget.z + direction.x * toTarget.x > 0.0f && maxRange * maxRange > distanceSq && Spell_C::CastSpell(CGSpellBook::m_autoRangedSpell, nullptr, target->m_obj->m_guid, false)) {
             Spell_C_ClearLastAutoRangedCombatError();
         }
@@ -8704,7 +8704,7 @@ int32_t CGPlayer_C::OnLootRemoved(CDataStore* msg) {
     uint8_t slot;
     msg->Get(slot);
 
-    // FIX: HoT pushes loot from targets the client may not see, so the slot is cleared without the object check.
+    // HoT: pushes loot from targets the client may not see, so the slot is cleared without the object check.
     memset(&s_lootItems[slot], 0, sizeof(s_lootItems[slot]));
     CGGameUI::ClearLootSlot(slot);
 
@@ -12544,7 +12544,7 @@ void CGPlayer_C::CheckForQuestItemLoot(uint32_t itemId, uint32_t count, uint32_t
         return;
     }
 
-    // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+    // HoT: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
     for (uint32_t i = 0; i < HoT::QuestLog::NUM_SLOTS; i++) {
         PlayerQuestLogEntry* entry = this->GetQuestLogEntry(i);
 

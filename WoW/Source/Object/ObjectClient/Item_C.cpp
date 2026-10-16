@@ -698,7 +698,7 @@ void CGItem_C::GetCooldowns(int32_t itemId, uint32_t& cooldown, uint32_t& catego
         return;
     }
 
-    // FIX: no delay use spells count too, -1 falls back to the spell's own recovery, and spell modifiers apply.
+    // HoT: no delay use spells count too, -1 falls back to the spell's own recovery, and spell modifiers apply.
     for (uint32_t i = 0; i < 5; i++) {
         if (stats->m_spellId[i] && (stats->m_spellTrigger[i] == 0 || stats->m_spellTrigger[i] == 5)) {
             cooldown = stats->m_spellCooldown[i];

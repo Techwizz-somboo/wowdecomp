@@ -27,7 +27,7 @@ void MouseToWorld(CGWorldFrame* frame, float mouseX, float mouseY, C3Vector* sta
         return;
     }
 
-    // FIX: the DLL kept pointers to the live matrices, so its restore wrote back the new ones.
+    // HoT: the DLL kept pointers to the live matrices, so its restore wrote back the new ones.
     C44Matrix projection = device->m_projection;
     CGxMatrixStack& stack = device->m_xforms[GxXform_View];
     C44Matrix view = stack.m_mtx[stack.m_level];
@@ -70,7 +70,7 @@ static int32_t Packet_SMSG_GOB_EDITOR_SELECT(void* param, NETMESSAGE msgId, uint
     CGGameObject_C* object = GobEditor::SelectedGameObject();
 
     if (object) {
-        // FIX: the DLL passed a std::string object through the varargs for %s.
+        // HoT: the DLL passed a std::string object through the varargs for %s.
         std::string text = GobEditor::GuidToString(guid);
         const C3Vector& position = object->m_passenger.m_position;
         Lua::SignalEvent("HOT_GOB_SELECTED", "%s%u%f%f%f", text.c_str(), 0u, position.x, position.y, position.z);

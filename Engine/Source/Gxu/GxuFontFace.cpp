@@ -64,7 +64,7 @@ FACEDATA::FACEDATA() {
 // VERIFY: 263b0e27 manual
 // OFFSET: 0x006C81C0
 FACEDATA::~FACEDATA() {
-    // FIX: the MSDF font reads the face data, so it goes first.
+    // HoT: the MSDF font reads the face data, so it goes first.
     HoT::MSDF::CloseFont(this->m_msdf);
     this->m_msdf = nullptr;
 
@@ -105,7 +105,7 @@ HFACE FontFaceGetHandle(const char* fileName, FT_Library library) {
             FACEDATA* face = new ("HFACE", SLOG_OBJECT) FACEDATA;
             face->m_data = data;
             face->m_face = ftFace;
-            // FIX: give the face a distance field font when MSDF is on and the font passes validation.
+            // HoT: give the face a distance field font when MSDF is on and the font passes validation.
             face->m_msdf = HoT::MSDF::OpenFont(ftFace, data, size);
             s_faceHash.Insert(face, fileName);
             data = nullptr;

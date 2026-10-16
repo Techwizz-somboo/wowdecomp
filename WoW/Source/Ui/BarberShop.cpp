@@ -476,7 +476,7 @@ void CGBarberShop::DisableBarberShop() {
 // VERIFY: ba4d94bb manual
 // OFFSET: 0x0052EBA0
 int32_t CGBarberShop::GetTotalCost() {
-    // FIX: HoT barber shop changes are free.
+    // HoT: barber shop changes are free.
     if (!CGBarberShop::m_barberShopEnabled || true) {
         return 0;
     }

@@ -15,7 +15,7 @@ struct PathRow {
     int32_t m_path;
 };
 
-// FIX: the one non-id field holds the path, listing it lets WDC2 and later offsets resolve where the DLL left them raw.
+// HoT: the one non-id field holds the path, listing it lets WDC2 and later offsets resolve where the DLL left them raw.
 static const uint32_t s_pathColumns[2] = { 0, 1 };
 
 struct Tables {

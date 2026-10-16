@@ -39,7 +39,7 @@
 #include "WoW/Source/Object/ObjectClient/Types.h"
 
 // STATIC: 0x00A45570
-// FIX: material blend 7 draws with the BlendAdd state.
+// HoT: material blend 7 draws with the BlendAdd state.
 static const uint32_t s_ribbonBlendModes[] = { 0, 1, 2, 10, 3, 4, 5, 13 };
 
 // STATIC: 0x00D4118C
@@ -1093,7 +1093,7 @@ int32_t CM2Model::HasSequence(uint32_t id) {
 // VERIFY: cf5b210a auto
 // OFFSET: 0x00825F40
 uint32_t CM2Model::ResolveSequenceFallback(uint32_t id) {
-    // FIX: ids past the stock table resolve only to themselves.
+    // HoT: ids past the stock table resolve only to themselves.
     if (id >= ANIM_COUNT) {
         return this->m_shared && this->m_shared->m_data && this->HasSequence(this->m_shared->m_data, id) ? id : 0xFFFFFFFF;
     }
@@ -1138,7 +1138,7 @@ uint32_t CM2Model::ResolveSequenceFallback(uint32_t id) {
 // VERIFY: af94bf41 manual
 // OFFSET: 0x00826050
 int32_t CM2Model::IsSequenceLoaded(uint32_t id) {
-    // FIX: ids past the stock table play when the model has them.
+    // HoT: ids past the stock table play when the model has them.
     if (id >= 506) {
         return this->m_shared && this->m_shared->m_data && this->HasSequence(this->m_shared->m_data, id);
     }
@@ -4127,7 +4127,7 @@ void CM2Model::OptimizeVisibleGeometry() {
     uint32_t cacheFlags = shared->m_cache->m_flags;
     M2SkinProfile* skin = shared->m_skinData;
 
-    // FIX: the merged geometry buffer is 16-bit, so a skin past 65535 vertex slots keeps drawing per section.
+    // HoT: the merged geometry buffer is 16-bit, so a skin past 65535 vertex slots keeps drawing per section.
     if (skin->IsWide()) {
         return;
     }
@@ -4251,7 +4251,7 @@ void CM2Model::OptimizeVisibleGeometry() {
             int32_t indexStart = indexStarts[batch->m_skinSectionIndex];
 
             if (indexStart < 0) {
-                // FIX: merged index starts past 65535 are no longer truncated.
+                // HoT: merged index starts past 65535 are no longer truncated.
                 indexStart = static_cast<int32_t>(indexCount);
                 indexStarts[batch->m_skinSectionIndex] = indexCount;
             }
@@ -6195,7 +6195,7 @@ void CM2Model::AnimateSM() {
         return;
     }
 
-    // FIX: a modern model always rebuilds its bone palette since its batches are skinned against it.
+    // HoT: a modern model always rebuilds its bone palette since its batches are skinned against it.
     if (this->m_attachParent || this->m_shared->m_billboardBoneCount || this->m_shared->m_modern) {
         this->Animate();
         return;
@@ -7439,7 +7439,7 @@ int32_t CM2Model::InitializeLoaded() {
                     break;
 
                 default:
-                    // FIX: modern emitter blends past 6 draw with the Screen state and no alpha test.
+                    // HoT: modern emitter blends past 6 draw with the Screen state and no alpha test.
                     material.m_blendMode = 12;
                     material.m_flags &= ~4u;
                     break;

@@ -244,7 +244,7 @@ LPDIRECT3DINDEXBUFFER9 CGxDeviceD3d9Ex::ICreateD3dIB(EGxPoolUsage usage, uint32_
     }
 
     LPDIRECT3DINDEXBUFFER9 indexBuffer = nullptr;
-    // FIX: a pool hinted Index32 holds 32-bit indices.
+    // HoT: a pool hinted Index32 holds 32-bit indices.
     HRESULT hr = this->m_d3dDevice->CreateIndexBuffer(size, d3dUsage, wide ? D3DFMT_INDEX32 : D3DFMT_INDEX16, d3dPool, &indexBuffer, nullptr);
 
     return SUCCEEDED(hr) ? indexBuffer : nullptr;
@@ -4011,7 +4011,7 @@ LPDIRECT3DTEXTURE9 CGxDeviceD3d9Ex::ITexGetScratch(EGxTexFormat format) {
     LPDIRECT3DTEXTURE9 texture = scratch.m_textures[scratch.m_index];
 
     if (!texture) {
-        // FIX: modern models use 2048 px textures, a 1024 px scratch made their uploads fail.
+        // HoT: modern models use 2048 px textures, a 1024 px scratch made their uploads fail.
         if (FAILED(this->m_d3dDevice->CreateTexture(2048, 2048, 11, 0, s_GxTexFmtToD3dFmt[format], D3DPOOL_SYSTEMMEM, &texture, nullptr))) {
             return nullptr;
         }

@@ -3810,7 +3810,7 @@ int32_t CGGameObject_C::CanHighlight() const {
         return 0;
     }
 
-    // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+    // HoT: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
     for (uint32_t i = 0; i < HoT::QuestLog::NUM_SLOTS; i++) {
         if (player->GetQuestLogEntry(i)->m_questId == static_cast<uint32_t>(questId)) {
             return 1;

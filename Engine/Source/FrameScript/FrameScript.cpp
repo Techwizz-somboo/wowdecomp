@@ -1133,7 +1133,7 @@ static int32_t FrameScript_HandleError(lua_State* L) {
 // VERIFY: 6d24b23a auto
 // OFFSET: 0x00819BB0
 int32_t FrameScript_Initialize(int32_t profile) {
-    // FIX: HoT's size class pool replaces the stock Lua allocator.
+    // HoT:'s size class pool replaces the stock Lua allocator.
     s_mempool = HoT::LuaRuntime::CreatePool();
     s_context = lua_newstate(HoT::LuaRuntime::Realloc, s_mempool, profile);
     s_scriptTimeUsed = 0;

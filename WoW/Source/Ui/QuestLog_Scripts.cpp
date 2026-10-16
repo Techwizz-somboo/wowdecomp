@@ -1162,7 +1162,7 @@ static int32_t Script_IsUnitOnQuest(lua_State* L) {
     int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
     int32_t questId;
 
-    // FIX: HoT answers for the player from its slots and for party members from the quest list the server sends.
+    // HoT: answers for the player from its slots and for party members from the quest list the server sends.
     if (index >= 0 && index < CGQuestLog::m_numQuest && !CGQuestLog::m_quests[index].m_isHeader && (questId = CGQuestLog::m_quests[index].m_questId) > 0 && HoT::QuestLog::IsUnitOnQuest(GetGuidByKeyword(lua_tolstring(L, 2, nullptr)).m_guid, questId)) {
         lua_pushnumber(L, 1.0);
         return 1;

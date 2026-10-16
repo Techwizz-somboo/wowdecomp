@@ -204,7 +204,7 @@ void CGxString::ClearInstanceData() {
         }
     }
 
-    // FIX: reset the page mask and eviction flag together with the lines.
+    // HoT: reset the page mask and eviction flag together with the lines.
     this->m_texturePagesUsed = 0;
     this->m_textureEvicted = 0;
 }
@@ -612,7 +612,7 @@ void CGxString::InitializeTextLine(const char* text, uint32_t numBytes, CImVecto
                     verts[3].m_tc.x = coords.maxX;
                     verts[2].m_tc.x = coords.maxX;
 
-                    // FIX: MSDF fonts place the quad on the distance field glyph box instead of the bitmap cell.
+                    // HoT: MSDF fonts place the quad on the distance field glyph box instead of the bitmap cell.
                     if (this->m_currentFace->GetMsdfFont()) {
                         BuildMsdfQuad(this->m_currentFace, desc, this->m_flags, this->m_currentFontHeight, verts);
                     }
@@ -647,12 +647,12 @@ void CGxString::AddShadow(const C2Vector& offset, const CImVector& color) {
 // VERIFY: 926a0475 auto
 // OFFSET: 0x006C7480
 int32_t CGxString::CheckGeometry() {
-    // FIX: an evicted string always drops its lines and rebuilds instead of trusting the glyph check.
+    // HoT: an evicted string always drops its lines and rebuilds instead of trusting the glyph check.
     if (this->m_textureEvicted) {
         this->ClearInstanceData();
     }
 
-    // FIX: an MSDF atlas page eviction since the last build invalidates the quads as well.
+    // HoT: an MSDF atlas page eviction since the last build invalidates the quads as well.
     if (this->m_numLines && this->m_currentFace && this->m_currentFace->GetMsdfFont() && this->m_msdfEvictions != HoT::MSDF::EvictionCount(this->m_currentFace->GetMsdfFont())) {
         this->ClearInstanceData();
     }
@@ -849,7 +849,7 @@ void CGxString::CreateGeometry() {
         return;
     }
 
-    // FIX: note the MSDF atlas generation up front so an eviction during this build triggers another one.
+    // HoT: note the MSDF atlas generation up front so an eviction during this build triggers another one.
     this->m_msdfEvictions = HoT::MSDF::EvictionCount(this->m_currentFace->GetMsdfFont());
 
     this->m_gradientInfo.SetCount(0);

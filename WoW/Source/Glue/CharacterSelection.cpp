@@ -452,7 +452,7 @@ void CCharacterSelection::ShowCharacter() {
         data.m_preferences.m_hairStyleId = info.m_hairStyleID;
         data.m_preferences.m_hairColorId = info.m_hairColorID;
         data.m_preferences.m_facialHairId = info.m_facialHairStyleID;
-        // FIX: uses the HD character model while the HD patch is on.
+        // HoT: uses the HD character model while the HD patch is on.
         data.m_model = CCharacterSelection::m_modelFrame->GetScene()->CreateModel(HoT::HD::GlueModelPath(playerRec->m_modelName), 0);
         data.m_flags |= 0x2;
 
