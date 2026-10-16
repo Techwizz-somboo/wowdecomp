@@ -87,6 +87,32 @@ set(MSDFGEN_USE_VCPKG OFF CACHE BOOL "" FORCE)
 set(MSDFGEN_DYNAMIC_RUNTIME ON CACHE BOOL "" FORCE)
 add_subdirectory(msdfgen EXCLUDE_FROM_ALL)
 
+# Controller: gamepad input comes from SDL3, built static with only the joystick side enabled.
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/SDL/CMakeLists.txt)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+    set(SDL_UNINSTALL OFF CACHE BOOL "" FORCE)
+    set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+    set(SDL_VIDEO OFF CACHE BOOL "" FORCE)
+    set(SDL_GPU OFF CACHE BOOL "" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
+    set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+    set(SDL_JOYSTICK ON CACHE BOOL "" FORCE)
+    set(SDL_HAPTIC ON CACHE BOOL "" FORCE)
+    set(SDL_HIDAPI ON CACHE BOOL "" FORCE)
+    set(SDL_POWER ON CACHE BOOL "" FORCE)
+    set(SDL_SENSOR ON CACHE BOOL "" FORCE)
+    add_subdirectory(SDL EXCLUDE_FROM_ALL)
+else ()
+    message(WARNING "ThirdParty/SDL is missing, run git submodule update --init. Gamepad support is disabled.")
+endif ()
+
 add_library(expat STATIC
     expat/lib/xmlparse.c
     expat/lib/xmlrole.c

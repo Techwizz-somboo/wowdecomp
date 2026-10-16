@@ -11,6 +11,7 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C2iVector.h"
+#include "Controller/Controller.h"
 
 #define WM_POPUPSYSTEMMENU 0x313
 
@@ -1208,6 +1209,8 @@ int32_t OsInputGet(OSINPUT* id, int32_t* param0, int32_t* param1, int32_t* param
 
     if (s_queueHead == s_queueTail) {
         OsPollJoysticks(s_appActive);
+        // Controller: gamepads post their buttons into the queue here.
+        Controller::Poll(s_appActive);
 
         MSG msg;
         BOOL available = PeekMessageA(&msg, nullptr, 0, 0, PM_NOREMOVE);

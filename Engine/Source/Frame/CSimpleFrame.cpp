@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <new>
 #include "Engine/Source/Frame/CSimpleFrame.h"
+#include "Controller/Controller.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Base/Status.h"
@@ -154,8 +155,11 @@ static const char* KeyCodeToString(KEY key) {
         case KEY_F19:
             SStrPrintf(charBuf, sizeof(charBuf), "F%d", key - KEY_F1 + 1);
             return charBuf;
-        default:
-            return "UNKNOWN";
+        default: {
+            // Controller: pad keys report their binding name.
+            const char* padName = Controller::KeyName(key);
+            return padName ? padName : "UNKNOWN";
+        }
     }
 }
 
@@ -234,6 +238,8 @@ CSimpleFrame::CSimpleFrame(CSimpleFrame* parent) {
 // VERIFY: e1a5b71b manual
 // OFFSET: [0x00492770, 0x004926B0, 0x00492E40]
 CSimpleFrame::~CSimpleFrame() {
+    // Controller: drop the frame's gamepad scripts and button captures.
+    Controller::OnFrameDestroyed(this);
     this->m_lifecycleState = 3;
     this->m_simpleTop->UnregisterFrame(this);
     this->m_simpleTop->ValidateDeletedFrame(this);
@@ -404,7 +410,8 @@ FrameScript_Object::ScriptIx* CSimpleFrame::GetScriptByName(const char* name, Fr
         return &this->m_onDisable;
     }
 
-    return nullptr;
+    // Controller: OnGamePadButtonDown, OnGamePadButtonUp and OnGamePadStick.
+    return Controller::GetFrameScript(this, name, data);
 }
 
 // VERIFY: d39dac25 manual

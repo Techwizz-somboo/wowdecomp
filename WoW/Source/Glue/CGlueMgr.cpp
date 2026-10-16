@@ -38,6 +38,7 @@
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/CRect.h"
 #include "HoT/HoT.h"
+#include "Controller/Controller.h"
 #include "HoT/Runtime/SharedXML.h"
 #include "HoT/Streaming/PatchStatusUI.h"
 #include "HoT/Runtime/WorldResume.h"
@@ -718,8 +719,11 @@ void CGlueMgr::Resume() {
     AccountMsg_RegisterScriptFunctions();
     CGVideoOptions::RegisterScriptFunctions();
     CGlueMgr::s_scriptFunctionsLoaded = 1;
-    FrameScript_CreateEvents(g_glueScriptEvents, sizeof(g_glueScriptEvents) / sizeof(g_glueScriptEvents[0]));
-    HoT::OnGlueScriptsLoaded(g_glueScriptEvents, sizeof(g_glueScriptEvents) / sizeof(g_glueScriptEvents[0]));
+    // Controller: the GAME_PAD_* events go after the stock ones.
+    uint32_t eventCount;
+    const char** events = Controller::ScriptEvents(false, g_glueScriptEvents, sizeof(g_glueScriptEvents) / sizeof(g_glueScriptEvents[0]), &eventCount);
+    FrameScript_CreateEvents(events, eventCount);
+    HoT::OnGlueScriptsLoaded(events, eventCount);
 
     CCharacterSelection::Initialize();
     CCharacterCreation::Initialize();

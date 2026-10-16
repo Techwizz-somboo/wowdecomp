@@ -6,6 +6,7 @@
 #include <new>
 #include <typeinfo>
 #include "WoW/Source/Ui/UIBindings.h"
+#include "Controller/Controller.h"
 #include "HoT/Spells/ActionRepeat.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
@@ -152,7 +153,8 @@ static int32_t IsValidKeyName(const char* key) {
         }
     }
 
-    return 0;
+    // Controller: PAD1, PADLSHOULDER and the other pad keys are bindable.
+    return Controller::IsKeyName(key);
 }
 
 // VERIFY: 532ce7dd manual
@@ -258,8 +260,11 @@ static const char* GetKeyName(KEY key) {
         case KEY_F19:
             SStrPrintf(s_keyName, sizeof(s_keyName), "F%d", key - KEY_F1 + 1);
             return s_keyName;
-        default:
-            return "UNKNOWN";
+        default: {
+            // Controller: pad keys bind by their PAD names.
+            const char* padName = Controller::KeyName(key);
+            return padName ? padName : "UNKNOWN";
+        }
     }
 }
 

@@ -45,6 +45,7 @@
 #include "Engine/Source/Storm/Source/MD5.h"
 #include "Engine/Source/Tempest/CRandom.h"
 #include "HoT/HoT.h"
+#include "Controller/Controller.h"
 #include "HoT/Streaming/BackgroundDownloader.h"
 #include "HoT/Streaming/LooseFiles.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
@@ -513,6 +514,8 @@ static void WowClientDestroy() {
     ValidateNameDestroy();
     DeclinedWordsDestroy();
     SpellVisualsShutdown();
+    // Controller: release held pad input before the input control goes away.
+    Controller::Shutdown();
     InputControlDestroy();
     CGlueMgr::Shutdown();
     ShutdownAddOns();
@@ -1048,6 +1051,8 @@ static void InitializeClient() {
     GxuLightInitialize();
     GxuLightSetGridSize(16.665001f);
     InputControlInitialize();
+    // Controller: open SDL gamepads once the input control exists.
+    Controller::Initialize();
     CGlueMgr::Initialize();
 
     if (GetConsoleMessage()) {

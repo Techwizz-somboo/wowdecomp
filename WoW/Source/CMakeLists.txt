@@ -77,4 +77,5 @@ target_link_libraries(Wow
         WowServices
         WowSvcs
         HoT
+        Controller
 )

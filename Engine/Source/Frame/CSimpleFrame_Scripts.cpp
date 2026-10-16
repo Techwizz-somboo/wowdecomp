@@ -4,6 +4,7 @@
 #include <new>
 #include <typeinfo>
 #include "Engine/Source/Frame/CSimpleFrame.h"
+#include "Controller/Controller.h"
 #include "Engine/Source/Base/CDataAllocator.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Base/Status.h"
@@ -2071,4 +2072,6 @@ static FrameScript_Method s_ScriptMethods[] = {
 void CSimpleFrame::RegisterScriptMethods(lua_State* L) {
     CScriptRegion::RegisterScriptMethods(L);
     FrameScript_Object::FillScriptMethodTable(L, s_ScriptMethods, sizeof(s_ScriptMethods) / sizeof(s_ScriptMethods[0]));
+    // Controller: EnableGamePadButton and EnableGamePadStick.
+    Controller::RegisterFrameMethods(L);
 }

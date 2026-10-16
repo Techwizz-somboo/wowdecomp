@@ -1,5 +1,6 @@
 #include "GameUI.h"
 #include "HoT/HoT.h"
+#include "Controller/Controller.h"
 #include "HoT/Game/Session.h"
 #include "HoT/Runtime/SharedXML.h"
 #include "HoT/Streaming/PatchStatusUI.h"
@@ -1718,8 +1719,11 @@ void CGGameUI::InitializeFrameXML() {
     FrameScript_Destroy();
     FrameScript_Initialize(g_scriptProfileCVar->m_intValue);
     LoadScriptFunctions();
-    FrameScript_CreateEvents(g_scriptEvents, NUM_SCRIPT_EVENTS);
-    HoT::OnGameScriptsLoaded(g_scriptEvents, NUM_SCRIPT_EVENTS);
+    // Controller: the GAME_PAD_* events go after the stock ones.
+    uint32_t eventCount;
+    const char** events = Controller::ScriptEvents(true, g_scriptEvents, NUM_SCRIPT_EVENTS, &eventCount);
+    FrameScript_CreateEvents(events, eventCount);
+    HoT::OnGameScriptsLoaded(events, eventCount);
     CGGameUI::RegisterGameCVars();
     CGUIBindings::Initialize();
     CGWorldFrame::RegisterFrames();
@@ -1780,6 +1784,9 @@ void CGGameUI::InitializeFrameXML() {
     if (SFile::FileExistsEx("Interface\\FrameXML\\Bindings.xml", 1)) {
         CGUIBindings::s_bindings->Load("Interface\\FrameXML\\Bindings.xml", &md5, &status);
     }
+
+    // Controller: gamepad binding commands, default pad bindings and UI glue.
+    Controller::LoadGameUI(&status);
 
     uint8_t digest[16];
     MD5Final(digest, &md5);

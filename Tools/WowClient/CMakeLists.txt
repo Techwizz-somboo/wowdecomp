@@ -89,5 +89,6 @@ target_link_libraries(WowClient
         WowServices
         WowSvcs
         HoT
+        Controller
         dbghelp
 )
