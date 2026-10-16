@@ -1,4 +1,8 @@
 #include "GameUI.h"
+#include "HoT/HoT.h"
+#include "HoT/Game/Session.h"
+#include "HoT/Runtime/SharedXML.h"
+#include "HoT/Streaming/PatchStatusUI.h"
 #include "WoW/Source/DB/Rec/FileDataRec.h"
 #include "WoW/Source/DB/Rec/MovieFileDataRec.h"
 #include "WoW/Source/DB/Rec/MovieRec.h"
@@ -1715,6 +1719,7 @@ void CGGameUI::InitializeFrameXML() {
     FrameScript_Initialize(g_scriptProfileCVar->m_intValue);
     LoadScriptFunctions();
     FrameScript_CreateEvents(g_scriptEvents, NUM_SCRIPT_EVENTS);
+    HoT::OnGameScriptsLoaded(g_scriptEvents, NUM_SCRIPT_EVENTS);
     CGGameUI::RegisterGameCVars();
     CGUIBindings::Initialize();
     CGWorldFrame::RegisterFrames();
@@ -1769,6 +1774,8 @@ void CGGameUI::InitializeFrameXML() {
     FrameXML_RegisterLoadProgressCallback(LoadingScreenXMLCallback, nullptr, LoadAddOnFileCount() + numFiles);
     FrameXML_FreeHashNodes();
     FrameXML_CreateFrames("Interface\\FrameXML\\FrameXML.toc", nullptr, &md5, &status);
+    HoT::SharedXML::Load("frame", &status);
+    HoT::Streaming::PatchStatusUI::Load("frame");
 
     if (SFile::FileExistsEx("Interface\\FrameXML\\Bindings.xml", 1)) {
         CGUIBindings::s_bindings->Load("Interface\\FrameXML\\Bindings.xml", &md5, &status);
@@ -2000,9 +2007,7 @@ int32_t CGGameUI::Idle(const void* data, void* param) {
 
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-    if (player && !(player->m_unit->m_unitFieldFlags & 0x80000)) {
-        lua_gc(L, LUA_GCSTEP, 1);
-    }
+    // FIX: HoT paces the Lua GC at the end of PaintScreen instead of stepping it here every frame.
 
     if (CGGameUI::m_reloadUIRequested && !CGGameUI::m_inCinematic) {
         CGGameUI::m_currentlyReloadingUI = 1;
@@ -2075,7 +2080,8 @@ int32_t CGGameUI::Idle(const void* data, void* param) {
 
     int32_t idleTime = OsGetAsyncTimeMs() - CSimpleTop::s_eventTime;
 
-    if (idleTime - 300000 >= 0) {
+    // FIX: HoT staff accounts never go idle.
+    if (idleTime - 300000 >= 0 && !HoT::Session::HasClearance(2)) {
         if (idleTime - 1800000 < 0) {
             if (player) {
                 if (!player->m_unit->m_unitFieldBytes1[0] && !(player->m_unit->m_unitFieldFlags & 0x80000) && !player->IsMounted() && !player->IsAutoTracking()) {
@@ -3071,15 +3077,8 @@ void CGGameUI::DisplayError(UIErrors error, ...) {
 // VERIFY: 7aa17106 auto
 // OFFSET: 0x00513920
 uint8_t CGGameUI::GetComboPoints(WOWGUID target) {
-    if (!target) {
-        target = CGGameUI::m_lockedTarget;
-    }
-
-    if (target == CGGameUI::m_comboTarget) {
-        return CGGameUI::m_comboPoints;
-    }
-
-    return 0;
+    // FIX: HoT combo points stay with the player instead of the combo target.
+    return CGGameUI::m_comboPoints;
 }
 
 // VERIFY: 8e70952b auto

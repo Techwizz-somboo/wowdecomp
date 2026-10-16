@@ -33,7 +33,9 @@ enum EGxBlend {
     GxBlend_SrcAlphaOpaque = 9,
     GxBlend_NoAlphaAdd = 10,
     GxBlend_ConstantAlpha = 11,
-    GxBlends_Last = 12,
+    GxBlend_Screen = 12,
+    GxBlend_BlendAdd = 13,
+    GxBlends_Last = 14,
 };
 
 enum EGxTexFormat {
@@ -175,8 +177,9 @@ class CGxBatch {
     /* 0000 */ EGxPrim m_primType;
     /* 0004 */ uint32_t m_start;
     /* 0008 */ uint32_t m_count;
-    /* 000C */ uint16_t m_minIndex;
-    /* 000E */ uint16_t m_maxIndex;
+    // FIX: the vertex range is 32-bit so batches can address past 65535 vertices.
+    /* 000C */ uint32_t m_minIndex;
+    /* 0010 */ uint32_t m_maxIndex;
 };
 
 enum EGxColorFormat {

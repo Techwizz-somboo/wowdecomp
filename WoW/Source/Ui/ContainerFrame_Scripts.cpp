@@ -1,4 +1,5 @@
 #include "ContainerFrame.h"
+#include "HoT/HoT.h"
 #include <cstdint>
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/FrameScript/FrameScript_Object.h"
@@ -266,6 +267,11 @@ static int32_t Script_GetContainerItemCooldown(lua_State* L) {
 // VERIFY: 0244abbb manual
 // OFFSET: 0x005D8650
 static int32_t Script_UseContainerItem(lua_State* L) {
+    // FIX: HoT crafting and gem sockets take bag clicks while their windows are open.
+    if (HoT::OnUseContainerItem(L)) {
+        return 0;
+    }
+
     if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2)) {
         luaL_error(L, "Usage: UseContainerItem(index, slot[, target])");
         return 0;

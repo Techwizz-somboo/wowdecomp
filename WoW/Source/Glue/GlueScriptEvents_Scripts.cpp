@@ -18,6 +18,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "HoT/Streaming/PatchStatusUI.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/Console/ConsoleClient.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -206,6 +207,11 @@ static int32_t Script_AcceptContest(lua_State* L) {
 // VERIFY: 37439067 auto
 // OFFSET: 0x004DC260
 static int32_t Script_DefaultServerLogin(lua_State* L) {
+    // FIX: HoT refuses the login while the background downloader is still patching or needs a restart.
+    if (HoT::Streaming::PatchStatusUI::BlockLogin()) {
+        return 0;
+    }
+
     if (!lua_isstring(L, 1) || !lua_isstring(L, 2)) {
         luaL_error(L, "Usage: DefaultServerLogin(\"accountName\", \"password\")");
         return 0;

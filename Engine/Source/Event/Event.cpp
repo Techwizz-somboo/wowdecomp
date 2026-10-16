@@ -9,6 +9,7 @@
 #include "Engine/Source/Event/Observer.h"
 #include "Engine/Source/Os/Input.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/Streaming/BackgroundDownloader.h"
 
 // VERIFY: 849b60d4 auto
 // OFFSET: 0x0047CFF0
@@ -106,6 +107,8 @@ int32_t EventIsKeyDown(KEY key) {
 // VERIFY: 21d82365 manual
 // OFFSET: 0x0047D290
 void EventPostCloseEx(HEVENTCONTEXT contextHandle) {
+    HoT::Streaming::SwapOnClose();
+
     if (!contextHandle) {
         contextHandle = static_cast<HEVENTCONTEXT>(PropGet(PROP_EVENTCONTEXT));
     }

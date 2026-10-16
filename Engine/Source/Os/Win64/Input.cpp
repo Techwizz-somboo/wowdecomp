@@ -11,6 +11,7 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C2iVector.h"
+#include "HoT/Runtime/Display.h"
 
 #define WM_POPUPSYSTEMMENU 0x313
 
@@ -1296,6 +1297,11 @@ int32_t OsGetDefaultWindowRect(tagRECT* rect) {
 intptr_t OsWindowProc(void* window, uint32_t message, uintptr_t wparam, intptr_t lparam) {
     HWND hwnd = static_cast<HWND>(window);
     UINT_PTR timer = 0;
+
+    // FIX: drop HoT's cached display modes when the display configuration changes.
+    if (message == WM_DISPLAYCHANGE) {
+        HoT::Display::InvalidateMonitorModes();
+    }
 
     switch (message) {
         case WM_SIZE:

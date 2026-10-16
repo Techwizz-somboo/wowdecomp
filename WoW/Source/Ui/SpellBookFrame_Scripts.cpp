@@ -1,4 +1,5 @@
 #include "SpellBookFrame.h"
+#include "HoT/Spells/Targeting.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include <cstdint>
 #include "Engine/Source/FrameScript/FrameScript.h"
@@ -1051,6 +1052,11 @@ static int32_t Script_CastSpellByID(lua_State* L) {
 // VERIFY: c96444c2 manual
 // OFFSET: 0x00540310
 static int32_t Script_CastSpellByName(lua_State* L) {
+    // FIX: HoT takes "cursor" and "self" as ground targets.
+    if (HoT::Spells::CastSpellByNameAt(L, Script_CastSpellByName)) {
+        return 0;
+    }
+
     if (!lua_isstring(L, 1)) {
         luaL_error(L, "Usage: CastSpellByName(name[, target])");
         return 0;

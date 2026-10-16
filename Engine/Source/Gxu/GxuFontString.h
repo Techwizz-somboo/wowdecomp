@@ -72,6 +72,8 @@ struct CGxString : public TSLinkedNode<CGxString> {
     /* 00B0 */ int32_t m_numLines;
     /* 00B4 */ TEXTLINETEXTURE* m_textLines[8];
     /* 00D4 */ int32_t m_idleTicks;
+    // FIX: the MSDF atlas eviction count the quads were built against.
+    /* 00D8 */ uint32_t m_msdfEvictions;
 
     CGxString();
     ~CGxString();
@@ -103,6 +105,8 @@ struct CGxString : public TSLinkedNode<CGxString> {
 struct VERT {
     /* 0000 */ C3Vector m_vc;
     /* 000C */ C2Vector m_tc;
+    // FIX: the MSDF atlas page of the quad, always 0 on the stock path.
+    /* 0014 */ float m_page;
 };
 
 #endif

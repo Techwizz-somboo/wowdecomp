@@ -1,0 +1,5 @@
+// Generated at build time by HoT/BuildVersion.cmake.
+#pragma once
+
+#define HOT_COMMIT_HASH "@HOT_COMMIT_HASH@"
+#define HOT_COMMIT_DIRTY @HOT_COMMIT_DIRTY@

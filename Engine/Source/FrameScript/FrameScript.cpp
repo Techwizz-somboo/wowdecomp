@@ -13,6 +13,7 @@
 #include "Engine/Source/lua-5.1/src/lmemPool.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "Engine/Source/lua-5.1/src/lualib.h"
+#include "HoT/Runtime/LuaRuntime.h"
 
 // STATIC: 0x00D3F780
 double s_scriptTimeDivisor;
@@ -1132,8 +1133,9 @@ static int32_t FrameScript_HandleError(lua_State* L) {
 // VERIFY: 6d24b23a auto
 // OFFSET: 0x00819BB0
 int32_t FrameScript_Initialize(int32_t profile) {
-    s_mempool = luaM_initPool();
-    s_context = lua_newstate(luaM_reallocPool, s_mempool, profile);
+    // FIX: HoT's size class pool replaces the stock Lua allocator.
+    s_mempool = HoT::LuaRuntime::CreatePool();
+    s_context = lua_newstate(HoT::LuaRuntime::Realloc, s_mempool, profile);
     s_scriptTimeUsed = 0;
     s_scriptProfileEnabled = profile;
     s_errorHandlerFunc = -1;
@@ -1162,6 +1164,7 @@ int32_t FrameScript_Initialize(int32_t profile) {
     lua_pop(s_context, 1);
 
     FrameScript_Execute(s_compatLua, "compat.lua", nullptr);
+    HoT::LuaRuntime::OnStateCreated(s_context);
 
     return 1;
 }
@@ -1215,6 +1218,7 @@ const char* FrameScript_GetText(const char* token, int32_t count, FRAMESCRIPT_GE
 // VERIFY: cfc227f0 manual
 // OFFSET: 0x00819EA0
 void FrameScript_Execute(int32_t function, FrameScript_Object* object, int32_t argCount, const char* taint, FrameScript_EventObject* event) {
+    HoT::LuaRuntime::HandlerTimer handlerTimer;
     lua_State* L = s_context;
     int64_t start = 0;
 
@@ -1436,7 +1440,7 @@ void FrameScript_UnregisterScriptEvent(FrameScript_Object* object, FrameScript_E
 void FrameScript_Destroy() {
     lua_close(s_context);
     s_context = nullptr;
-    luaM_freePool(s_mempool);
+    HoT::LuaRuntime::DestroyPool(s_mempool);
     s_mempool = nullptr;
     s_scriptEventsHash.Clear();
     s_scriptEvents.Clear();

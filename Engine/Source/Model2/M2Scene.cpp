@@ -14,6 +14,7 @@
 #include "Engine/Source/Model2/CM2SceneRender.h"
 #include "Engine/Source/Services/GfxSingletonManager.h"
 #include "Engine/Source/Services/ParticleSystem2.h"
+#include "HoT/Character/HD/HDCharacters.h"
 #include "Engine/Source/Services/RibbonEmitter.h"
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
@@ -23,10 +24,11 @@
 #include "Engine/Source/Tempest/NTempest.h"
 
 // STATIC: 0x00A45374
-const uint32_t s_localLighting[7] = { 1, 1, 1, 1, 1, 0, 0 };
+// FIX: blend 7 is the modern BlendAdd material and 8 is the internal Screen blend modern particles use.
+const uint32_t s_localLighting[9] = { 1, 1, 1, 1, 1, 0, 0, 1, 0 };
 
 // STATIC: 0x00A453B0
-const uint32_t s_blendModes[3][7] = { { 0, 1, 2, 10, 3, 4, 5 }, { 2, 2, 2, 10, 3, 4, 5 }, { 2, 2, 2, 10, 3, 4, 5 } };
+const uint32_t s_blendModes[3][9] = { { 0, 1, 2, 10, 3, 4, 5, 13, 12 }, { 2, 2, 2, 10, 3, 4, 5, 13, 12 }, { 2, 2, 2, 10, 3, 4, 5, 13, 12 } };
 
 // STATIC: 0x00AF5898
 uint32_t CM2Scene::s_optFlags = 0xFFFFFFFF;
@@ -89,6 +91,10 @@ uint32_t ParticleBlendToM2Blend(uint32_t blend) {
             return 6;
         case 10:
             return 3;
+        case 12:
+            return 8;
+        case 13:
+            return 7;
         default:
             return 0;
     }
@@ -447,9 +453,10 @@ void M2BlendBoneMatrices(const C44Matrix* bones, ubyte4 weights, ubyte4 indices,
 // OFFSET: 0x0081D510
 M2HitRec* CM2Scene::IntersectHitTestTriangles(const uint16_t* indices, const uint16_t* end, uint32_t vertexStart, const C3Vector& start, uint32_t pass, M2HitRec* rec, float& t, M2HitRec* best) {
     for (; indices < end; indices += 3) {
-        const C3Vector& v0 = this->m_hitVerts[indices[0] - vertexStart];
-        const C3Vector& v1 = this->m_hitVerts[indices[1] - vertexStart];
-        const C3Vector& v2 = this->m_hitVerts[indices[2] - vertexStart];
+        // FIX: triangle values keep only the low 16 bits past 65535 vertices, so the section offset wraps the same way.
+        const C3Vector& v0 = this->m_hitVerts[static_cast<uint16_t>(indices[0] - vertexStart)];
+        const C3Vector& v1 = this->m_hitVerts[static_cast<uint16_t>(indices[1] - vertexStart)];
+        const C3Vector& v2 = this->m_hitVerts[static_cast<uint16_t>(indices[2] - vertexStart)];
         float det = (v2.y - v0.y) * (v1.x - v0.x) - (v2.x - v0.x) * (v1.y - v0.y);
 
         if (fabsf(det) < 0.0000099999997f) {
@@ -503,7 +510,7 @@ void CM2Scene::TransformHitTestVerticesBlendSSE(const CM2Model* model, const M2S
     uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
     for (uint32_t i = section->m_vertexStart; i < end; i++) {
-        M2Vertex* vertex = &data->m_vertices[skinData->m_vertices[i]];
+        M2Vertex* vertex = &data->m_vertices[skinData->VertexAt(i)];
 
         if (*reinterpret_cast<uint32_t*>(&vertex->m_weights) != weights || *reinterpret_cast<uint32_t*>(&vertex->m_indices) != indices) {
             weights = *reinterpret_cast<uint32_t*>(&vertex->m_weights);
@@ -538,7 +545,7 @@ void CM2Scene::TransformHitTestVerticesBlend(const CM2Model* model, const M2Skin
     uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
     for (uint32_t i = section->m_vertexStart; i < end; i++) {
-        M2Vertex* vertex = &data->m_vertices[skinData->m_vertices[i]];
+        M2Vertex* vertex = &data->m_vertices[skinData->VertexAt(i)];
 
         if (*reinterpret_cast<uint32_t*>(&vertex->m_weights) != weights || *reinterpret_cast<uint32_t*>(&vertex->m_indices) != indices) {
             weights = *reinterpret_cast<uint32_t*>(&vertex->m_weights);
@@ -570,7 +577,7 @@ void CM2Scene::TransformHitTestVertices(const CM2Model* model, const M2SkinProfi
     uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
     for (uint32_t i = section->m_vertexStart; i < end; i++) {
-        M2Vertex* vertex = &data->m_vertices[skinData->m_vertices[i]];
+        M2Vertex* vertex = &data->m_vertices[skinData->VertexAt(i)];
         const C44Matrix& matrix = model->m_boneMatrices[vertex->m_indices.b[0]];
         C3Vector p = vertex->m_position * matrix;
 
@@ -1550,6 +1557,9 @@ CM2Model* CM2Scene::DuplicateModel(CM2Model* source, uint32_t flags) {
         ObjectFree(heap->m_heapId, model->m_handle);
         return nullptr;
     }
+
+    // FIX: a copied HD helm keeps its HD placement.
+    HoT::HD::CopyHelmPlacement(model, source);
 
     return model;
 }

@@ -41,10 +41,10 @@ const D3DDECLUSAGE CGxDeviceD3d9Ex::s_gxAttribToD3dAttribUsage[GxVAs_Last] = { D
 const uint32_t CGxDeviceD3d9Ex::s_gxAttribToD3dAttribUsageIndex[GxVAs_Last] = { 0, 0, 0, 0, 0, 1, 0, 1, 2, 3, 4, 5, 6, 7 };
 
 // STATIC: 0x00A2FB68
-const D3DBLEND CGxDeviceD3d9Ex::s_srcBlend[12] = { D3DBLEND_ONE, D3DBLEND_ONE, D3DBLEND_SRCALPHA, D3DBLEND_SRCALPHA, D3DBLEND_DESTCOLOR, D3DBLEND_DESTCOLOR, D3DBLEND_DESTCOLOR, D3DBLEND_INVSRCALPHA, D3DBLEND_INVSRCALPHA, D3DBLEND_SRCALPHA, D3DBLEND_ONE, D3DBLEND_BLENDFACTOR };
+const D3DBLEND CGxDeviceD3d9Ex::s_srcBlend[GxBlends_Last] = { D3DBLEND_ONE, D3DBLEND_ONE, D3DBLEND_SRCALPHA, D3DBLEND_SRCALPHA, D3DBLEND_DESTCOLOR, D3DBLEND_DESTCOLOR, D3DBLEND_DESTCOLOR, D3DBLEND_INVSRCALPHA, D3DBLEND_INVSRCALPHA, D3DBLEND_SRCALPHA, D3DBLEND_ONE, D3DBLEND_BLENDFACTOR, D3DBLEND_INVDESTCOLOR, D3DBLEND_ONE };
 
 // STATIC: 0x00A2FB98
-const D3DBLEND CGxDeviceD3d9Ex::s_dstBlend[12] = { D3DBLEND_ZERO, D3DBLEND_ZERO, D3DBLEND_INVSRCALPHA, D3DBLEND_ONE, D3DBLEND_ZERO, D3DBLEND_SRCCOLOR, D3DBLEND_ONE, D3DBLEND_ONE, D3DBLEND_ZERO, D3DBLEND_ZERO, D3DBLEND_ONE, D3DBLEND_INVBLENDFACTOR };
+const D3DBLEND CGxDeviceD3d9Ex::s_dstBlend[GxBlends_Last] = { D3DBLEND_ZERO, D3DBLEND_ZERO, D3DBLEND_INVSRCALPHA, D3DBLEND_ONE, D3DBLEND_ZERO, D3DBLEND_SRCCOLOR, D3DBLEND_ONE, D3DBLEND_ONE, D3DBLEND_ZERO, D3DBLEND_ZERO, D3DBLEND_ONE, D3DBLEND_INVBLENDFACTOR, D3DBLEND_ONE, D3DBLEND_INVSRCALPHA };
 
 // STATIC: 0x00A2FBC8
 const D3DTEXTUREADDRESS CGxDeviceD3d9Ex::s_wrapModes[2] = { D3DTADDRESS_CLAMP, D3DTADDRESS_WRAP };
@@ -234,7 +234,7 @@ void CGxDeviceD3d9Ex::IUnloadD3dLib(HINSTANCE& d3dLib, LPDIRECT3D9& d3d) {
 
 // VERIFY: 01b7ea49 manual
 // OFFSET: 0x0068E180
-LPDIRECT3DINDEXBUFFER9 CGxDeviceD3d9Ex::ICreateD3dIB(EGxPoolUsage usage, uint32_t size) {
+LPDIRECT3DINDEXBUFFER9 CGxDeviceD3d9Ex::ICreateD3dIB(EGxPoolUsage usage, uint32_t size, int32_t wide) {
     D3DPOOL d3dPool = D3DPOOL_MANAGED;
     DWORD d3dUsage = D3DUSAGE_WRITEONLY | (this->m_d3dIsHwDevice ? 0 : D3DUSAGE_SOFTWAREPROCESSING);
 
@@ -244,7 +244,8 @@ LPDIRECT3DINDEXBUFFER9 CGxDeviceD3d9Ex::ICreateD3dIB(EGxPoolUsage usage, uint32_
     }
 
     LPDIRECT3DINDEXBUFFER9 indexBuffer = nullptr;
-    HRESULT hr = this->m_d3dDevice->CreateIndexBuffer(size, d3dUsage, D3DFMT_INDEX16, d3dPool, &indexBuffer, nullptr);
+    // FIX: a pool hinted Index32 holds 32-bit indices.
+    HRESULT hr = this->m_d3dDevice->CreateIndexBuffer(size, d3dUsage, wide ? D3DFMT_INDEX32 : D3DFMT_INDEX16, d3dPool, &indexBuffer, nullptr);
 
     return SUCCEEDED(hr) ? indexBuffer : nullptr;
 }
@@ -542,7 +543,7 @@ int32_t CGxDeviceD3d9Ex::CreatePoolAPI(CGxPool* pool) {
             break;
 
         case GxPoolTarget_Index:
-            pool->m_apiSpecific = this->ICreateD3dIB(pool->m_usage, pool->m_size);
+            pool->m_apiSpecific = this->ICreateD3dIB(pool->m_usage, pool->m_size, (pool->m_hint & GxPoolHintBit_Index32) != 0);
             break;
 
         default:
@@ -592,7 +593,7 @@ void CGxDeviceD3d9Ex::PoolSizeSet(CGxPool* pool, uint32_t size) {
             break;
 
         case GxPoolTarget_Index:
-            pool->m_apiSpecific = this->ICreateD3dIB(pool->m_usage, size);
+            pool->m_apiSpecific = this->ICreateD3dIB(pool->m_usage, size, (pool->m_hint & GxPoolHintBit_Index32) != 0);
             break;
 
         default:
@@ -3097,7 +3098,7 @@ void CGxDeviceD3d9Ex::Draw(CGxBatch* batch, int32_t count) {
 
     if (count) {
         uint32_t primCount = this->PrimCalcCount(batch->m_primType, batch->m_count);
-        this->m_d3dDevice->DrawIndexedPrimitive(s_primitiveConversion[batch->m_primType], baseVertexIndex, batch->m_minIndex, batch->m_maxIndex - batch->m_minIndex + 1, batch->m_start + (this->m_primIndexBuf->m_index >> 1), primCount);
+        this->m_d3dDevice->DrawIndexedPrimitive(s_primitiveConversion[batch->m_primType], baseVertexIndex, batch->m_minIndex, batch->m_maxIndex - batch->m_minIndex + 1, batch->m_start + (this->m_primIndexBuf->m_index >> (this->m_primIndexBuf->m_itemSize == sizeof(uint32_t) ? 2 : 1)), primCount);
     } else {
         uint32_t primCount = this->PrimCalcCount(batch->m_primType, batch->m_count);
         this->m_d3dDevice->DrawPrimitive(s_primitiveConversion[batch->m_primType], baseVertexIndex, primCount);
@@ -4010,7 +4011,8 @@ LPDIRECT3DTEXTURE9 CGxDeviceD3d9Ex::ITexGetScratch(EGxTexFormat format) {
     LPDIRECT3DTEXTURE9 texture = scratch.m_textures[scratch.m_index];
 
     if (!texture) {
-        if (FAILED(this->m_d3dDevice->CreateTexture(1024, 1024, 10, 0, s_GxTexFmtToD3dFmt[format], D3DPOOL_SYSTEMMEM, &texture, nullptr))) {
+        // FIX: modern models use 2048 px textures, a 1024 px scratch made their uploads fail.
+        if (FAILED(this->m_d3dDevice->CreateTexture(2048, 2048, 11, 0, s_GxTexFmtToD3dFmt[format], D3DPOOL_SYSTEMMEM, &texture, nullptr))) {
             return nullptr;
         }
 

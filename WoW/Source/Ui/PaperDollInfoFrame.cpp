@@ -203,6 +203,9 @@ int32_t GetUnitAndSlotFromLua(lua_State* L, const char*& unit, int32_t& slot) {
 // VERIFY: d19c5b13 manual
 // OFFSET: 0x005E8300
 int32_t CGCharacterInfo::GetActivePlayerAmmoID(const CGPlayer_C* player) {
+    // FIX: HoT has no ammo slot, so equipped ammo never counts for stats, tooltips or action counts.
+    return 0;
+
     if (player->m_obj->m_guid == ClntObjMgrGetActivePlayer()) {
         return player->m_player->m_playerAmmoId;
     }

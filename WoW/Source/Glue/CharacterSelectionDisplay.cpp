@@ -1,5 +1,6 @@
 #include "CharacterSelectionDisplay.h"
 #include "Engine/Source/Model2/M2Model.h"
+#include "HoT/Character/HD/HDCharacters.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/Glue/CharacterSelection.h"
@@ -53,6 +54,7 @@ void CharacterSelectionDisplay::SetCharacterFacing(float rotation) {
 
     if (display.m_component->m_data.m_model) {
         C3Vector position(0.0f, 0.0f, 0.0f);
-        display.m_component->m_data.m_model->SetWorldTransform(position, rotation, 1.0f);
+        // FIX: an HD character model is scaled to match the stock one.
+        display.m_component->m_data.m_model->SetWorldTransform(position, rotation, HoT::HD::GlueScale(display.m_component->m_data.m_model));
     }
 }

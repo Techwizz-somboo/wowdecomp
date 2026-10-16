@@ -58,6 +58,7 @@ enum EGxPoolHintBits {
     GxPoolHintBit_Unk1 = 1,
     GxPoolHintBit_Unk2 = 2,
     GxPoolHintBit_Unk3 = 3,
+    GxPoolHintBit_Index32 = 0x10,
 };
 
 enum EGxPrim {

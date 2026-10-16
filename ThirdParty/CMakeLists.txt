@@ -66,30 +66,26 @@ if (WIN32)
     endif ()
 endif ()
 
-add_library(freetype STATIC
-    freetype/src/base/ftsystem.c
-    freetype/src/base/ftinit.c
-    freetype/src/base/ftdebug.c
-    freetype/src/base/ftbase.c
-    freetype/src/autohint/autohint.c
-    freetype/src/cff/cff.c
-    freetype/src/cid/type1cid.c
-    freetype/src/psaux/psaux.c
-    freetype/src/psnames/psnames.c
-    freetype/src/raster/raster.c
-    freetype/src/sfnt/sfnt.c
-    freetype/src/smooth/smooth.c
-    freetype/src/truetype/truetype.c
-    freetype/src/type1/type1.c
-    freetype/src/winfonts/winfnt.c
-)
+# FIX: HoT MSDF text needs a modern FreeType and msdfgen, the client's 2.0 copy stays in freetype/ unused.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(FT_DISABLE_ZLIB ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE)
+set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+add_subdirectory(freetype-2.14.1 EXCLUDE_FROM_ALL)
+if (NOT TARGET Freetype::Freetype)
+    add_library(Freetype::Freetype ALIAS freetype)
+endif ()
 
-target_include_directories(freetype
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/freetype/include
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/freetype/src
-)
+set(MSDFGEN_CORE_ONLY OFF CACHE BOOL "" FORCE)
+set(MSDFGEN_DISABLE_SVG ON CACHE BOOL "" FORCE)
+set(MSDFGEN_DISABLE_PNG ON CACHE BOOL "" FORCE)
+set(MSDFGEN_INSTALL OFF CACHE BOOL "" FORCE)
+set(MSDFGEN_BUILD_STANDALONE OFF CACHE BOOL "" FORCE)
+set(MSDFGEN_USE_VCPKG OFF CACHE BOOL "" FORCE)
+set(MSDFGEN_DYNAMIC_RUNTIME ON CACHE BOOL "" FORCE)
+add_subdirectory(msdfgen EXCLUDE_FROM_ALL)
 
 add_library(expat STATIC
     expat/lib/xmlparse.c

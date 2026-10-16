@@ -11,6 +11,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C2Vector.h"
 #include "Engine/Source/Tempest/CMath.h"
+#include "HoT/Runtime/LuaRuntime.h"
 
 // STATIC: 0x009EA83C
 static const FRAMEPOINT s_centerXPoints[3] = { FRAMEPOINT_TOP, FRAMEPOINT_CENTER, FRAMEPOINT_BOTTOM };
@@ -475,9 +476,11 @@ int32_t CLayoutFrame::CalculateRect(CRect* rect) {
 // VERIFY: cabf5ddd auto
 // OFFSET: 0x00489570
 int32_t CLayoutFrame::OnFrameResize() {
+    HoT::LuaRuntime::Count(HoT::LuaRuntime::Counter::LayoutFrames);
     CRect rect = { 0.0f, 0.0f, 0.0f, 0.0f };
 
     if (!this->CalculateRect(&rect)) {
+        HoT::LuaRuntime::Count(HoT::LuaRuntime::Counter::LayoutFailed);
         this->m_layoutFlags = (this->m_layoutFlags & ~0x900u) | 0x800;
         return 0;
     }
@@ -517,38 +520,66 @@ void CLayoutFrame::SetProtectFlag(uint32_t flag) {
     this->m_layoutFlags &= ~0x80000u;
 }
 
+// HoT: true when one of the frame's used points is anchored to target.
+static bool DependsOn(CLayoutFrame* frame, CLayoutFrame* target) {
+    for (int32_t i = 0; i < FRAMEPOINT_NUMPOINTS; i++) {
+        CFramePoint* framePoint = frame->m_framePoints[i];
+
+        if (framePoint && !(framePoint->m_flags & 8) && framePoint->m_relative == target) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // VERIFY: 1461f17f manual
 // OFFSET: 0x00489710
 void CLayoutFrame::AddToResizeList() {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::AddResize);
+
     if (s_resizePendingList.IsLinked(this)) {
         return;
     }
 
+    // FIX: only frames anchored to this one can depend on it, so look at those before walking the whole pending list.
     CLayoutFrame* dependent = nullptr;
+    uint32_t dependents = 0;
 
-    for (CLayoutFrame* frame = s_resizePendingList.Head(); frame; frame = s_resizePendingList.Next(frame)) {
-        for (int32_t i = 0; i < FRAMEPOINT_NUMPOINTS; i++) {
-            CFramePoint* framePoint = frame->m_framePoints[i];
+    for (CLayoutFrame::FRAMENODE* node = this->m_resizeList.Head(); node; node = this->m_resizeList.Next(node)) {
+        CLayoutFrame* frame = node->m_frame;
 
-            if (framePoint && !(framePoint->m_flags & 8) && framePoint->m_relative == this) {
-                dependent = frame;
-            }
-        }
-
-        if (dependent) {
-            s_resizePendingList.LinkNode(this, 2, dependent);
-            this->m_layoutFlags = (this->m_layoutFlags & ~0xFFu) | 6;
-            return;
+        if (frame && s_resizePendingList.IsLinked(frame) && DependsOn(frame, this)) {
+            dependent = frame;
+            dependents++;
         }
     }
 
-    s_resizePendingList.LinkToTail(this);
+    if (dependents > 1) {
+        dependent = nullptr;
+
+        for (CLayoutFrame* frame = s_resizePendingList.Head(); frame; frame = s_resizePendingList.Next(frame)) {
+            if (DependsOn(frame, this)) {
+                dependent = frame;
+                break;
+            }
+        }
+    }
+
+    if (dependent) {
+        s_resizePendingList.LinkNode(this, 2, dependent);
+    } else {
+        s_resizePendingList.LinkToTail(this);
+    }
+
     this->m_layoutFlags = (this->m_layoutFlags & ~0xFFu) | 6;
 }
 
 // VERIFY: dfeb387c manual
 // OFFSET: 0x004898B0
 void CLayoutFrame::ResizePending() {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Layout);
+
     for (uint32_t loops = 0; s_resizePendingList.Head() && loops < 32; loops++) {
         CLayoutFrame* frame = s_resizePendingList.Head();
 

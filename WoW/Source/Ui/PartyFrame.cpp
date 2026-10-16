@@ -31,6 +31,7 @@
 #include "WoW/Source/DB/Rec/MapDifficultyRec.h"
 #include "Engine/Source/ConsoleBase/IConsole.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/Features/Features.h"
 
 // STATIC: 0x00BD1948
 WOWGUID CGPartyInfo::m_members[4];
@@ -836,6 +837,9 @@ void CGPartyInfo::RemoveAll(int32_t a1) {
         Script_SendUniqueSignal(SCRIPT_EVENT_PARTY_MEMBERS_CHANGED);
         Script_SendUniqueSignal(SCRIPT_EVENT_PLAYER_ROLES_ASSIGNED);
     }
+
+    // FIX: HoT drops the party quest lists the server sent.
+    HoT::QuestLog::ClearPartyQuests();
 }
 
 // VERIFY: 8bd59f6a auto

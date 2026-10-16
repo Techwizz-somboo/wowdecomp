@@ -3,6 +3,13 @@
 #include <new>
 #include <typeinfo>
 #include <cstring>
+#include "HoT/Features/Features.h"
+#include "HoT/Features/Units.h"
+#include "HoT/Character/AnimationFixes.h"
+#include "HoT/Character/HandItemDisplay.h"
+#include "HoT/Character/HD/HDCharacters.h"
+#include "HoT/Character/PlayerRenderLimit.h"
+#include "HoT/Character/UnitFixes.h"
 #include "Engine/Source/Base/CDataStore.h"
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
@@ -935,12 +942,13 @@ float CGUnit_C::GetModelScale(const CreatureDisplayInfoRec* displayInfo, const C
 
         float familyScale = fraction * (family->m_maxScale - family->m_minScale) + family->m_minScale;
 
+        // FIX: an HD model already has its race scale baked in.
         if (familyScale > scale || this->m_unit->m_unitFieldPetnumber) {
-            return familyScale;
+            return HoT::HD::UnitModelScale(this, displayInfo, modelData, familyScale);
         }
     }
 
-    return scale;
+    return HoT::HD::UnitModelScale(this, displayInfo, modelData, scale);
 }
 
 // VERIFY: 3f33188f manual
@@ -1605,6 +1613,9 @@ void CGUnit_C::PreAnimate(CGWorldFrame* frame) {
     }
 
     this->UpdateDelayedSpellVisualKits();
+
+    // FIX: a channel cast while moving keeps the legs on a movement animation.
+    HoT::Animation::OnPreAnimate(this);
 }
 
 // VERIFY: 8308766d manual
@@ -2245,6 +2256,9 @@ void CGUnit_C::Render() {
 // VERIFY: e73a5793 manual
 // OFFSET: 0x0073D2B0
 void CGUnit_C::PlayFallLandAnimation(uint32_t oldFlags, int32_t jumping) {
+    // FIX: a channel keeps playing on the torso after landing.
+    HoT::Animation::FallLandScope channelScope(this);
+
     uint32_t landing = this->m_animationState & 0x1000000;
     this->m_animationState &= ~0x1000000;
 
@@ -2742,6 +2756,9 @@ uint32_t CGUnit_C::ChooseAnimation(uint32_t mask, uint32_t* animFlags, int32_t* 
 // VERIFY: bb382509 manual
 // OFFSET: 0x0073AC30
 void CGUnit_C::UpdateBaseAnimation(uint32_t animFlags, int32_t mask) {
+    // FIX: a channel cast while moving plays on the torso and the legs keep moving.
+    HoT::Animation::UpdateBaseAnimationScope channelScope(this, animFlags, mask);
+
     if (this->m_worldModel && !this->m_worldModel->IsLoaded(0, 0)) {
         return;
     }
@@ -3412,7 +3429,8 @@ void CGUnit_C::UpdateSmoothFacing(float* facingOffset) {
                     if (this->GetVehicleRec() && this->m_vehicle->m_forceFacingGuid.m_guid) {
                         target = this->m_vehicle->m_forceFacingGuid;
                     } else {
-                        if (this->m_unit->m_unitChannelSpell && (this->m_clientFlags & 0x8000) && !this->IsClientControlled()) {
+                        // FIX: units always face their target, which stops the ghost attack when an NPC evades.
+                        if (false && this->m_unit->m_unitChannelSpell && (this->m_clientFlags & 0x8000) && !this->IsClientControlled()) {
                             target = this->m_unit->m_unitFieldChannelObject;
                         } else {
                             target = this->m_unit->m_unitFieldTarget;
@@ -3955,6 +3973,13 @@ int32_t AnimationData::FindIdByBehaviorAndTier(uint32_t behavior, int32_t tier, 
 // VERIFY: fea936b3 manual
 // OFFSET: 0x007176F0
 uint32_t CGUnit_C::ResolveAnimForModel(uint32_t animId, CM2Model* model) {
+    // FIX: monk attacks, mount swim and fly animations and ids past the stock table.
+    uint32_t hotAnim = HoT::Animation::ResolveAnimForModel(this, animId, model);
+
+    if (hotAnim != 0xFFFFFFFF) {
+        return hotAnim;
+    }
+
     int32_t tier = this->m_animTier;
 
     if (!(this->m_modelFlags & 0x40000) || (this->m_modelFlags & 0x20000) || !this->GetObjectModel() || !this->GetObjectModel()->IsLoaded(0, 0)) {
@@ -4106,6 +4131,11 @@ int32_t CGUnit_C::ApplyAttachmentAnimOverride(const M2BoneSequenceInfo* mount, c
 // VERIFY: 9be483c3 manual
 // OFFSET: 0x00737EF0
 void CGUnit_C::ProcessAnimationEvent(M2BoneSequenceInfo* slot, uint32_t currentAnim, int32_t torso, uint32_t previousAnim, int32_t blend, int32_t keepVariation) {
+    // FIX: a channel cast while moving plays on the torso.
+    if (!torso && HoT::Animation::RouteChannelToTorso(this, slot->m_sequenceId)) {
+        torso = 1;
+    }
+
     uint32_t anim = slot->m_sequenceId;
     uint32_t playing = anim;
     bool casting = this->m_unit->m_unitChannelSpell || (this->m_animationState & 0x400);
@@ -4342,6 +4372,9 @@ void CGUnit_C::UpdateHandItemAnimEffects(bool force) {
 // VERIFY: 4d39ab41 manual
 // OFFSET: 0x007385C0
 void CGUnit_C::PlayBaseAnimation(uint32_t animId, int32_t flags) {
+    // FIX: monks play their own unarmed attacks.
+    animId = HoT::Animation::RemapMonkAttack(this, animId);
+
     if (!(this->m_modelFlags & 0x40000) || (this->m_modelFlags & 0x20000) || !this->GetObjectModel() || !this->m_worldModel) {
         return;
     }
@@ -5751,12 +5784,18 @@ int32_t __stdcall CGUnit_C::IsTwoHanded(const CGUnitVirtualItem* item) {
 uint32_t CGUnit_C::GetCombatReadyAnim() const {
     const CGUnitVirtualItem* item = this->GetVirtualItem(0, false);
 
+    // FIX: a bow, gun or crossbow in the main hand holds the ranged pose.
+    if (item && item->m_classID == 2 && (item->m_subclassID == 2 || item->m_subclassID == 3 || item->m_subclassID == 18)) {
+        return ANIM_HOLD_RIFLE;
+    }
+
     if (!item || item->m_classID != 2) {
         item = this->GetVirtualItem(1, false);
     }
 
     if (!item || item->m_classID != 2) {
-        return ANIM_READY_UNARMED;
+        // FIX: monks stand in their own unarmed ready pose.
+        return HoT::Animation::UnarmedReadyAnim(this);
     }
 
     uint32_t anim = ANIM_READY_2H - (this->GetVirtualItem(1, false) != nullptr);
@@ -7909,7 +7948,8 @@ int32_t CGUnit_C::GetModelFileName(const char** name) const {
     CreatureModelDataRec* modelData = this->GetModelData();
 
     if (modelData) {
-        *name = modelData->m_modelName;
+        // FIX: units that render HD use the HD character model.
+        *name = HoT::HD::UnitModelPath(this, modelData->m_modelName);
         return *name != nullptr;
     }
 
@@ -8159,7 +8199,8 @@ const CGUnitVirtualItem* CGUnit_C::GetVirtualItem(uint32_t slot, bool ignoreDisa
 // VERIFY: 07176a35 auto
 // OFFSET: 0x0071FEF0
 C3Vector CGUnit_C::GetNamePosition() const {
-    if (this->m_worldModel->IsLoaded(0, 0)) {
+    // FIX: units without a body model or hidden by the render limit place the name by their height.
+    if (this->m_worldModel && !HoT::PlayerRenderLimit::IsHidden(this) && this->m_worldModel->IsLoaded(0, 0)) {
         if (this->m_mountDisplayId > 0 && !(this->m_clientFlags & 0x10000000) && this->m_worldModel->HasAttachment(29)) {
             return this->m_worldModel->GetAttachmentPosition(29);
         }
@@ -9235,6 +9276,9 @@ void CGUnit_C::ReleaseEffectsBySpell(int32_t spellId) {
 // VERIFY: e1b2b150 manual
 // OFFSET: 0x00735820
 void CGUnit_C::SetKeyBoneSequence(CM2Model* model, uint32_t boneId, uint32_t sequenceId, uint32_t variation, uint32_t time, float speed, int32_t blend, int32_t primary, int32_t force) {
+    // FIX: a channel cast while moving goes to the torso and monks play their own unarmed attacks.
+    HoT::Animation::OnSetKeyBoneSequence(this, model, boneId, sequenceId, time, blend, primary, force);
+
     if (!model) {
         return;
     }
@@ -9711,10 +9755,14 @@ void CGUnit_C::OnCollideFalling() {
 // VERIFY: 8cfa7612 auto
 // OFFSET: 0x0072D940
 void CGUnit_C::RefreshDataPointers() {
+    // FIX: HDDisplaySwap replaces the display ids read here without touching the update fields.
+    uint32_t unitDisplayId = this->m_unit->m_unitFieldDisplayid;
+    uint32_t unitNativeDisplayId = this->m_unit->m_unitFieldNativedisplayid;
+    HoT::HD::SwapDisplayIds(this, unitDisplayId, unitNativeDisplayId);
     int32_t displayId = this->m_displayId;
 
-    if (!displayId || this->m_unit->m_unitFieldNativedisplayid != this->m_unit->m_unitFieldDisplayid) {
-        displayId = this->m_unit->m_unitFieldDisplayid;
+    if (!displayId || unitNativeDisplayId != unitDisplayId) {
+        displayId = unitDisplayId;
     }
 
     this->m_displayInfo = g_creatureDisplayInfoDB.GetRecord(displayId);
@@ -9750,7 +9798,7 @@ void CGUnit_C::RefreshDataPointers() {
         this->m_creatureCacheEntry = g_creatureDBCache.GetRecord(this->m_obj->m_entryID, this->m_obj->m_guid, &CreatureQueryCallback, nullptr, false);
     }
 
-    if (this->m_unit->m_unitFieldNativedisplayid == this->m_unit->m_unitFieldDisplayid) {
+    if (unitNativeDisplayId == unitDisplayId) {
         this->m_clientFlags |= 0x100;
     } else {
         this->m_clientFlags &= ~0x100u;
@@ -10681,7 +10729,7 @@ void CGUnit_C::OnSetPitchLocal(uint32_t eventTime, float pitch) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10791,7 +10839,7 @@ void CGUnit_C::OnMoveStartLocal(uint32_t eventTime, int32_t forward) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10809,7 +10857,7 @@ void CGUnit_C::OnStrafeStartLocal(uint32_t eventTime, int32_t left) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10827,7 +10875,7 @@ void CGUnit_C::OnAscendDescendStartLocal(uint32_t eventTime, int32_t ascend) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10851,7 +10899,7 @@ void CGUnit_C::OnTurnStartLocal(uint32_t eventTime, int32_t left) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10869,7 +10917,7 @@ void CGUnit_C::OnPitchStartLocal(uint32_t eventTime, int32_t up) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10887,7 +10935,7 @@ void CGUnit_C::OnPitchStopLocal(uint32_t eventTime) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -10901,7 +10949,7 @@ void CGUnit_C::TryJumpOrAscend(uint32_t eventTime) {
     if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -13274,7 +13322,7 @@ void CGUnit_C::OnMovementInitiated(bool clearTracking, bool keepLoot) {
     if (!keepLoot && this->m_obj->m_guid == CGUnit_C::s_activeMover) {
         CGUnit_C* player = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-        if (player && player->IsLooting()) {
+        if (player && player->IsLooting() && !HoT::LootWindow::StaysOpenWhileMoving()) {
             CGGameUI::CloseLoot(true, true, false);
         }
     }
@@ -13361,7 +13409,8 @@ void CGUnit_C::PlayAttackerRound(const ATTACKROUNDINFO& info) {
         if (offhand && offhand->m_classID == 2) {
             anim = (offhand->m_subclassID == 15) + 87;
         } else {
-            anim = 117;
+            // FIX: monks swing their own unarmed off hand.
+            anim = HoT::Animation::UnarmedAttackAnim(this, true);
         }
     } else {
         const CGUnitVirtualItem* mainhand = this->GetVirtualItem(0, false);
@@ -13392,7 +13441,14 @@ void CGUnit_C::PlayAttackerRound(const ATTACKROUNDINFO& info) {
                 case 15:
                     anim = 85;
                     break;
+                default:
+                    // FIX: bows, guns, fist weapons, thrown and wands hold the ranged pose.
+                    anim = ANIM_HOLD_RIFLE;
+                    break;
             }
+        } else {
+            // FIX: monks swing their own unarmed attacks.
+            anim = HoT::Animation::UnarmedAttackAnim(this, false);
         }
     }
 
@@ -13866,6 +13922,8 @@ int32_t CGUnit_C::InitializeExtendedDisplay(CGPlayer_C* player, int32_t hasDispl
         CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_2);
     }
 
+    // FIX: an HD model swaps the baked NPC texture for the HD bake or composites the sheet.
+    HoT::HD::ApplyNpcBake(this, &data);
     this->m_characterComponent->Init(&data, nullptr);
     return 1;
 }
@@ -13887,6 +13945,11 @@ void CGUnit_C::ApplyComponentItemsFromEffects() {
 // VERIFY: e06874b6 manual
 // OFFSET: 0x00730100
 int32_t CGUnit_C::InitializeComponent() {
+    // FIX: players hidden by the render limit build no character sheet.
+    if (HoT::PlayerRenderLimit::IsHidden(this)) {
+        return 0;
+    }
+
     if (!this->m_worldModel || !this->m_worldModel->IsLoaded(0, 0)) {
         return 0;
     }
@@ -14076,6 +14139,8 @@ int32_t CGUnit_C::SheatheHandItem(uint32_t hand, int32_t sheathe) {
     }
 
     bool mainHand = !hand || item->m_inventoryType == INVTYPE_RANGEDRIGHT || item->m_inventoryType == INVTYPE_THROWN;
+    // FIX: shield models are found by file, so either hand can hold one.
+    bool shieldModel = HoT::HandItemDisplay::IsShieldModel(this, hand, item);
     GEOCOMPONENTLINKS handLink;
 
     switch (hand) {
@@ -14085,7 +14150,7 @@ int32_t CGUnit_C::SheatheHandItem(uint32_t hand, int32_t sheathe) {
         }
 
         case 1: {
-            handLink = item->m_inventoryType != INVTYPE_SHIELD ? ATTACH_HANDLEFT : ATTACH_SHIELD;
+            handLink = shieldModel ? ATTACH_SHIELD : ATTACH_HANDLEFT;
             break;
         }
 
@@ -14129,6 +14194,10 @@ int32_t CGUnit_C::SheatheHandItem(uint32_t hand, int32_t sheathe) {
 
         if (to != ATTACH_NONE) {
             child->AttachToParent(model, to, nullptr, 0);
+        }
+
+        if (hand == 0 && shieldModel) {
+            HoT::HandItemDisplay::SetMainHandShieldTransform(child, model, to == ATTACH_HANDRIGHT);
         }
 
         child->Release();
@@ -14426,6 +14495,9 @@ void CGUnit_C::AnimEndCallback(CM2Model* model, uint32_t boneId, uint32_t sequen
 // VERIFY: a0318ed7 manual
 // OFFSET: 0x0073BBD0
 void CGUnit_C::AnimEndHandler(CM2Model* model, uint32_t boneId, uint32_t sequenceId, int32_t interrupted, uint32_t time) {
+    // FIX: monks see the same attack remap here as when the animation started.
+    sequenceId = HoT::Animation::RemapMonkAttack(this, sequenceId);
+
     if (this->m_vehiclePassenger && this->m_vehiclePassenger->m_state) {
         this->m_vehiclePassenger->OnAnimEnd(boneId);
     }
@@ -14832,6 +14904,9 @@ void CGUnit_C::OnBaseAnimEnd(CM2Model* model, uint32_t boneId, uint32_t sequence
 // VERIFY: 81228148 manual
 // OFFSET: 0x00737BD0
 void CGUnit_C::OnKeyBoneAnimEnd(CM2Model* model, uint32_t boneId, uint32_t sequenceId) {
+    // FIX: monks see the same attack remap here as when the animation started.
+    sequenceId = HoT::Animation::RemapMonkAttack(this, sequenceId);
+
     if (sequenceId == 15) {
         return;
     }
@@ -15591,6 +15666,11 @@ const char* CGUnit_C::GetDisplayRaceName(const CGUnit_C* unit, const NameCache* 
 // VERIFY: 7e92c457 manual
 // OFFSET: 0x0072AAB0
 const char* CGUnit_C::GetDisplayClassName(const CGUnit_C* unit, const NameCache* name) {
+    // FIX: HoT players show their subclass name.
+    if (const ChrClassesRec* subClass = HoT::UnitLevel::GetSubClassRecord(unit)) {
+        return CGUnit_C::GetDisplayClassNameFromRecord(subClass, unit->m_unit->m_unitFieldBytes0[2], nullptr);
+    }
+
     if (unit) {
         if (!(unit->m_obj->m_type & TYPEMASK_PLAYER)) {
             return const_cast<CGUnit_C*>(unit)->GetUnitName(nullptr, 1);
@@ -16081,7 +16161,8 @@ bool CGUnit_C::CheckAndReportSpellInhibitFlags(PendingSpellCast* cast, const Spe
         return false;
     }
 
-    if ((channeled && (spell->m_channelInterruptFlags & 0x18) && (this->m_movement->m_flags & 0xC0100F) && !(spell->m_targets & 0x60)) || ((spell->m_interruptFlags & 0x1) && (this->m_movement->m_flags & 0xC0100F) && !(spell->m_targets & 0x60) && !(spell->m_attributesExB & 0x20) && (SpellRec::GetCastTime(spell, this->m_unit->m_unitFieldPetnumber != 0, 0, 0) || (spell->m_auraInterruptFlags & 0x18)))) {
+    // FIX: HoT lets spell modifiers waive the movement interrupt.
+    if (!Spell_C_CanCastWhileMoving(spell) && ((channeled && (spell->m_channelInterruptFlags & 0x18) && (this->m_movement->m_flags & 0xC0100F) && !(spell->m_targets & 0x60)) || ((spell->m_interruptFlags & 0x1) && (this->m_movement->m_flags & 0xC0100F) && !(spell->m_targets & 0x60) && !(spell->m_attributesExB & 0x20) && (SpellRec::GetCastTime(spell, this->m_unit->m_unitFieldPetnumber != 0, 0, 0) || (spell->m_auraInterruptFlags & 0x18))))) {
         Spell_C_SpellFailed(cast, spell, 51, -1, -1, false);
         return false;
     }
@@ -16901,7 +16982,8 @@ void CGUnit_C::HandleSpellEventSound() {
 // VERIFY: 28e7526d auto
 // OFFSET: 0x0072AF60
 int32_t CGUnit_C::PlaySpellVisualKit_DelayLightningEffects(const SpellRec* spell, const SpellVisualKitRec* kit, SPELL_VISUAL_KIT_TYPE type, const C3Vector* position, WOWGUID guid, int32_t a6, int32_t a7, int32_t a8, int32_t a9, uint32_t a10, const SpellVisualRec* visual) {
-    if (!spell || !visual || !Spell_C_SpellVisualHasChainEffect(visual) || a8 || !(kit->m_flags & 0x1)) {
+    // FIX: delayed chain lightning kits crashed the client, so they play right away.
+    if (true || !spell || !visual || !Spell_C_SpellVisualHasChainEffect(visual) || a8 || !(kit->m_flags & 0x1)) {
         return 0;
     }
 
@@ -17956,6 +18038,9 @@ void CGUnit_C::DoPowerRegen(uint32_t elapsed) {
             CGRuneInfo::SetPredictedRunes(previous, runes, nullptr);
         }
     }
+
+    // FIX: a focus bar next to another power fills between server updates.
+    HoT::UnitFixes::PredictFocusRegen(this, elapsed);
 }
 
 // VERIFY: 08043232 manual
@@ -19922,7 +20007,8 @@ int32_t CGUnit_C::UpdateObjectNameStringForUnit(CGUnit_C* unit, int32_t flags, c
     } else {
         CreatureStats_C* stats = unit->m_creatureCacheEntry;
 
-        if (stats && *stats->m_subName) {
+        // FIX: HoT creature cache records can arrive without a subname.
+        if (stats && stats->m_subName && *stats->m_subName) {
             const char* subName = stats->m_subName;
 
             if (!unit->m_unit->m_unitFieldPetnumber && subName && *subName) {
@@ -21335,6 +21421,9 @@ void CGUnit_C::DestroyUnitMount(int32_t a2) {
 
     this->UpdateObjectEffectAnimationStates();
     this->m_clientFlags &= ~0x10000000;
+
+    // FIX: the selection radius is measured again without the mount display.
+    HoT::UnitFixes::UpdateDismountedSelectionRadius(this);
 }
 
 // VERIFY: 842ee456 manual
@@ -23685,6 +23774,11 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
         uint32_t guildId;
         msg->Get(guildId);
 
+        // FIX: a second reply would leak the component the first one built.
+        if (this->m_characterComponent) {
+            CCharacterComponent::FreeComponent(this->m_characterComponent);
+        }
+
         this->m_characterComponent = CCharacterComponent::AllocComponent();
         data.m_model = this->m_worldModel;
         data.m_flags ^= (data.m_flags ^ (static_cast<uint32_t>(this->m_obj->m_guid == ClntObjMgrGetActivePlayer()) << 1)) & 0x2;
@@ -23770,6 +23864,11 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
             }
         }
     } else if (this->m_displayInfoExtra) {
+        // FIX: a second reply would leak the component the first one built.
+        if (this->m_characterComponent) {
+            CCharacterComponent::FreeComponent(this->m_characterComponent);
+        }
+
         this->m_characterComponent = CCharacterComponent::AllocComponent();
         const char* bakeName = this->GetDisplayBakeName();
 
@@ -23790,6 +23889,8 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
         SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
         data.m_model = this->m_worldModel;
         data.m_model->m_refCount++;
+        // FIX: an HD model swaps the baked NPC texture for the HD bake or composites the sheet.
+        HoT::HD::ApplyNpcBake(this, &data);
         this->m_characterComponent->Init(&data, nullptr);
 
         if (this->m_characterComponent && this->m_displayInfoExtra) {

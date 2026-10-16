@@ -10,6 +10,7 @@
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #include "Engine/Source/Gx/CGxDeviceD3d9Ex/CGxDeviceD3d9Ex.h"
+#include "HoT/Runtime/Display.h"
 
 // STATIC: 0x00AD8CE8
 static D3DMULTISAMPLE_TYPE s_d3dMultisampleTypes[9] = { D3DMULTISAMPLE_NONE, D3DMULTISAMPLE_2_SAMPLES, D3DMULTISAMPLE_4_SAMPLES, D3DMULTISAMPLE_6_SAMPLES, D3DMULTISAMPLE_8_SAMPLES, D3DMULTISAMPLE_10_SAMPLES, D3DMULTISAMPLE_12_SAMPLES, D3DMULTISAMPLE_14_SAMPLES, D3DMULTISAMPLE_16_SAMPLES };
@@ -567,6 +568,11 @@ int32_t CGxDevice::D3d9ExAdapterFormats(TSGrowableArray<CGxFormat>& formats) {
 
 // OFFSET: 0x0068A4C0
 int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
+    // FIX: reuse the modes until the display changes, enumerating them is slow.
+    if (HoT::Display::GetCachedMonitorModes(modes)) {
+        return 1;
+    }
+
     modes.SetCount(0);
 
     DISPLAY_DEVICEA device;
@@ -589,6 +595,7 @@ int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
     }
 
     qsort(modes.Ptr(), modes.Count(), sizeof(CGxMonitorMode), CGxMonitorModeSort);
+    HoT::Display::CacheMonitorModes(modes);
 
     return modes.Count() != 0;
 }

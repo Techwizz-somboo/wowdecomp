@@ -82,10 +82,10 @@ static const GLenum s_glAttribType[7] = { GL_UNSIGNED_BYTE, GL_UNSIGNED_BYTE, GL
 static const GLboolean s_glAttribNormalized[7] = { GL_TRUE, GL_FALSE, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE };
 
 // STATIC: 0x00AD8D90
-static GLenum s_glBlendSrc[12] = { GL_ONE, GL_ONE, GL_SRC_ALPHA, GL_SRC_ALPHA, GL_DST_COLOR, GL_DST_COLOR, GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE, GL_CONSTANT_ALPHA_EXT };
+static GLenum s_glBlendSrc[GxBlends_Last] = { GL_ONE, GL_ONE, GL_SRC_ALPHA, GL_SRC_ALPHA, GL_DST_COLOR, GL_DST_COLOR, GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA, GL_ONE, GL_CONSTANT_ALPHA_EXT, GL_ONE_MINUS_DST_COLOR, GL_ONE };
 
 // STATIC: 0x00AD8DC0
-static GLenum s_glBlendDst[12] = { GL_ZERO, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO, GL_SRC_COLOR, GL_ONE, GL_ONE, GL_ZERO, GL_ZERO, GL_ONE, GL_ONE_MINUS_CONSTANT_ALPHA_EXT };
+static GLenum s_glBlendDst[GxBlends_Last] = { GL_ZERO, GL_ZERO, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ZERO, GL_SRC_COLOR, GL_ONE, GL_ONE, GL_ZERO, GL_ZERO, GL_ONE, GL_ONE_MINUS_CONSTANT_ALPHA_EXT, GL_ONE, GL_ONE_MINUS_SRC_ALPHA };
 
 // STATIC: 0x00AD8E80
 static GLenum s_glDepthFunc[4] = { GL_LEQUAL, GL_EQUAL, GL_GEQUAL, GL_LESS };
@@ -3977,10 +3977,14 @@ void CGxDeviceOpenGl::Draw(CGxBatch* batch, int32_t count) {
     this->IStateSync();
 
     if (count) {
+        // FIX: a 4 byte index buffer draws with 32-bit indices.
+        uint32_t indexSize = this->m_primIndexBuf->m_itemSize == sizeof(uint32_t) ? sizeof(uint32_t) : sizeof(uint16_t);
+        GLenum indexType = indexSize == sizeof(uint32_t) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+
         if (glExtDrawRangeElements) {
-            glDrawRangeElementsEXT(s_glPrim[batch->m_primType], batch->m_minIndex, batch->m_maxIndex, batch->m_count, GL_UNSIGNED_SHORT, reinterpret_cast<const GLvoid*>(this->m_indexPtr + sizeof(uint16_t) * batch->m_start));
+            glDrawRangeElementsEXT(s_glPrim[batch->m_primType], batch->m_minIndex, batch->m_maxIndex, batch->m_count, indexType, reinterpret_cast<const GLvoid*>(this->m_indexPtr + indexSize * batch->m_start));
         } else {
-            glDrawElements(s_glPrim[batch->m_primType], batch->m_count, GL_UNSIGNED_SHORT, reinterpret_cast<const GLvoid*>(this->m_indexPtr + sizeof(uint16_t) * batch->m_start));
+            glDrawElements(s_glPrim[batch->m_primType], batch->m_count, indexType, reinterpret_cast<const GLvoid*>(this->m_indexPtr + indexSize * batch->m_start));
         }
     } else {
         glDrawArrays(s_glPrim[batch->m_primType], batch->m_start, batch->m_count);

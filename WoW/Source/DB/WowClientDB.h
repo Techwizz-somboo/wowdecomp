@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <new>
+#include <type_traits>
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/Storm/H/storm.h"
 
@@ -12,6 +13,24 @@ extern int32_t g_clientDbPerformCompress;
 
 uint8_t* DecompressRow(const uint8_t* src, uint32_t size, uint8_t* dst);
 uint32_t CompressRow(const uint8_t* src, uint32_t size, uint8_t* dst);
+
+class SpellRec;
+
+// FIX: spell rows pick up overrides the server applies through spell modifiers, such as the power type.
+void Spell_C_ApplyRowOverrides(SpellRec* rec);
+
+class ItemRec;
+
+// FIX: item rows also resolve from the server and the item cache, so items missing from Item.dbc work.
+namespace HoT::Items {
+ItemRec* Resolve(int32_t id, ItemRec* dbcRecord);
+}
+
+class SkillLineAbilityRec;
+
+// FIX: tables only walked by index skip the id lookup, HoT SkillLineAbility ids span tens of millions.
+template <class T>
+inline constexpr bool s_indexedById = !std::is_same_v<T, SkillLineAbilityRec>;
 
 class WowClientDB_Base {
     public:
@@ -208,6 +227,10 @@ void WowClientDB<T>::LoadRecords(SFileImpl* f, const char* file, int32_t line) {
         this->m_minID = id < this->m_minID ? id : this->m_minID;
     }
 
+    if constexpr (!s_indexedById<T>) {
+        return;
+    }
+
     this->m_recordsById = new (__FILE__, __LINE__) T*[this->m_maxID - this->m_minID + 1];
     memset(this->m_recordsById, 0, sizeof(T*) * (this->m_maxID - this->m_minID + 1));
 
@@ -280,11 +303,13 @@ void* WowClientDB<T>::GetRecordIndex() {
 // OFFSET: [0x0065C290<LiquidTypeRec>]
 template <class T>
 T* WowClientDB<T>::GetRecord(int32_t id) const {
-    if (id < this->m_minID || id > this->m_maxID) {
-        return nullptr;
+    T* rec = !s_indexedById<T> || id < this->m_minID || id > this->m_maxID ? nullptr : this->m_recordsById[id - this->m_minID];
+
+    if constexpr (std::is_same_v<T, ItemRec>) {
+        rec = HoT::Items::Resolve(id, rec);
     }
 
-    return this->m_recordsById[id - this->m_minID];
+    return rec;
 }
 
 // INLINED
@@ -425,6 +450,10 @@ int32_t WowClientDB_RLE<T>::GetRecordByIndex(int32_t index, T* rec) const {
         memcpy(rec, this->m_records[index], sizeof(T));
     }
 
+    if constexpr (std::is_same_v<T, SpellRec>) {
+        Spell_C_ApplyRowOverrides(rec);
+    }
+
     return 1;
 }
 
@@ -446,6 +475,10 @@ int32_t WowClientDB_RLE<T>::GetRecord(int32_t id, T* rec) const {
         DecompressRow(reinterpret_cast<const uint8_t*>(*slot), sizeof(T), reinterpret_cast<uint8_t*>(rec));
     } else {
         memcpy(rec, *slot, sizeof(T));
+    }
+
+    if constexpr (std::is_same_v<T, SpellRec>) {
+        Spell_C_ApplyRowOverrides(rec);
     }
 
     return 1;

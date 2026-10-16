@@ -1,4 +1,5 @@
 #include "Camera.h"
+#include "HoT/Editor/Editor.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include <cmath>
 #include <cstring>
@@ -2664,6 +2665,9 @@ int32_t CGCamera::UpdateCallback(const void* data, void* param) {
     if (!camera) {
         return 1;
     }
+
+    // FIX: HoT free camera overrides the camera after every update path.
+    HoT::Editor::CameraUpdateScope freeCam(camera);
 
     uint32_t time = OsGetAsyncTimeMs();
     camera->m_nearZ = World::s_nearClip;

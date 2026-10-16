@@ -16,6 +16,7 @@
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
 
 class CHashKeyGUID;
+class ItemStats_C;
 class CWardenKey;
 
 struct HASHKEY_INT {
@@ -691,7 +692,8 @@ void DBCache<T, TKey, THashKey>::Idle() {
     }
 
     this->m_queriesSent = 0;
-    this->m_nextQueryTime = OsGetAsyncTimeMs() + 30000;
+    // FIX: item cache queries are not throttled to one batch every 30 seconds.
+    this->m_nextQueryTime = OsGetAsyncTimeMs() + (std::is_same_v<T, ItemStats_C> ? 0 : 30000);
 
     DBCACHEHASH* next;
 

@@ -9,6 +9,10 @@
 #include "Engine/Source/Gxu/Types.h"
 #include "Engine/Source/Storm/H/stpl.h"
 
+namespace HoT::MSDF {
+class Font;
+}
+
 struct KERNINGHASHKEY {
     /* 0000 */ uint32_t m_code;
 
@@ -47,6 +51,7 @@ struct CGxFont : public TSLinkedNode<CGxFont> {
     float GetGlyphAdvance(uint32_t code);
     float GetGlyphBearing(const CHARCODEDESC* desc, bool scaled, float height);
     bool GetGlyphData(GLYPHBITMAPDATA* data, uint32_t code);
+    HoT::MSDF::Font* GetMsdfFont();
     const char* GetName();
     uint32_t GetPixelSize();
     void HandleScreenSizeChange();

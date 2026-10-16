@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "Engine/Source/Storm/H/stpl.h"
+#include "HoT/Features/Features.h"
 #include "WoW/Source/Object/WGUID.h"
 #include "WoW/Source/Net/Types.h"
 
@@ -86,7 +87,8 @@ class CGQuestLog {
     static int32_t FindOrFreePOISlot(int32_t questId);
     static int32_t GetQuestLeaderBoardByID(int32_t questId, QuestLogLeaderBoardParams* params);
     static int32_t GetQuestLeaderBoardForObject(int32_t questId, int32_t objectId, QuestLogLeaderBoardParams* params);
-    static int32_t m_sortTypes[25];
+    // FIX: HoT sizes the entry, sort type and POI arrays for its 100 slot quest log.
+    static int32_t m_sortTypes[HoT::QuestLog::NUM_SORT_TYPES];
     static uint32_t m_numSortTypes;
     static int32_t m_questResetTime;
     static uint8_t m_trackedQuestsLoaded;
@@ -110,8 +112,8 @@ class CGQuestLog {
     static int32_t IsQuestFailed(uint32_t index);
     static bool HasNoObjectives(uint32_t index);
     static int32_t IsQuestExpiredByID(int32_t questId);
-    static QuestLogEntry m_quests[50];
-    static QuestPOIInfo m_questPOIs[25];
+    static QuestLogEntry m_quests[HoT::QuestLog::NUM_ENTRIES];
+    static QuestPOIInfo m_questPOIs[HoT::QuestLog::NUM_POIS];
     static int32_t m_abandonQuest;
     static uint32_t m_numQuestWatches;
     static int32_t m_timeOffset;

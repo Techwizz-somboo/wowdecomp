@@ -25,6 +25,8 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/CMath.h"
 #include "Engine/Source/Tempest/CRect.h"
+#include "HoT/Runtime/Layout.h"
+#include "HoT/Runtime/LuaRuntime.h"
 
 // STATIC: 0x00B499A8
 CSimpleTop* CSimpleTop::s_instance;
@@ -35,9 +37,12 @@ uint32_t CSimpleTop::s_eventTime;
 // VERIFY: 29e70871 auto
 // OFFSET: 0x00495810
 static void PaintScreen(void* param, const RECTF* rect, const RECTF* visible, float elapsedSec) {
+    HoT::LuaRuntime::BeginPaint();
     CSimpleTop* top = CSimpleTop::s_instance;
     top->OnLayerUpdate(elapsedSec);
     top->OnLayerRender();
+    // FIX: HoT paces the Lua GC here instead of stepping it from CGGameUI::Idle.
+    HoT::LuaRuntime::EndPaint();
 }
 
 // VERIFY: 3a1b6d83 auto
@@ -631,6 +636,7 @@ CSimpleFrame* CFrameStrata::GetHitFrame(const C2Vector& pt) {
 // VERIFY: 314ab723 manual
 // OFFSET: 0x00494D20
 int32_t CFrameStrata::FrameOccluded(CSimpleFrame* frame) {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Occlude);
     CRect frameRect = { 0.0f, 0.0f, 0.0f, 0.0f };
     CRect otherRect = { 0.0f, 0.0f, 0.0f, 0.0f };
 
@@ -682,6 +688,8 @@ void CFrameStrata::CheckOcclusion() {
 // VERIFY: 2b665fc9 manual
 // OFFSET: 0x00494EE0
 int32_t CFrameStrata::BuildBatches(int32_t noMouseCapture) {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Build);
+
     if (this->m_levelsDirty) {
         this->CheckOcclusion();
         this->m_levelsDirty = 0;
@@ -705,6 +713,8 @@ int32_t CFrameStrata::BuildBatches(int32_t noMouseCapture) {
 // VERIFY: 62b40657 manual
 // OFFSET: 0x00494F30
 void CFrameStrata::RenderBatches() {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Draw);
+
     for (uint32_t level = 0; level < this->m_topLevel; level++) {
         CFrameStrataNode* node = this->m_levels[level];
 
@@ -748,6 +758,10 @@ void CSimpleTop::RegisterForCleanup(CSimpleFrame* frame) {
 // VERIFY: cfde847a manual
 // OFFSET: 0x00495060
 void CSimpleTop::CompressStrata(int32_t strata) {
+    // FIX: one pass compaction from HoT, this version rescans every frame for every level.
+    HoT::Layout::CompressStrata(this, strata);
+    return;
+
     if (strata < FRAME_STRATA_WORLD || strata > FRAME_STRATA_TOOLTIP) {
         return;
     }
@@ -806,6 +820,8 @@ void CSimpleTop::CompressStrata(int32_t strata) {
 // VERIFY: ca612c34 manual
 // OFFSET: 0x004951A0
 int32_t CSimpleTop::RaiseFrame(CSimpleFrame* frame, int32_t checkOcclusion) {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Raise);
+
     while (!(frame->m_frameFlags & 1)) {
         frame = frame->m_parent;
 
@@ -865,6 +881,7 @@ int32_t CSimpleTop::StartMoveOrResizeFrame(const CMouseEvent& evt, MOVERESIZE_RE
 // VERIFY: 09bbf45a auto
 // OFFSET: 0x00495320
 void CSimpleTop::OnLayerUpdate(float elapsedSec) {
+    HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Update);
     CSimpleFrame* frame;
 
     while ((frame = this->m_destroyed.Head()) != nullptr) {

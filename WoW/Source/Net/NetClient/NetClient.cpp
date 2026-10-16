@@ -8,6 +8,7 @@
 #include "Engine/Source/Event/Types.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/HoT.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/WowServices/HMAC.h"
 
@@ -276,8 +277,9 @@ int32_t NetClient::ProcessMessage(uint32_t timeReceived, CDataStore* msg, int32_
     uint16_t msgId;
     msg->Get(msgId);
     this->ValidateMessageId(msgId);
+    HoT::OnNetMessage(msgId, msg);
 
-    if (msgId < NUM_MSG_TYPES && this->m_handlers[msgId]) {
+    if (msgId < HoT::Net::NUM_HANDLER_SLOTS && this->m_handlers[msgId]) {
         return this->m_handlers[msgId](this->m_handlerParams[msgId], static_cast<NETMESSAGE>(msgId), timeReceived, msg);
     }
 

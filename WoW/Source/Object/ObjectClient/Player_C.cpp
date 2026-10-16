@@ -10,6 +10,11 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/CMath.h"
 #include "Engine/Source/Tempest/CRandom.h"
+#include "HoT/HoT.h"
+#include "HoT/Lua/Script.h"
+#include "HoT/Character/PlayerRenderLimit.h"
+#include "HoT/Net/Opcodes.h"
+#include "HoT/Spells/AutoRepeatDeadzone.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/DB/DBClient/DBCacheInstances.h"
@@ -253,6 +258,8 @@ static uint32_t s_visibleAuraEffectDisplay;
 
 // STATIC: 0x00C9EAC0
 uint32_t CGPlayer_C::s_resurrectOfferSickness;
+
+CGPlayerCustomStats CGPlayer_C::s_customStats;
 
 // STATIC: 0x00C9EAC4
 uint32_t CGPlayer_C::s_resurrectOfferUseTimer;
@@ -860,9 +867,11 @@ void PlayerClientInitialize() {
     CGPlayer_C::s_resurrectOfferer = WOWGUID{ 0 };
     CGPlayer_C::s_resurrectOfferSickness = 0;
     CGPlayer_C::s_resurrectOfferUseTimer = 0;
+    CGPlayer_C::s_customStats = CGPlayerCustomStats();
     s_playerRenderDisabled = 1;
     PlayerInitializeSounds();
     AreaTriggersInitialize(ClntObjMgrGetMapID());
+    HoT::OnPlayerClientInitialize();
 }
 
 // VERIFY: f3fc01f5 auto
@@ -1035,6 +1044,9 @@ void CGPlayer_C::ShouldRender(uint32_t flags, int32_t& culled, int32_t& hidden) 
     } else if (!s_playerRenderDisabled && this->m_obj->m_guid == ClntObjMgrGetActivePlayer()) {
         hidden = 1;
     }
+
+    // FIX: players over the render limit are not drawn.
+    HoT::PlayerRenderLimit::OnShouldRender(this, hidden);
 }
 
 // VERIFY: 486d0703 auto
@@ -2523,6 +2535,8 @@ int32_t CGPlayer_C::OnPetitionShowList(CDataStore* msg) {
         msg->Get(petitionList[i].m_itemID);
         msg->Get(petitionList[i].m_displayID);
         msg->Get(petitionList[i].m_cost);
+        // FIX: HoT guild and arena charters are free.
+        petitionList[i].m_cost = 0;
         msg->Get(petitionList[i].m_charterType);
         msg->Get(petitionList[i].m_requiredSignatures);
     }
@@ -3055,10 +3069,9 @@ void CGPlayer_C::PostInitActivePlayer() {
     CGClassTrainer::RefreshList();
 
     if (!ClntObjMgrGetPlayerType()) {
+        // FIX: HoT keeps spells on the action bar even when they are not known yet.
         for (uint32_t i = 0; i < sizeof(s_actionButtons) / sizeof(s_actionButtons[0]); i++) {
-            if ((s_actionButtons[i] & 0xF0000000) || this->IsSpellKnown(s_actionButtons[i])) {
-                CGActionBar::SetAction(i, s_actionButtons[i], 0, 1);
-            }
+            CGActionBar::SetAction(i, s_actionButtons[i], 0, 1);
         }
 
         FrameScript_SignalEvent(SCRIPT_EVENT_ACTIONBAR_SLOT_CHANGED, "%d", 0);
@@ -3798,8 +3811,9 @@ int32_t Packet_Group_17(void* param, NETMESSAGE msgId, uint32_t time, CDataStore
             return 1;
         }
 
-        for (int32_t i = 0; i < 25; i++) {
-            PlayerQuestLogEntry* entry = i >= 0 && i <= 25 ? &player->m_player->m_playerQuestLog[i] : nullptr;
+        // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+        for (int32_t i = 0; i < static_cast<int32_t>(HoT::QuestLog::NUM_SLOTS); i++) {
+            PlayerQuestLogEntry* entry = player->GetQuestLogEntry(i);
 
             if (entry && entry->m_questId == questId) {
                 if (entry->m_state & 0x2) {
@@ -4079,7 +4093,8 @@ int32_t Packet_SMSG_ACTION_BUTTONS(void* param, NETMESSAGE msgId, uint32_t time,
         for (uint32_t i = 0; i < sizeof(s_actionButtons) / sizeof(s_actionButtons[0]); i++) {
             int32_t action = s_actionButtons[i];
 
-            if (((action & 0xF0000000) || player->IsSpellKnown(action)) && ((action & 0xF0000000) != 0x20000000 || CGActionBar::IsEquipmentSetValid(action & 0xDFFFFFFF))) {
+            // FIX: HoT keeps spells on the action bar even when they are not known yet.
+            if ((action & 0xF0000000) != 0x20000000 || CGActionBar::IsEquipmentSetValid(action & 0xDFFFFFFF)) {
                 CGActionBar::SetAction(i, action, 0, 1);
             } else {
                 CGActionBar::RemoveAction(i);
@@ -4413,9 +4428,36 @@ int32_t Packet_SMSG_DEBUG_SERVER_GEO(void* param, NETMESSAGE msgId, uint32_t tim
     return 1;
 }
 
+int32_t Packet_SMSG_CUSTOM_STAT_TRACK(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    CGPlayerCustomStats& stats = CGPlayer_C::s_customStats;
+    msg->Get(stats.m_magicFind);
+    msg->Get(stats.m_healthLeech);
+    msg->Get(stats.m_manaLeech);
+    msg->Get(stats.m_critDamageMod);
+    msg->Get(stats.m_critHealingMod);
+
+    for (uint32_t i = 0; i < 7; i++) {
+        msg->Get(stats.m_spellPenetration[i]);
+    }
+
+    msg->Get(stats.m_spellPenetrationTotal);
+
+    for (uint32_t i = 0; i < 7; i++) {
+        msg->Get(stats.m_spellHealing[i]);
+    }
+
+    msg->Get(stats.m_healthRegen);
+    msg->Get(stats.m_healthRegenInCombat);
+
+    HoT::Lua::SignalEvent("HOT_STAT_UPDATE", nullptr);
+    FrameScript_SignalEvent(SCRIPT_EVENT_COMBAT_RATING_UPDATE, nullptr);
+    return 1;
+}
+
 // VERIFY: 97769787 auto
 // OFFSET: 0x006E83B0
 void CGPlayer_C::PlayerInitializeMessageHandlers() {
+    ClientServices::SetMessageHandler(static_cast<NETMESSAGE>(HoT::Net::SMSG_CUSTOM_STAT_TRACK), Packet_SMSG_CUSTOM_STAT_TRACK, nullptr);
     ClientServices::SetMessageHandler(SMSG_MOUNT_RESULT, Packet_Group_9, nullptr);
     ClientServices::SetMessageHandler(SMSG_DISMOUNT_RESULT, Packet_Group_9, nullptr);
     ClientServices::SetMessageHandler(SMSG_INVENTORY_CHANGE_FAILURE, Packet_Group_9, nullptr);
@@ -7118,7 +7160,7 @@ int32_t OnUpdateQuest(WOWGUID guid, uint32_t offset, uint32_t count, const void*
 
     CGQuestLog::Update(1);
     uint32_t slot = (offset - 0x28) / sizeof(PlayerQuestLogEntry);
-    PlayerQuestLogEntry* entry = slot > 25 ? nullptr : &player->m_player->m_playerQuestLog[slot];
+    PlayerQuestLogEntry* entry = player->GetQuestLogEntry(slot);
     const PlayerQuestLogEntry* old = static_cast<const PlayerQuestLogEntry*>(value);
     uint32_t questId = entry->m_questId;
     WOWGUID none = { 0 };
@@ -7996,7 +8038,8 @@ void CGPlayer_C::DelKnownSpell(int32_t spellId, int32_t silent) {
     }
 
     CGSpellBook::DelKnownSpell(spellId, 0);
-    CGActionBar::RemoveMacro(spellId);
+    // FIX: HoT leaves unlearned spells on the action bar and only refreshes their usable state.
+    CGActionBar::UpdateUsable();
 
     if (!silent) {
         CGClassTrainer::RefreshList();
@@ -8347,7 +8390,8 @@ int32_t CGPlayer_C::AutoCombatModeEventHandler(const void* data, void* param) {
         return 1;
     }
 
-    if (player->IsInMeleeRange(target)) {
+    // FIX: HoT makes the melee range that stops auto shot configurable with autoRepeatMeleeDeadzone.
+    if (HoT::AutoRepeatDeadzone::IsInMeleeRange(player, target)) {
         if (!player->CGUnit_C::IsInMelee()) {
             WOWGUID guid = target->m_obj->m_guid;
             player->MeleeModeEnter(guid);
@@ -8389,7 +8433,8 @@ int32_t CGPlayer_C::AutoCombatModeEventHandler(const void* data, void* param) {
 
         C3Vector direction = player->m_movementData.GetDirection();
 
-        if (direction.y * toTarget.y + direction.z * toTarget.z + direction.x * toTarget.x > 0.0f && !(player->m_movement->m_flags & 0x33) && maxRange * maxRange > distanceSq && Spell_C::CastSpell(CGSpellBook::m_autoRangedSpell, nullptr, target->m_obj->m_guid, false)) {
+        // FIX: HoT leaves moving to CheckToCancelSpellsDueToMovement, which honours the interrupt flags.
+        if (direction.y * toTarget.y + direction.z * toTarget.z + direction.x * toTarget.x > 0.0f && maxRange * maxRange > distanceSq && Spell_C::CastSpell(CGSpellBook::m_autoRangedSpell, nullptr, target->m_obj->m_guid, false)) {
             Spell_C_ClearLastAutoRangedCombatError();
         }
     }
@@ -8659,10 +8704,9 @@ int32_t CGPlayer_C::OnLootRemoved(CDataStore* msg) {
     uint8_t slot;
     msg->Get(slot);
 
-    if (ClntObjMgrObjectPtr(this->m_lootTarget, TYPEMASK_OBJECT, __FILE__, __LINE__)) {
-        memset(&s_lootItems[slot], 0, sizeof(s_lootItems[slot]));
-        CGGameUI::ClearLootSlot(slot);
-    }
+    // FIX: HoT pushes loot from targets the client may not see, so the slot is cleared without the object check.
+    memset(&s_lootItems[slot], 0, sizeof(s_lootItems[slot]));
+    CGGameUI::ClearLootSlot(slot);
 
     return 1;
 }
@@ -12500,8 +12544,9 @@ void CGPlayer_C::CheckForQuestItemLoot(uint32_t itemId, uint32_t count, uint32_t
         return;
     }
 
-    for (uint32_t i = 0; i < 25; i++) {
-        PlayerQuestLogEntry* entry = &this->m_player->m_playerQuestLog[i];
+    // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+    for (uint32_t i = 0; i < HoT::QuestLog::NUM_SLOTS; i++) {
+        PlayerQuestLogEntry* entry = this->GetQuestLogEntry(i);
 
         if (static_cast<int32_t>(entry->m_questId) <= 0 || CGQuestLog::IsQuestExpiredByID(entry->m_questId)) {
             continue;

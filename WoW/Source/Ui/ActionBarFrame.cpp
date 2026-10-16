@@ -1,4 +1,6 @@
 #include "ActionBarFrame.h"
+#include "HoT/Spells/ActionBar.h"
+#include "HoT/Spells/ActionRepeat.h"
 #include "Engine/Source/Base/CDataStore.h"
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
@@ -392,6 +394,11 @@ int32_t CGActionBar::UpdateUsableAction(uint32_t slot, int32_t& noMana) {
             return 0;
         }
 
+        // FIX: HoT keeps spells the player no longer knows on the bar, they show as unusable.
+        if (CGActionBar::IsSpell(slot) && !HasSpell(static_cast<uint32_t>(spellId))) {
+            return 0;
+        }
+
         noMana = !Spell_C_HaveSpellPower(caster, &spell);
         return 1;
     }
@@ -582,8 +589,9 @@ int32_t IsMultiCastSpellForSlot(int32_t slot, const SpellRec* spell, int32_t* ca
     int32_t totem = (spell->m_attributesExG & 0x20) ? 1 : 0;
     *category = GetMultiCastTotemCategory(slot);
 
+    // FIX: HoT totems that lack the stock flag or category still fit the multicast slot of their element.
     if (!totem || !*category) {
-        return totem;
+        return totem || HoT::Spells::IsTotemForMultiCastSlot(slot, spell);
     }
 
     for (uint32_t i = 0; i < sizeof(spell->m_requiredTotemCategoryID) / sizeof(spell->m_requiredTotemCategoryID[0]); i++) {
@@ -592,7 +600,7 @@ int32_t IsMultiCastSpellForSlot(int32_t slot, const SpellRec* spell, int32_t* ca
         }
     }
 
-    return 0;
+    return HoT::Spells::IsTotemForMultiCastSlot(slot, spell);
 }
 
 // VERIFY: 84bcf960 auto
@@ -1307,6 +1315,11 @@ void CGActionBar::UpdateMultiCastBar() {
 // VERIFY: d16e1aa6 manual
 // OFFSET: 0x005ABBC0
 void CGActionBar::UseAction(int32_t slot, const WOWGUID& target, const char* button) {
+    // FIX: HoT action repeat already used the held button, its release must not use it again.
+    if (HoT::ActionRepeat::ConsumeSuppressUse()) {
+        return;
+    }
+
     if (slot < 0 || slot >= sizeof(CGActionBar::m_slotActions) / sizeof(CGActionBar::m_slotActions[0])) {
         return;
     }

@@ -39,7 +39,8 @@
 #include "WoW/Source/Object/ObjectClient/Types.h"
 
 // STATIC: 0x00A45570
-static const uint32_t s_ribbonBlendModes[] = { 0, 1, 2, 10, 3, 4, 5 };
+// FIX: material blend 7 draws with the BlendAdd state.
+static const uint32_t s_ribbonBlendModes[] = { 0, 1, 2, 10, 3, 4, 5, 13 };
 
 // STATIC: 0x00D4118C
 void (*CM2Model::s_transformVertices[5])(CM2Model*, M2SkinSection*, uint8_t*, int32_t);
@@ -1092,8 +1093,9 @@ int32_t CM2Model::HasSequence(uint32_t id) {
 // VERIFY: cf5b210a auto
 // OFFSET: 0x00825F40
 uint32_t CM2Model::ResolveSequenceFallback(uint32_t id) {
+    // FIX: ids past the stock table resolve only to themselves.
     if (id >= ANIM_COUNT) {
-        return 0xFFFFFFFF;
+        return this->m_shared && this->m_shared->m_data && this->HasSequence(this->m_shared->m_data, id) ? id : 0xFFFFFFFF;
     }
 
     if (!(this->m_fFlags & 1)) {
@@ -1136,8 +1138,9 @@ uint32_t CM2Model::ResolveSequenceFallback(uint32_t id) {
 // VERIFY: af94bf41 manual
 // OFFSET: 0x00826050
 int32_t CM2Model::IsSequenceLoaded(uint32_t id) {
+    // FIX: ids past the stock table play when the model has them.
     if (id >= 506) {
-        return 0;
+        return this->m_shared && this->m_shared->m_data && this->HasSequence(this->m_shared->m_data, id);
     }
 
     if (!(this->m_fFlags & 1)) {
@@ -2742,7 +2745,7 @@ int32_t CM2Model::GetRegionBounds(M2SkinSection* section, CAaBox& box, C44Matrix
     box.t = C3Vector(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
     for (uint32_t i = 0; i < section->m_vertexCount; i++) {
-        M2Vertex* vertex = &data->m_vertices[skin->m_vertices[i + section->m_vertexStart]];
+        M2Vertex* vertex = &data->m_vertices[skin->VertexAt(i + section->m_vertexStart)];
 
         if (*reinterpret_cast<uint32_t*>(&vertex->m_weights) != weights || *reinterpret_cast<uint32_t*>(&vertex->m_indices) != indices) {
             weights = *reinterpret_cast<uint32_t*>(&vertex->m_weights);
@@ -2981,7 +2984,7 @@ void CM2Model::RenderBatchShadowMap(int32_t untextured, M2Batch* batch, const CM
         }
 
         gxBatch.m_count = instances * section->m_indexCount;
-        gxBatch.m_maxIndex = static_cast<uint16_t>(instances * this->m_shared->m_skinData->m_vertices.m_count - 1);
+        gxBatch.m_maxIndex = instances * this->m_shared->m_skinData->m_vertices.m_count - 1;
         g_theGxDevicePtr->Draw(&gxBatch, 1);
     }
 }
@@ -4123,6 +4126,12 @@ void CM2Model::OptimizeVisibleGeometry() {
     CM2Shared* shared = this->m_shared;
     uint32_t cacheFlags = shared->m_cache->m_flags;
     M2SkinProfile* skin = shared->m_skinData;
+
+    // FIX: the merged geometry buffer is 16-bit, so a skin past 65535 vertex slots keeps drawing per section.
+    if (skin->IsWide()) {
+        return;
+    }
+
     M2Batch* prevBatch = nullptr;
     M2SkinSection* prevSection = nullptr;
     uint32_t batchCount = 0;
@@ -4242,7 +4251,8 @@ void CM2Model::OptimizeVisibleGeometry() {
             int32_t indexStart = indexStarts[batch->m_skinSectionIndex];
 
             if (indexStart < 0) {
-                indexStart = static_cast<uint16_t>(indexCount);
+                // FIX: merged index starts past 65535 are no longer truncated.
+                indexStart = static_cast<int32_t>(indexCount);
                 indexStarts[batch->m_skinSectionIndex] = indexCount;
             }
 
@@ -6185,7 +6195,8 @@ void CM2Model::AnimateSM() {
         return;
     }
 
-    if (this->m_attachParent || this->m_shared->m_billboardBoneCount) {
+    // FIX: a modern model always rebuilds its bone palette since its batches are skinned against it.
+    if (this->m_attachParent || this->m_shared->m_billboardBoneCount || this->m_shared->m_modern) {
         this->Animate();
         return;
     }
@@ -7424,6 +7435,12 @@ int32_t CM2Model::InitializeLoaded() {
 
                 case 6:
                     material.m_blendMode = 5;
+                    material.m_flags &= ~4u;
+                    break;
+
+                default:
+                    // FIX: modern emitter blends past 6 draw with the Screen state and no alpha test.
+                    material.m_blendMode = 12;
                     material.m_flags &= ~4u;
                     break;
             }

@@ -55,7 +55,8 @@ static int32_t Script_GetBarberShopStyleInfo(lua_State* L) {
         cost = static_cast<int32_t>(value);
     }
 
-    lua_pushinteger(L, cost);
+    // FIX: HoT barber shop changes are free.
+    lua_pushinteger(L, 0);
 
     if (CGBarberShop::IsCurrentStyle(index)) {
         lua_pushnumber(L, 1.0);

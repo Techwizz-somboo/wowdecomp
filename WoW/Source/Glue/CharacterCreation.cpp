@@ -7,6 +7,7 @@
 #include "Engine/Source/Model2/M2Shared.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/CRandom.h"
+#include "HoT/Character/HD/HDCharacters.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/CharBaseInfoRec.h"
@@ -208,7 +209,8 @@ void CCharacterCreation::SetCharacterFacing(float facing) {
 
     if (CCharacterCreation::m_character->m_data.m_model) {
         C3Vector position(0.0f, 0.0f, 0.0f);
-        CCharacterCreation::m_character->m_data.m_model->SetWorldTransform(position, facing, 1.0f);
+        // FIX: an HD character model is scaled to match the stock one.
+        CCharacterCreation::m_character->m_data.m_model->SetWorldTransform(position, facing, HoT::HD::GlueScale(CCharacterCreation::m_character->m_data.m_model));
     }
 }
 
@@ -562,7 +564,8 @@ void CCharacterCreation::InitCharacterComponents(ComponentData* data, bool rando
     }
 
     CCharacterCreation::m_character = CCharacterComponent::AllocComponent();
-    data->m_model = CCharacterCreation::m_charCustomizeFrame->GetScene()->CreateModel(modelRec->m_modelName, 0);
+    // FIX: uses the HD character model while the HD patch is on.
+    data->m_model = CCharacterCreation::m_charCustomizeFrame->GetScene()->CreateModel(HoT::HD::GlueModelPath(modelRec->m_modelName), 0);
 
     if (!data->m_model) {
         return;
@@ -765,8 +768,9 @@ void CCharacterCreation::ResetCharCustomizeInfo() {
 
 // VERIFY: 06f4239a manual
 // OFFSET: 0x004E20B0
-void CCharacterCreation::SetSelectedRace(uint32_t raceIndex) {
-    if (raceIndex >= CCharacterCreation::m_races.Count() || raceIndex == CCharacterCreation::m_raceIndex) {
+void CCharacterCreation::SetSelectedRace(uint32_t raceIndex, bool force) {
+    // FIX: HoT can force a rebuild of the selected race after new art is mounted.
+    if (raceIndex >= CCharacterCreation::m_races.Count() || (raceIndex == CCharacterCreation::m_raceIndex && !force)) {
         return;
     }
 

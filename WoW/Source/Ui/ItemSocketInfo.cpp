@@ -88,23 +88,24 @@ int32_t CGItemSocketInfo::SetGem(uint32_t slot, WOWGUID item, WOWGUID container,
 
     ItemStats_C* socketStats = CGItemSocketInfo::m_socketItemStats;
     GemPropertiesRec* properties = g_gemPropertiesDB.GetRecord(stats->m_gemProperties);
-    uint32_t meta;
 
-    if (!properties || (meta = socketStats->m_socketColor[slot] & 0x1) == (properties->m_type & 0x1)) {
-        CGItemSocketInfo::m_gemItems[slot] = item;
-        CGItemSocketInfo::m_gemItemContainer[slot] = container;
-        CGItemSocketInfo::m_gemContainerSlot[slot] = containerSlot;
-        FrameScript_SignalEvent(SCRIPT_EVENT_SOCKET_INFO_UPDATE, nullptr);
-        return 1;
+    // FIX: HoT meta sockets take any gem and other sockets need a matching color, a gem without properties is refused.
+    if (!properties) {
+        return 0;
     }
 
-    if (meta) {
+    uint32_t socketColor = socketStats->m_socketColor[slot];
+
+    if (socketColor != 1 && !(socketColor & properties->m_type)) {
         CGGameUI::DisplayError(ERR_SOCKETING_REQUIRES_META_GEM);
         return 0;
     }
 
-    CGGameUI::DisplayError(ERR_SOCKETING_META_GEM_ONLY_IN_METASLOT);
-    return 0;
+    CGItemSocketInfo::m_gemItems[slot] = item;
+    CGItemSocketInfo::m_gemItemContainer[slot] = container;
+    CGItemSocketInfo::m_gemContainerSlot[slot] = containerSlot;
+    FrameScript_SignalEvent(SCRIPT_EVENT_SOCKET_INFO_UPDATE, nullptr);
+    return 1;
 }
 
 // VERIFY: c7291b92 manual

@@ -125,7 +125,8 @@ static int32_t Script_CheckInbox(lua_State* L) {
         return 0;
     }
 
-    CGMailInfo::m_nextUpdateTime = now + 60000;
+    // FIX: new mail shows up without the 60 second wait or a relog.
+    CGMailInfo::m_nextUpdateTime = now + 1;
     CGMailInfo::m_commandPending = 1;
     CDataStore msg;
     msg.Put(static_cast<uint32_t>(CMSG_MAIL_GET_LIST));

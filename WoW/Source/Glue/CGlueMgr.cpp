@@ -37,6 +37,10 @@
 #include "Engine/Source/Tempest/C3Vector.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/CRect.h"
+#include "HoT/HoT.h"
+#include "HoT/Runtime/SharedXML.h"
+#include "HoT/Streaming/PatchStatusUI.h"
+#include "HoT/Runtime/WorldResume.h"
 #include "WoW/Source/Client.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/ChrClassesRec.h"
@@ -715,6 +719,7 @@ void CGlueMgr::Resume() {
     CGVideoOptions::RegisterScriptFunctions();
     CGlueMgr::s_scriptFunctionsLoaded = 1;
     FrameScript_CreateEvents(g_glueScriptEvents, sizeof(g_glueScriptEvents) / sizeof(g_glueScriptEvents[0]));
+    HoT::OnGlueScriptsLoaded(g_glueScriptEvents, sizeof(g_glueScriptEvents) / sizeof(g_glueScriptEvents[0]));
 
     CCharacterSelection::Initialize();
     CCharacterCreation::Initialize();
@@ -748,6 +753,8 @@ void CGlueMgr::Resume() {
         case 3: {
             FrameXML_FreeHashNodes();
             FrameXML_CreateFrames("Interface\\GlueXML\\GlueXML.toc", nullptr, &md5, &status);
+            HoT::SharedXML::Load("glue", &status);
+            HoT::Streaming::PatchStatusUI::Load("glue");
 
             uint8_t digest[16];
             MD5Final(digest, &md5);
@@ -1473,6 +1480,7 @@ int32_t CGlueMgr::Idle(const void* data, void* param) {
             CGlueMgr::m_showedDisconnect = 0;
             FrameScript_SignalEvent(GLUE_EVENT_CLOSE_STATUS_DIALOG, nullptr);
             CCharacterSelection::UpdateCharacterList();
+            HoT::OnCharacterListUpdated();
 
             if (CGlueMgr::m_accountMsgAvailable) {
                 FrameScript_SignalEvent(GLUE_EVENT_ACCOUNT_MESSAGES_AVAILABLE, nullptr);
@@ -2021,6 +2029,7 @@ void CGlueMgr::EnterWorld() {
 
     ClientServices::SetAccountName(CGlueMgr::m_accountName);
     ClientServices::SetCharacterInfo(CGlueMgr::m_characterInfo);
+    HoT::OnEnterWorld();
 
     if (!s_curGameTip) {
         s_curGameTip = CVar::Register("gameTip", nullptr, 0, "0", nullptr, CATEGORY_DEFAULT, false, nullptr, false);
@@ -2234,6 +2243,11 @@ void CGlueMgr::StatusDialogClick() {
 // VERIFY: 4eb1c510 auto
 // OFFSET: 0x004DA9D0
 int32_t CGlueMgr::NetDisconnectHandler(NetClient* client) {
+    // FIX: HoT holds the world through a game server drop and resumes the session.
+    if (HoT::WorldResume::OnDisconnect(client)) {
+        return 1;
+    }
+
     bool displayScript = CGlueMgr::m_idleState != IDLE_ACCOUNT_LOGIN;
     CGlueMgr::m_idleState = IDLE_NONE;
     CGlueMgr::m_showedDisconnect = 0;

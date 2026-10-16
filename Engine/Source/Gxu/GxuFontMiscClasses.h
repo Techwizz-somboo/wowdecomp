@@ -80,6 +80,7 @@ struct BATCHEDRENDERFONTDESC : public TSHashObject<BATCHEDRENDERFONTDESC, HASHKE
 
     ~BATCHEDRENDERFONTDESC();
     void RenderBatch();
+    void RenderBatchMsdf();
 };
 
 struct CGxStringBatch : public TSLinkedNode<CGxStringBatch> {

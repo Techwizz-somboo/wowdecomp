@@ -8,6 +8,7 @@
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
+#include "HoT/Character/HD/HDCharacters.h"
 #include "Engine/Source/Frame/CSimpleModel.h"
 #include "Engine/Source/Model2/M2Scene.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -124,10 +125,10 @@ void CGDressUpModelFrame::UpdateModel() {
 }
 
 // STATIC: 0x00C0E4F8
-static int32_t s_mainHandItemId;
+int32_t s_mainHandItemId;
 
 // STATIC: 0x00C0E4FC
-static int32_t s_offHandItemId;
+int32_t s_offHandItemId;
 
 // STATIC: 0x00ACF548
 static int32_t s_nextHand = 15;
@@ -628,6 +629,8 @@ void CGDressUpModelFrame::SetModel(CM2Model* model) {
     data.m_model = model;
     SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
     data.m_model->m_refCount++;
+    // FIX: an HD model drops the stock baked NPC texture so the sheet is composited.
+    HoT::HD::ApplyNpcBake(nullptr, &data);
     this->m_component->Init(&data, nullptr);
 
     for (uint32_t i = 0; i < 11; i++) {

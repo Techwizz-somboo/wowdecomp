@@ -8,6 +8,7 @@
 #include "Engine/Source/Gxu/GxuFontMiscClasses.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/CRect.h"
+#include "HoT/MSDF/MSDF.h"
 
 // VERIFY: acac9576 auto
 // OFFSET: 0x006C5E60
@@ -202,6 +203,10 @@ void CGxString::ClearInstanceData() {
             this->m_textLines[i] = nullptr;
         }
     }
+
+    // FIX: reset the page mask and eviction flag together with the lines.
+    this->m_texturePagesUsed = 0;
+    this->m_textureEvicted = 0;
 }
 
 // VERIFY: 50ba3e99 manual
@@ -238,6 +243,72 @@ void CGxString::HandleScreenSizeChange() {
     this->m_currentFontHeight = this->m_requestedFontHeight > minHeight ? this->m_requestedFontHeight : minHeight;
 
     this->ClearInstanceData();
+}
+
+// Moves a stock glyph quad onto the MSDF glyph box and points it at the atlas.
+static void BuildMsdfQuad(CGxFont* face, const CHARCODEDESC* desc, uint32_t stringFlags, float fontHeight, VERT* verts) {
+    const HoT::MSDF::GlyphMetrics* glyph = HoT::MSDF::GetGlyph(face->GetMsdfFont(), desc->m_hashval);
+
+    if (!glyph) {
+        for (uint32_t i = 0; i < 4; i++) {
+            verts[i].m_vc = verts[0].m_vc;
+            verts[i].m_tc.x = 0.0f;
+            verts[i].m_tc.y = 0.0f;
+            verts[i].m_page = 0.0f;
+        }
+
+        return;
+    }
+
+    bool is3d = (stringFlags & 0x80) != 0;
+    float fontOffs = 0.0f;
+
+    if (!is3d) {
+        if (face->m_fontFlags & 8) {
+            fontOffs = 4.5f;
+        } else if (face->m_fontFlags & 1) {
+            fontOffs = 2.5f;
+        }
+    }
+
+    float baselineOffs = fontOffs > 0.0f ? 1.0f : 0.0f;
+    double renderHeight = is3d ? fontHeight : ScreenToPixelHeight(0, fontHeight) * 0.98;
+    float scale = static_cast<float>(renderHeight / HoT::MSDF::SDF_RENDER_SIZE);
+    float pad = HoT::MSDF::SDF_SPREAD * scale;
+
+    float leftOffs = face->GetGlyphBearing(desc, false, fontHeight);
+    float bitmapLeft = is3d ? leftOffs : glyph->m_bitmapLeft * scale - leftOffs;
+    float leftCorrection = bitmapLeft != leftOffs ? bitmapLeft + 1.0f : 0.0f;
+
+    float left = verts[0].m_vc.x + leftCorrection - pad + fontOffs * 0.5f;
+    float right = left + glyph->m_width * scale;
+    float top = verts[1].m_vc.y + glyph->m_bitmapTop * scale + pad - baselineOffs;
+    float bottom = top - glyph->m_height * scale;
+    float page = static_cast<float>(glyph->m_page);
+
+    verts[0].m_vc.x = left;
+    verts[0].m_vc.y = bottom;
+    verts[0].m_tc.x = glyph->m_u0;
+    verts[0].m_tc.y = glyph->m_v0;
+
+    verts[1].m_vc.x = left;
+    verts[1].m_vc.y = top;
+    verts[1].m_tc.x = glyph->m_u0;
+    verts[1].m_tc.y = glyph->m_v1;
+
+    verts[2].m_vc.x = right;
+    verts[2].m_vc.y = bottom;
+    verts[2].m_tc.x = glyph->m_u1;
+    verts[2].m_tc.y = glyph->m_v0;
+
+    verts[3].m_vc.x = right;
+    verts[3].m_vc.y = top;
+    verts[3].m_tc.x = glyph->m_u1;
+    verts[3].m_tc.y = glyph->m_v1;
+
+    for (uint32_t i = 0; i < 4; i++) {
+        verts[i].m_page = page;
+    }
 }
 
 // VERIFY: 6a878b65 manual
@@ -492,6 +563,7 @@ void CGxString::InitializeTextLine(const char* text, uint32_t numBytes, CImVecto
                     vert.m_vc.z = pos.z;
                     vert.m_tc.x = 0.0f;
                     vert.m_tc.y = 0.0f;
+                    vert.m_page = 0.0f;
                     vert.m_vc.x = this->m_currentFace->GetGlyphBearing(desc, (flags >> 7) & 1, this->m_currentFontHeight) + pos.x;
 
                     float width = desc->m_bitmapData.m_glyphCellWidth * scale;
@@ -540,6 +612,11 @@ void CGxString::InitializeTextLine(const char* text, uint32_t numBytes, CImVecto
                     verts[3].m_tc.x = coords.maxX;
                     verts[2].m_tc.x = coords.maxX;
 
+                    // FIX: MSDF fonts place the quad on the distance field glyph box instead of the bitmap cell.
+                    if (this->m_currentFace->GetMsdfFont()) {
+                        BuildMsdfQuad(this->m_currentFace, desc, this->m_flags, this->m_currentFontHeight, verts);
+                    }
+
                     lastCode = wide;
                     break;
                 }
@@ -570,15 +647,18 @@ void CGxString::AddShadow(const C2Vector& offset, const CImVector& color) {
 // VERIFY: 926a0475 auto
 // OFFSET: 0x006C7480
 int32_t CGxString::CheckGeometry() {
+    // FIX: an evicted string always drops its lines and rebuilds instead of trusting the glyph check.
     if (this->m_textureEvicted) {
-        if (!this->m_currentFace->CheckStringGlyphs(this->m_text)) {
-            this->ClearInstanceData();
-        }
+        this->ClearInstanceData();
+    }
 
-        this->m_textureEvicted = 0;
+    // FIX: an MSDF atlas page eviction since the last build invalidates the quads as well.
+    if (this->m_numLines && this->m_currentFace && this->m_currentFace->GetMsdfFont() && this->m_msdfEvictions != HoT::MSDF::EvictionCount(this->m_currentFace->GetMsdfFont())) {
+        this->ClearInstanceData();
     }
 
     this->CreateGeometry();
+    this->m_textureEvicted = 0;
     this->m_idleTicks = 0;
 
     return this->m_numLines != 0;
@@ -670,6 +750,7 @@ CGxString::CGxString() {
     this->m_scale = 1.0f;
     this->m_numLines = 0;
     this->m_idleTicks = 0;
+    this->m_msdfEvictions = 0;
     this->m_gradientInfo.m_chunk = 128;
 
     for (uint32_t i = 0; i < 8; i++) {
@@ -767,6 +848,9 @@ void CGxString::CreateGeometry() {
     if (this->m_numLines || !this->m_text || !*this->m_text) {
         return;
     }
+
+    // FIX: note the MSDF atlas generation up front so an eviction during this build triggers another one.
+    this->m_msdfEvictions = HoT::MSDF::EvictionCount(this->m_currentFace->GetMsdfFont());
 
     this->m_gradientInfo.SetCount(0);
 

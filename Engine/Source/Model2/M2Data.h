@@ -297,9 +297,11 @@ class M2Batch {
     /* 0016 */ uint16_t m_textureTransformComboIndex;
 };
 
-class M2SkinSection {
+// The skin section as stored in a .skin file.
+class M2SkinSectionFile {
     public:
-    /* 0000 */ uint32_t m_skinSectionId;
+    /* 0000 */ uint16_t m_skinSectionId;
+    /* 0002 */ uint16_t m_level;
     /* 0004 */ uint16_t m_vertexStart;
     /* 0006 */ uint16_t m_vertexCount;
     /* 0008 */ uint16_t m_indexStart;
@@ -311,6 +313,23 @@ class M2SkinSection {
     /* 0014 */ C3Vector m_centerPosition;
     /* 0020 */ C3Vector m_sortCenterPosition;
     /* 002C */ float m_sortRadius;
+};
+
+// FIX: the runtime section carries 32-bit starts and counts so skins past 65535 indices or vertices fit.
+class M2SkinSection {
+    public:
+    /* 0000 */ uint32_t m_skinSectionId;
+    /* 0004 */ uint32_t m_vertexStart;
+    /* 0008 */ uint32_t m_vertexCount;
+    /* 000C */ uint32_t m_indexStart;
+    /* 0010 */ uint32_t m_indexCount;
+    /* 0014 */ uint16_t m_boneCount;
+    /* 0016 */ uint16_t m_boneComboIndex;
+    /* 0018 */ uint16_t m_boneInfluences;
+    /* 001A */ uint16_t m_centerBoneIndex;
+    /* 001C */ C3Vector m_centerPosition;
+    /* 0028 */ C3Vector m_sortCenterPosition;
+    /* 0034 */ float m_sortRadius;
 };
 
 class M2Data {
@@ -362,6 +381,10 @@ class M2SkinProfile {
     /* 001C */ M2Array<M2SkinSection> m_skinSections;
     /* 0024 */ M2Array<M2Batch> m_batches;
     /* 002C */ uint32_t m_boneCountMax;
+
+    int32_t IsWide() const;
+    uint32_t VertexAt(uint32_t slot) const;
+    uint32_t IndexAt(const M2SkinSection& section, uint32_t index) const;
 };
 
 // OFFSET: [0x0081CD50]
@@ -383,6 +406,25 @@ inline void M2Array<T>::Relocate(const void* base) {
 template <class T>
 inline void M2Array<T>::Set(const T* data) {
     this->m_offset = data ? static_cast<uint32_t>(reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(this)) : 0;
+}
+
+// A skin past 65535 vertex slots keeps its vertices in slot order and its triangle values hold only the low 16 bits.
+inline int32_t M2SkinProfile::IsWide() const {
+    return this->m_vertices.m_count > 0xFFFF;
+}
+
+inline uint32_t M2SkinProfile::VertexAt(uint32_t slot) const {
+    return this->IsWide() ? slot : this->m_vertices[slot];
+}
+
+inline uint32_t M2SkinProfile::IndexAt(const M2SkinSection& section, uint32_t index) const {
+    uint16_t value = this->m_indices[index];
+
+    if (!this->IsWide()) {
+        return value;
+    }
+
+    return section.m_vertexStart + static_cast<uint16_t>(value - static_cast<uint16_t>(section.m_vertexStart));
 }
 
 #endif

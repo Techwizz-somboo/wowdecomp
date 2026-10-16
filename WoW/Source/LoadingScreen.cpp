@@ -18,6 +18,7 @@
 #include "Engine/Source/Tempest/C3Spline_CatmullRom.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/CMath.h"
+#include "HoT/HoT.h"
 #include "WoW/Source/DB/Rec/LoadingScreenTaxiSplinesRec.h"
 #include "WoW/Source/DB/Rec/TaxiPathNodeRec.h"
 #include "WoW/Source/Object/GameObjectDef.h"
@@ -669,6 +670,8 @@ static void InitializeProgressBar(bool loadingWorld) {
         ScrnLayerCreate(&rect, 9.0f, 6, nullptr, LoadingScreenPaint, &s_loadingScreenLayer);
         InitializeProgressBarEvents();
     }
+
+    HoT::OnLoadingScreenStarted();
 
     s_nextPingTime = OsGetAsyncTimeMs() + 30000;
 

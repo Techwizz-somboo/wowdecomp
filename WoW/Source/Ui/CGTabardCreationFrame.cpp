@@ -50,5 +50,6 @@ void CGTabardCreationFrame::Close() {
 // VERIFY: b533bac0 auto
 // OFFSET: 0x007EAE60
 uint32_t GuildGetTabardCost() {
-    return 100000;
+    // FIX: HoT guild tabards are free.
+    return 0;
 }

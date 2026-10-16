@@ -48,7 +48,7 @@ class CCharacterCreation {
     static void SetCharacterFacing(float facing);
     static void SetCharCustomizeModel(const char* modelName);
     static void SetSelectedClass(int32_t classID);
-    static void SetSelectedRace(uint32_t raceIndex);
+    static void SetSelectedRace(uint32_t raceIndex, bool force = false);
     static void SetSelectedSex(uint32_t sexID);
     static void SetToExistingCharacter(uint32_t index);
     static void Shutdown();

@@ -11,6 +11,7 @@
 #include "WoW/Source/Net/Types.h"
 #include "WoW/Source/Object/ObjectClient/Object_C.h"
 #include "WoW/Source/WowServices/WowConnection.h"
+#include "HoT/Net/Opcodes.h"
 
 class CGObject_C;
 class CHashKeyGUID;
@@ -85,8 +86,8 @@ class NetClient : public WowConnectionResponse {
     /* 0534 */ NETSTATE m_netState;
     /* 0538 */ bool m_suspended;
     /* 0539 */ uint8_t unused_0539[3];
-    /* 053C */ MESSAGE_HANDLER m_handlers [1311];
-    /* 19B8 */ void* m_handlerParams [1311];
+    /* 053C */ MESSAGE_HANDLER m_handlers [HoT::Net::NUM_HANDLER_SLOTS];
+    /* 19B8 */ void* m_handlerParams [HoT::Net::NUM_HANDLER_SLOTS];
     /* 2E34 */ NETEVENTQUEUE* m_netEventQueue;
     /* 2E38 */ WowConnection* m_serverConnection;
     /* 2E3C */ WowConnection* m_redirectConnection;

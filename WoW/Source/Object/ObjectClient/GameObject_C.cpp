@@ -20,6 +20,7 @@
 #include "Engine/Source/Tempest/C4Quaternion.h"
 #include "Engine/Source/Tempest/CAaSphere.h"
 #include "Engine/Source/Tempest/CMath.h"
+#include "HoT/Features/Features.h"
 #include "WoW/Source/DB/DBClient/DBCacheInstances.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/DBClient/GameObjectStats_C.h"
@@ -3809,7 +3810,8 @@ int32_t CGGameObject_C::CanHighlight() const {
         return 0;
     }
 
-    for (uint32_t i = 0; i < 25; i++) {
+    // FIX: walks the 100 HoT quest log slots instead of the 25 descriptor slots.
+    for (uint32_t i = 0; i < HoT::QuestLog::NUM_SLOTS; i++) {
         if (player->GetQuestLogEntry(i)->m_questId == static_cast<uint32_t>(questId)) {
             return 1;
         }

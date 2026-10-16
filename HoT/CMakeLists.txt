@@ -1,0 +1,57 @@
+file(GLOB_RECURSE PRIVATE_SOURCES CONFIGURE_DEPENDS "*.cpp")
+
+# The auth server only accepts builds it knows, set this to the commit it expects when the decomp HEAD is not one of them.
+set(HOT_COMMIT_OVERRIDE "" CACHE STRING "40 character commit hash sent to the server instead of the git HEAD")
+
+set(HOT_VERSION_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(HOT_VERSION_HEADER "${HOT_VERSION_DIR}/HoT/BuildVersion.h")
+set(HOT_VERSION_ARGS
+    "-DHOT_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+    "-DHOT_TEMPLATE=${CMAKE_CURRENT_SOURCE_DIR}/BuildVersion.h.in"
+    "-DHOT_OUTPUT=${HOT_VERSION_HEADER}"
+    "-DHOT_COMMIT_OVERRIDE=${HOT_COMMIT_OVERRIDE}"
+)
+execute_process(COMMAND ${CMAKE_COMMAND} ${HOT_VERSION_ARGS} -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildVersion.cmake")
+
+add_custom_target(HoTBuildVersion
+    BYPRODUCTS "${HOT_VERSION_HEADER}"
+    COMMAND ${CMAKE_COMMAND} ${HOT_VERSION_ARGS} -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildVersion.cmake"
+    COMMENT "Resolving git commit hash for HoT"
+    VERBATIM
+)
+
+add_library(HoT STATIC
+    ${PRIVATE_SOURCES}
+)
+
+add_dependencies(HoT HoTBuildVersion)
+
+target_include_directories(HoT
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}
+        ${HOT_VERSION_DIR}
+)
+
+# The Discord SDK is loaded at runtime, the client just needs it next to the exe.
+if (WOWDECOMP_ARCH_64)
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Discord/redist/discord_game_sdk.dll" "${CMAKE_SOURCE_DIR}/bin/Win/discord_game_sdk.dll" COPYONLY)
+endif ()
+
+# MSDF text, FreeType and msdfgen come from ThirdParty.
+target_link_libraries(HoT
+    PUBLIC
+        freetype
+)
+
+if (TARGET msdfgen::msdfgen-ext)
+    target_link_libraries(HoT
+        PUBLIC
+            msdfgen::msdfgen-core
+            msdfgen::msdfgen-ext
+    )
+endif ()
+
+option(AUTO_UPDATER_IGNORES_EXE "Background downloader leaves the running client exe and discord_game_sdk.dll alone" OFF)
+if (AUTO_UPDATER_IGNORES_EXE)
+    target_compile_definitions(HoT PRIVATE AUTO_UPDATER_IGNORES_EXE)
+endif ()

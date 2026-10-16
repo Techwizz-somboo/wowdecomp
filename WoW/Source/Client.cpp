@@ -44,6 +44,9 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Storm/Source/MD5.h"
 #include "Engine/Source/Tempest/CRandom.h"
+#include "HoT/HoT.h"
+#include "HoT/Streaming/BackgroundDownloader.h"
+#include "HoT/Streaming/LooseFiles.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Source/Console/ConsoleClient.h"
 #include "WoW/Source/ConsoleDevice/ConsoleDevice.h"
@@ -939,6 +942,15 @@ static int32_t LoadNewWorld(const void* data, void* param) {
     return 1;
 }
 
+// HoT WorldResume reloads the current map without a worldport ack after a resumed login.
+void ClientReloadWorld(uint32_t zoneID, const char* directory, const C3Vector& position, float facing) {
+    s_zoneID = zoneID;
+    s_directory = directory;
+    s_spawnPosition = position;
+    s_spawnRotation = facing;
+    LoadNewWorld(nullptr, nullptr);
+}
+
 // VERIFY: a5146d91 auto
 // OFFSET: 0x00403D10
 static int32_t Packet_SMSG_NEW_WORLD(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
@@ -1009,6 +1021,7 @@ static void InitializeClient() {
     WowSysMessageOutput::Initialize();
     ClientRegisterConsoleCommands();
     ClientDBInitialize();
+    HoT::OnClientDBInitialized();
     LoadingScreenInitialize();
     FrameScript_Initialize(0);
     SI2::Init(0);
@@ -1064,6 +1077,7 @@ static void InitializeClient() {
     CGlueMgr::m_pendingTimerAlert = s_timeTestError;
     SpellVisualsInitialize();
     EventRegister(EVENT_ID_POLL, PollNet);
+    HoT::OnInitializeClient();
 }
 
 // VERIFY: 56a0f6b5 auto
@@ -1550,6 +1564,8 @@ void ClientDestroyGame(int32_t charSelect, int32_t resumeGlue, int32_t worldLogi
         return;
     }
 
+    HoT::OnDestroyGame();
+
     s_botCheckEnabled = 0;
     EventUnregister(EVENT_ID_IDLE, ClientIdle);
     ClientServices::ClearMessageHandler(SMSG_NOTIFICATION);
@@ -1760,6 +1776,7 @@ bool InitializeGlobal() {
     Startup_StringsRec* title = g_startup_StringsDB.GetRecord(1);
     char windowTitle[260];
     SStrCopy(windowTitle, title ? title->m_message : "World of Warcraft", STORM_MAX_STR);
+    HoT::OnInitializeGlobal();
     ConsoleDeviceInitialize(windowTitle, 1, 1);
 
     OsIMEInitialize();
@@ -1787,6 +1804,7 @@ void BeginCloseGame() {
     ConsoleCommandDestroy();
     BaseDestroyGlobal();
     CloseAllArchives();
+    HoT::Streaming::OnCloseGame();
     ShutdownStreamingIfTrial();
     StopStreaming();
 
@@ -1811,6 +1829,7 @@ int32_t CommonMain() {
 
     OsSystemEnableCpuLog();
     SetPaths();
+    HoT::Streaming::LooseFiles::Apply();
 
     uint32_t sendErrorLogs = 1;
 

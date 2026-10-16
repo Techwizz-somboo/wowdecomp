@@ -278,7 +278,7 @@ bool SetProjection() {
 
 // VERIFY: 9a3a1eda manual
 // OFFSET: 0x006C0E80
-bool ParseEmbeddedTexture(const char* text, GXUEMBEDDEDTEXTUREINFO* info, float fontPixelHeight, float scale, float fontHeight) {
+static bool ParseEmbeddedTextureInfo(const char* text, GXUEMBEDDEDTEXTUREINFO* info, float fontPixelHeight, float scale, float fontHeight) {
     CRect window;
     window.minY = 0.0f;
     window.minX = 0.0f;
@@ -497,6 +497,27 @@ bool ParseEmbeddedTexture(const char* text, GXUEMBEDDEDTEXTUREINFO* info, float 
     info->m_texCoords.maxY = bottom / imageHeightF;
 
     SStrChr(next + 1, ':');
+
+    return true;
+}
+
+static float SnapToPixel(float value, float minimum) {
+    float rounded = std::floor(value + 0.5f);
+    return rounded < minimum ? minimum : rounded;
+}
+
+// FIX: embedded textures in scaled text snap to whole pixels so they do not blur or shimmer.
+bool ParseEmbeddedTexture(const char* text, GXUEMBEDDEDTEXTUREINFO* info, float fontPixelHeight, float scale, float fontHeight) {
+    if (!ParseEmbeddedTextureInfo(text, info, fontPixelHeight, scale, fontHeight)) {
+        return false;
+    }
+
+    if (fontPixelHeight != fontHeight) {
+        info->m_height = SnapToPixel(info->m_height, 1.0f);
+        info->m_width = SnapToPixel(info->m_width, 1.0f);
+        info->m_offsetX = std::floor(info->m_offsetX + 0.5f);
+        info->m_offsetY = std::floor(info->m_offsetY + 0.5f);
+    }
 
     return true;
 }

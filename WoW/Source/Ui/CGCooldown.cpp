@@ -17,6 +17,7 @@
 #include "Engine/Source/Tempest/CRect.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "HoT/Features/Features.h"
 
 // STATIC: 0x00C2423C
 int32_t CGCooldown::s_objectType;
@@ -80,6 +81,9 @@ CSimpleFrame* CGCooldown::Create(CSimpleFrame* parent) {
 // VERIFY: 8c34e1ec auto
 // OFFSET: [0x005EB040, 0x005EBE60, 0x005EBEF0]
 CGCooldown::~CGCooldown() {
+    // FIX: HoT tracks frames by address for cooldown rate scaling.
+    HoT::CooldownRate::OnCooldownDestroyed(this);
+
     if (this->m_starTexture) {
         HandleClose(reinterpret_cast<HOBJECT>(this->m_starTexture));
     }
@@ -636,6 +640,9 @@ void CGCooldown::OnFrameSizeChanged(const CRect& rect) {
 // VERIFY: 9f3e3bf6 manual
 // OFFSET: 0x005EC8F0
 void CGCooldown::OnLayerUpdate(float elapsedSec) {
+    // FIX: HoT follows the spell history when the server scales cooldown rates.
+    HoT::CooldownRate::OnCooldownUpdate(this, this->m_startTime);
+
     CSimpleFrame::OnLayerUpdate(elapsedSec);
 
     this->m_elapsed = OsGetAsyncTimeMs() - this->m_startTime;
@@ -692,4 +699,7 @@ void CGCooldown::SetCooldown(uint32_t start, uint32_t duration) {
     this->UpdateColors();
     this->ResetVerts();
     this->Show();
+
+    // FIX: HoT remembers which spell history entry this frame shows so the rate scaling can follow it.
+    HoT::CooldownRate::OnCooldownSet(this, start, duration);
 }

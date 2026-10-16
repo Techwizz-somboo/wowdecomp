@@ -85,6 +85,20 @@ struct PlayerDance {
 class DanceMovesRec;
 class CEffect;
 
+// FIX: stats HoT servers track outside the update fields.
+struct CGPlayerCustomStats {
+    int32_t m_magicFind;
+    float m_healthLeech;
+    float m_manaLeech;
+    float m_critDamageMod;
+    float m_critHealingMod;
+    int32_t m_spellPenetration [7];
+    int32_t m_spellPenetrationTotal;
+    int32_t m_spellHealing [7];
+    float m_healthRegen;
+    float m_healthRegenInCombat;
+};
+
 class CGPlayer_C : public CGUnit_C, public CGPlayer {
     public:
     void DanceMoveAnimComplete();
@@ -107,6 +121,7 @@ class CGPlayer_C : public CGUnit_C, public CGPlayer {
     static WOWGUID s_resurrectOfferer;
     static uint32_t s_resurrectOfferSickness;
     static uint32_t s_resurrectOfferUseTimer;
+    static CGPlayerCustomStats s_customStats;
 
     static void __stdcall AcceptArenaTeam();
     static void __stdcall AcceptGroup(uint32_t roles);
@@ -564,6 +579,7 @@ int32_t Packet_SMSG_BATTLEGROUND_INFO_THROTTLED(void* param, NETMESSAGE msgId, u
 int32_t Packet_SMSG_TALENTS_INFO(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
 int32_t Packet_SMSG_QUEST_POI_QUERY_RESPONSE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
 int32_t Packet_SMSG_DEBUG_SERVER_GEO(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
+int32_t Packet_SMSG_CUSTOM_STAT_TRACK(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
 int32_t Packet_SMSG_QUEST_FORCE_REMOVE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
 int32_t Packet_SMSG_COMBAT_LOG_MULTIPLE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
 int32_t Player_C_SetPlayerRenderDisabled(int32_t disabled);

@@ -1,4 +1,5 @@
 #include "Map.h"
+#include "HoT/Core/Log.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #if defined(_MSC_VER)
 #include <malloc.h>
@@ -2451,6 +2452,13 @@ int32_t CMap::SafeOpen(const char* fileName, SFileImpl** file) {
         DebugLog("CMap::SafeOpen() failed %s\n", fileName);
 
         if (!--tries) {
+            // FIX: a model removed from the files loads the error cube and is logged instead of a fatal error.
+            LOG_ERROR << "missing file " << fileName << ", using Spells\\ErrorCube.mdx";
+
+            if (SFileOpenFile("Spells\\ErrorCube.mdx", file)) {
+                return 1;
+            }
+
             SErrDisplayAppFatal("CMap::SafeOpen() failed %s", fileName);
             return 0;
         }

@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include "HoT/Runtime/LuaRuntime.h"
 #include "Engine/Source/Frame/CRenderBatch.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Frame/CSimpleRender.h"
@@ -113,6 +114,7 @@ CRenderBatch::~CRenderBatch() {
 // VERIFY: d1a22f87 auto
 // OFFSET: 0x004843A0
 void CRenderBatch::QueueFontString(CSimpleFontString* string) {
+    HoT::LuaRuntime::Count(HoT::LuaRuntime::Counter::FontStrings);
     CRect rect;
 
     if (!string->GetRect(&rect)) {
@@ -144,6 +146,7 @@ void CRenderBatch::QueueFontString(CSimpleFontString* string) {
 // VERIFY: 597baa7e manual
 // OFFSET: 0x004847A0
 void CRenderBatch::QueueTexture(CSimpleTexture* texture) {
+    HoT::LuaRuntime::Count(HoT::LuaRuntime::Counter::Textures);
     CGxTex* gxTex = TextureGetGxTex(texture->m_texture, (texture->m_textureFlags & 1) ? 0 : 2, nullptr);
 
     if (!gxTex) {

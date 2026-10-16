@@ -241,13 +241,21 @@ class CGTooltip : public CSimpleFrame {
     int32_t SetItem(int32_t itemId, const WOWGUID* requester, const WOWGUID* itemGuid, int32_t nameOnly, int32_t compare, int32_t useLinkInfo, int32_t append, WOWGUID owner, int32_t socketPreview, FILE* stream, int32_t hideCharges, const ItemLinkInfo* link, int32_t minimumLevel, int32_t skipLock, int32_t skipSellPrice);
 };
 
+// FIX: HoT item mods run from 49 to 74, all primary stats (73) spreads over agility to stamina.
+static const int32_t ITEM_MOD_FIRST_CUSTOM = 49;
+static const int32_t ITEM_MOD_ALL_PRIMARY_STAT = 73;
+static const int32_t NUM_ITEM_MODS = 75;
+static const int32_t NUM_CUSTOM_ITEM_MODS = NUM_ITEM_MODS - ITEM_MOD_FIRST_CUSTOM;
+
 class CGItemStatsSummary {
     public:
     static int32_t GetItemComparison(CGTooltip* first, CGTooltip* second, CGItemStatsSummary* result);
+    static char* GetCustomStatName(int32_t index, char* buffer, int32_t size);
 
     /* 0000 */ float m_dps;
     /* 0004 */ int32_t m_stats[73];
     /* 0128 */ uint32_t m_flags;
+    /* 012C */ int32_t m_customStats[NUM_CUSTOM_ITEM_MODS];
 
     CGItemStatsSummary();
     void Create();
@@ -258,6 +266,7 @@ class CGItemStatsSummary {
     CGItemStatsSummary operator-(const CGItemStatsSummary& other) const;
     void AccumulateStats(const ItemStats_C* stats);
     void AddStatMods(const ItemStats_C* stats);
+    bool AddCustomItemMod(int32_t type, int32_t value);
     void AddResistances(const ItemStats_C* stats);
     void AddSpellEffects(const SpellRec* spell);
     void AddEnchantEffect(int32_t type, int32_t arg, int32_t amount);
@@ -293,6 +302,6 @@ int32_t SetCompareItem(CGTooltip* tooltip, uint32_t itemId, int32_t offset, int3
 int32_t SetTooltipUnitAura(CGTooltip* tooltip, ScriptAuraInfo* info);
 
 extern const char* s_socketColorNames[5];
-extern const char* s_itemModTokens[49];
+extern const char* s_itemModTokens[NUM_ITEM_MODS];
 
 #endif

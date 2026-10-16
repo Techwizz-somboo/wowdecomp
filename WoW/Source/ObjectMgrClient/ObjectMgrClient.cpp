@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cstring>
+#include "HoT/Features/Units.h"
 #include <ctime>
 #include <malloc.h>
 #include <new>
@@ -1167,6 +1168,9 @@ ObjectMgr::~ObjectMgr() {
 static int32_t PostInitObject(uint32_t time, CDataStore* msg, bool reenable) {
     SmartGUID guid;
     *msg >> guid;
+
+    // FIX: a new or recreated object may have new gear or scaling, so its HoT level is asked for again.
+    HoT::UnitLevel::SendRequest(guid);
 
     uint8_t typeId;
     msg->Get(typeId);

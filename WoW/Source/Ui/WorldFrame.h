@@ -98,6 +98,9 @@ struct HITTESTRESULT {
     /* 0024 */ C3Vector m_segEnd;
 };
 
+// FIX: HoT reads whether the last terrain track was acceptable, 0 means it was.
+int32_t WorldFrame_GetSpellShadowStyle();
+
 struct KEYDOWNSTATE {
     /* 0000 */ char m_keyString [32];
     /* 0020 */ uint32_t m_modifiers;

@@ -1,4 +1,8 @@
 #include "Tooltip.h"
+#include "HoT/DB/Custom.h"
+#include "HoT/Features/Items.h"
+#include "HoT/Features/Units.h"
+#include "HoT/Game/Session.h"
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -201,7 +205,7 @@ static const char* s_colorStrings[4] = { "|cffffffff", "|cff808080", "|cffff2020
 const char* s_inventoryTypeTokens[29] = { "", "INVTYPE_HEAD", "INVTYPE_NECK", "INVTYPE_SHOULDER", "INVTYPE_BODY", "INVTYPE_CHEST", "INVTYPE_WAIST", "INVTYPE_LEGS", "INVTYPE_FEET", "INVTYPE_WRIST", "INVTYPE_HAND", "INVTYPE_FINGER", "INVTYPE_TRINKET", "INVTYPE_WEAPON", "INVTYPE_SHIELD", "INVTYPE_RANGED", "INVTYPE_CLOAK", "INVTYPE_2HWEAPON", "INVTYPE_BAG", "INVTYPE_TABARD", "INVTYPE_ROBE", "INVTYPE_WEAPONMAINHAND", "INVTYPE_WEAPONOFFHAND", "INVTYPE_HOLDABLE", "INVTYPE_AMMO", "INVTYPE_THROWN", "INVTYPE_RANGEDRIGHT", "INVTYPE_QUIVER", "INVTYPE_RELIC" };
 
 // STATIC: 0x00AD6640
-const char* s_itemModTokens[49] = { "ITEM_MOD_MANA", "ITEM_MOD_HEALTH", "", "ITEM_MOD_AGILITY", "ITEM_MOD_STRENGTH", "ITEM_MOD_INTELLECT", "ITEM_MOD_SPIRIT", "ITEM_MOD_STAMINA", "", "", "", "", "ITEM_MOD_DEFENSE_SKILL_RATING", "ITEM_MOD_DODGE_RATING", "ITEM_MOD_PARRY_RATING", "ITEM_MOD_BLOCK_RATING", "ITEM_MOD_HIT_MELEE_RATING", "ITEM_MOD_HIT_RANGED_RATING", "ITEM_MOD_HIT_SPELL_RATING", "ITEM_MOD_CRIT_MELEE_RATING", "ITEM_MOD_CRIT_RANGED_RATING", "ITEM_MOD_CRIT_SPELL_RATING", "ITEM_MOD_HIT_TAKEN_MELEE_RATING", "ITEM_MOD_HIT_TAKEN_RANGED_RATING", "ITEM_MOD_HIT_TAKEN_SPELL_RATING", "ITEM_MOD_CRIT_TAKEN_MELEE_RATING", "ITEM_MOD_CRIT_TAKEN_RANGED_RATING", "ITEM_MOD_CRIT_TAKEN_SPELL_RATING", "ITEM_MOD_HASTE_MELEE_RATING", "ITEM_MOD_HASTE_RANGED_RATING", "ITEM_MOD_HASTE_SPELL_RATING", "ITEM_MOD_HIT_RATING", "ITEM_MOD_CRIT_RATING", "ITEM_MOD_HIT_TAKEN_RATING", "ITEM_MOD_CRIT_TAKEN_RATING", "ITEM_MOD_RESILIENCE_RATING", "ITEM_MOD_HASTE_RATING", "ITEM_MOD_EXPERTISE_RATING", "ITEM_MOD_ATTACK_POWER", "ITEM_MOD_RANGED_ATTACK_POWER", "", "ITEM_MOD_SPELL_HEALING_DONE", "ITEM_MOD_SPELL_DAMAGE_DONE", "ITEM_MOD_MANA_REGENERATION", "ITEM_MOD_ARMOR_PENETRATION_RATING", "ITEM_MOD_SPELL_POWER", "ITEM_MOD_HEALTH_REGEN", "ITEM_MOD_SPELL_PENETRATION", "ITEM_MOD_BLOCK_VALUE" };
+const char* s_itemModTokens[NUM_ITEM_MODS] = { "ITEM_MOD_MANA", "ITEM_MOD_HEALTH", "", "ITEM_MOD_AGILITY", "ITEM_MOD_STRENGTH", "ITEM_MOD_INTELLECT", "ITEM_MOD_SPIRIT", "ITEM_MOD_STAMINA", "", "", "", "", "ITEM_MOD_DEFENSE_SKILL_RATING", "ITEM_MOD_DODGE_RATING", "ITEM_MOD_PARRY_RATING", "ITEM_MOD_BLOCK_RATING", "ITEM_MOD_HIT_MELEE_RATING", "ITEM_MOD_HIT_RANGED_RATING", "ITEM_MOD_HIT_SPELL_RATING", "ITEM_MOD_CRIT_MELEE_RATING", "ITEM_MOD_CRIT_RANGED_RATING", "ITEM_MOD_CRIT_SPELL_RATING", "ITEM_MOD_HIT_TAKEN_MELEE_RATING", "ITEM_MOD_HIT_TAKEN_RANGED_RATING", "ITEM_MOD_HIT_TAKEN_SPELL_RATING", "ITEM_MOD_CRIT_TAKEN_MELEE_RATING", "ITEM_MOD_CRIT_TAKEN_RANGED_RATING", "ITEM_MOD_CRIT_TAKEN_SPELL_RATING", "ITEM_MOD_HASTE_MELEE_RATING", "ITEM_MOD_HASTE_RANGED_RATING", "ITEM_MOD_HASTE_SPELL_RATING", "ITEM_MOD_HIT_RATING", "ITEM_MOD_CRIT_RATING", "ITEM_MOD_HIT_TAKEN_RATING", "ITEM_MOD_CRIT_TAKEN_RATING", "ITEM_MOD_RESILIENCE_RATING", "ITEM_MOD_HASTE_RATING", "ITEM_MOD_EXPERTISE_RATING", "ITEM_MOD_ATTACK_POWER", "ITEM_MOD_RANGED_ATTACK_POWER", "", "ITEM_MOD_SPELL_HEALING_DONE", "ITEM_MOD_SPELL_DAMAGE_DONE", "ITEM_MOD_MANA_REGENERATION", "ITEM_MOD_ARMOR_PENETRATION_RATING", "ITEM_MOD_SPELL_POWER", "ITEM_MOD_HEALTH_REGEN", "ITEM_MOD_SPELL_PENETRATION", "ITEM_MOD_BLOCK_VALUE", "ITEM_MOD_MAGIC_FIND", "ITEM_MOD_LEECH", "ITEM_MOD_MANA_LEECH", "ITEM_MOD_CRIT_DAMAGE", "ITEM_MOD_CRIT_HEALING", "ITEM_MOD_FOCUS", "ITEM_MOD_PCT_FOCUS", "ITEM_MOD_PCT_ATK_POWER", "ITEM_MOD_PCT_SPELL_DMG", "ITEM_MOD_PCT_HEALING", "ITEM_MOD_PCT_STR", "ITEM_MOD_PCT_AGI", "ITEM_MOD_PCT_STAM", "ITEM_MOD_PCT_INT", "ITEM_MOD_PCT_SPI", "ITEM_MOD_PCT_ALL_STAT", "ITEM_MOD_PCT_RED_PHYS", "ITEM_MOD_PCT_RED_MAGIC", "ITEM_MOD_WEP_DMG_FLAT", "ITEM_MOD_WEP_DMG_PCT", "ITEM_MOD_ARMOR_PCT", "ITEM_MOD_ADDITONAL_SOCKET", "ITEM_MOD_MOVEMENT_SPEED", "ITEM_MOD_POTION_EFFECT", "ITEM_MOD_ALL_PRIMARY_STAT", "ITEM_MOD_THORNS" };
 
 // STATIC: 0x00A248F8
 static const int32_t s_attackPowerGroup[3] = { 8, 9, 54 };
@@ -243,7 +247,7 @@ const char* s_socketColorNames[5] = { "Meta", "Red", "Yellow", "Blue", "Major" }
 static const int32_t s_primaryStatOrder[11] = { 4, 3, 7, 5, 6, 1, 0, 8, 9, 2, 10 };
 
 // STATIC: 0x00A25F78
-static const int32_t s_spellStatOrder[37] = { 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 42, 41, 43, 44, 45, 46, 47, 48 };
+static const int32_t s_spellStatOrder[63] = { 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 42, 41, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74 };
 
 // STATIC: 0x00C5CF48
 static const ItemSetRec* s_sortItemSet;
@@ -285,6 +289,7 @@ static TSGrowableArray<FrameStackInfo> s_frameStack;
 // OFFSET: 0x0061B5B0
 void CGItemStatsSummary::Create() {
     memset(this->m_stats, 0, sizeof(this->m_stats));
+    memset(this->m_customStats, 0, sizeof(this->m_customStats));
     this->m_dps = 0.0f;
     this->m_flags = 0;
 }
@@ -401,6 +406,27 @@ void CGItemStatsSummary::GetSocketFlags(const ItemStats_C* stats) {
     }
 }
 
+bool CGItemStatsSummary::AddCustomItemMod(int32_t type, int32_t value) {
+    if (type >= 0 && type < ITEM_MOD_FIRST_CUSTOM) {
+        return false;
+    }
+
+    if (type == ITEM_MOD_ALL_PRIMARY_STAT) {
+        for (int32_t primary = 3; primary <= 7; primary++) {
+            this->m_stats[primary + 11] += value;
+        }
+    } else if (type >= ITEM_MOD_FIRST_CUSTOM && type < NUM_ITEM_MODS) {
+        this->m_customStats[type - ITEM_MOD_FIRST_CUSTOM] += value;
+    }
+
+    return true;
+}
+
+char* CGItemStatsSummary::GetCustomStatName(int32_t index, char* buffer, int32_t size) {
+    SStrPrintf(buffer, size, "%s%s", s_itemModTokens[index + ITEM_MOD_FIRST_CUSTOM], "_SHORT");
+    return buffer;
+}
+
 // VERIFY: 59d9b28c manual
 // OFFSET: 0x0061B990
 void CGItemStatsSummary::AddStatMods(const ItemStats_C* stats) {
@@ -409,6 +435,11 @@ void CGItemStatsSummary::AddStatMods(const ItemStats_C* stats) {
     for (int32_t i = 0; i < stats->m_statsCount; i++) {
         uint32_t type = stats->m_statType[i];
         int32_t value = stats->m_statValue[i];
+
+        if (this->AddCustomItemMod(type, value)) {
+            continue;
+        }
+
         this->m_stats[type + 11] += value;
 
         if (type == 38) {
@@ -1216,10 +1247,18 @@ void CGItemStatsSummary::AddEnchantEffect(int32_t type, int32_t arg, int32_t amo
         }
 
         case 4:
-            this->m_stats[arg] += amount;
+            // FIX: the server picks the index, keep it inside the table.
+            if (arg >= 0 && arg < static_cast<int32_t>(sizeof(this->m_stats) / sizeof(this->m_stats[0]))) {
+                this->m_stats[arg] += amount;
+            }
+
             break;
 
         case 5:
+            if (this->AddCustomItemMod(arg, amount)) {
+                break;
+            }
+
             this->m_stats[arg + 11] += amount;
 
             if (arg == 38) {
@@ -1312,6 +1351,11 @@ void CGItemStatsSummary::FillOutScalingItem(const ItemStats_C* stats, int32_t le
             }
 
             int32_t value = budget * distribution->m_bonus[i] / 10000;
+
+            if (this->AddCustomItemMod(type, value)) {
+                continue;
+            }
+
             this->m_stats[type + 11] += value;
 
             if (type == 38) {
@@ -1610,6 +1654,7 @@ int32_t CGItemStatsSummary::Create(CGItem_C* item, int32_t level) {
 // OFFSET: 0x006207A0
 int32_t CGItemStatsSummary::Fill(const char* link) {
     memset(this->m_stats, 0, sizeof(this->m_stats));
+    memset(this->m_customStats, 0, sizeof(this->m_customStats));
     this->m_dps = 0.0f;
     this->m_flags = 0;
     int32_t randomPropertiesId = 0;
@@ -1891,7 +1936,8 @@ int32_t CGTooltip::SetUnit(const WOWGUID& guid, int32_t showHealth, const WOWGUI
 
     if (unit) {
         dead = unit->m_unit->m_unitFieldHealth <= 0 || (unit->m_unit->m_unitDynamicFlags & 0x20);
-        unitLevel = unit->m_unit->m_unitFieldLevel;
+        // FIX: HoT shows scaled levels.
+        unitLevel = HoT::UnitLevel::GetDisplayLevel(unit, unit->m_unit->m_unitFieldLevel);
 
         if (unit->GetCreatureType() != 10) {
             if (activePlayer) {
@@ -1901,12 +1947,7 @@ int32_t CGTooltip::SetUnit(const WOWGUID& guid, int32_t showHealth, const WOWGUI
             }
         }
 
-        if (unit->GetCreatureType() == 10 || activePlayer) {
-            if (activePlayer && unit->UnitReaction(activePlayer) <= 1 && static_cast<int32_t>(activePlayer->m_unit->m_unitFieldLevel) <= unitLevel - 10) {
-                showLevel = 0;
-            }
-        }
-
+        // FIX: HoT only hides the level of bosses, the ten levels above skull is gone.
         if (showLevel && unit->IsBossMob()) {
             showLevel = 0;
         }
@@ -2926,6 +2967,24 @@ static void AddSpellEquippedItemLine(CGTooltip* tooltip, const SpellRec* spell, 
     tooltip->AddLine(text, nullptr, color, color, 1);
 }
 
+// FIX: HoT spells can require a weapon in each hand.
+static void AddSpellDualWieldLine(CGTooltip* tooltip, const SpellRec* spell, CGPlayer_C* player) {
+    if (!(HoT::DB::GetSpellCustomAttributes(spell->m_id) & HoT::DB::SPELL_ATTR0_CU_REQ_DUAL_WIELD)) {
+        return;
+    }
+
+    const char* key = "SPELL_REQUIRES_DUAL_WIELD";
+    const char* text = FrameScript_GetText(key, -1, GENDER_NOT_APPLICABLE);
+
+    if (!text || !*text || !SStrCmp(text, key, STORM_MAX_STR)) {
+        return;
+    }
+
+    bool equipped = Spell_C_IsWeaponEquipped(player, 15) && Spell_C_IsWeaponEquipped(player, 16);
+    const CImVector& color = *reinterpret_cast<const CImVector*>(equipped ? &s_tooltipTextColor : &s_tooltipRedColor);
+    tooltip->AddLine(text, nullptr, color, color, 1);
+}
+
 // INLINED
 static void AddSpellFormLine(CGTooltip* tooltip, const SpellRec* spell, CGUnit_C* caster, int32_t brief) {
     char forms[512];
@@ -3269,6 +3328,7 @@ int32_t CGTooltip::SetSpell(int32_t spellId, int32_t brief, uint32_t cooldown, i
     }
 
     AddSpellEquippedItemLine(this, &spell, player, brief, isPet);
+    AddSpellDualWieldLine(this, &spell, player);
     AddSpellFormLine(this, &spell, caster, brief);
     AddSpellReputationLine(this, &spell, player, brief);
 
@@ -3946,6 +4006,7 @@ int32_t SetTooltipUnitAura(CGTooltip* tooltip, ScriptAuraInfo* info) {
             uint8_t flags = unit->GetAuraFlags(slot);
             uint8_t stackCount = unit->GetAuraStackCount(slot);
             uint8_t level = unit->GetAuraLevel(slot);
+            HoT::AuraValues::RecordTooltipCall(unit, slot);
             tooltip->SetBuff(unit->GetAuraSpellId(slot), level, stackCount, flags, 0, 0);
             AuraData* aura = unit->GetAura(slot);
 
@@ -4136,13 +4197,14 @@ static void AddItemNameLines(CGTooltip* tooltip, const ItemStats_C* stats, int32
 
     if (colorblindMode && colorblindMode->m_intValue) {
         if (stats->m_flags[0] & 8) {
-            tooltip->AddLine(FrameScript_GetText("ITEM_HEROIC_EPIC", -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
+            // FIX: HoT items can carry a legendary, heirloom, paradoxical or corrupted label instead.
+            tooltip->AddLine(FrameScript_GetText(HoT::Items::GetHeroicLabelKey(stats, "ITEM_HEROIC_EPIC"), -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
         } else {
             SStrPrintf(format, sizeof(format), "ITEM_QUALITY%d_DESC", destroyGem ? 0 : stats->m_quality);
             tooltip->AddLine(FrameScript_GetText(format, -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
         }
     } else if (stats->m_flags[0] & 8) {
-        tooltip->AddLine(FrameScript_GetText("ITEM_HEROIC", -1, GENDER_NOT_APPLICABLE), nullptr, greenColor, greenColor, 0);
+        tooltip->AddLine(FrameScript_GetText(HoT::Items::GetHeroicLabelKey(stats, "ITEM_HEROIC"), -1, GENDER_NOT_APPLICABLE), nullptr, greenColor, greenColor, 0);
     }
 }
 
@@ -5750,7 +5812,8 @@ static void AddItemSpellStatLines(CGTooltip* tooltip, const ItemStats_C* stats, 
                         SStrPrintf(bonus, sizeof(bonus), format, value);
                     }
 
-                    SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONEQUIP", -1, GENDER_NOT_APPLICABLE), bonus);
+                    // FIX: HoT shows scaling stats as plain bonuses rather than equip effects.
+                    SStrPrintf(text, sizeof(text), "%s%s", FrameScript_GetText("ITEM_PLUS", -1, GENDER_NOT_APPLICABLE), bonus);
                     tooltip->AddLine(text, nullptr, greenColor, greenColor, 1);
                 }
             }
@@ -5852,6 +5915,11 @@ static int32_t AddItemSpellTriggerLines(CGTooltip* tooltip, const ItemStats_C* s
 
             case 2:
                 SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONPROC", -1, GENDER_NOT_APPLICABLE), format);
+                break;
+
+            // FIX: HoT gems show their socket spell.
+            case 3:
+                SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONSOCKET", -1, GENDER_NOT_APPLICABLE), format);
                 break;
 
             case 6:
@@ -6926,6 +6994,10 @@ int32_t CGTooltip::SetItemDelta(const CGItemStatsSummary* summary, int32_t appen
         this->AddColoredItemStat(summary->m_stats[i], text, &first);
     }
 
+    for (int32_t i = 0; i < NUM_CUSTOM_ITEM_MODS; i++) {
+        this->AddColoredItemStat(summary->m_customStats[i], FrameScript_GetText(CGItemStatsSummary::GetCustomStatName(i, name, sizeof(name)), -1, GENDER_NOT_APPLICABLE), &first);
+    }
+
     return 1;
 }
 
@@ -7043,6 +7115,10 @@ CGItemStatsSummary CGItemStatsSummary::operator-(const CGItemStatsSummary& other
 
     for (uint32_t i = 0; i < 73; i++) {
         result.m_stats[i] = this->m_stats[i] - other.m_stats[i];
+    }
+
+    for (int32_t i = 0; i < NUM_CUSTOM_ITEM_MODS; i++) {
+        result.m_customStats[i] = this->m_customStats[i] - other.m_customStats[i];
     }
 
     result.m_dps = this->m_dps - other.m_dps;
@@ -7320,7 +7396,15 @@ void TooltipAchievementCallback(int32_t id, const WOWGUID& guid, void* param, bo
 // OFFSET: 0x00620950
 void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
     const CImVector& textColor = *reinterpret_cast<const CImVector*>(&s_tooltipTextColor);
-    int32_t minDamage = static_cast<int32_t>(unit->m_unit->m_unitFieldMindamage);
+
+    // FIX: HoT staff see the creature entry and display id.
+    if (HoT::Session::HasClearance(1) && !(unit->m_obj->m_type & TYPEMASK_PLAYER)) {
+        SStrPrintf(buffer, size, "Entry: %u | Display %u", unit->m_obj->m_entryID, unit->m_unit->m_unitFieldDisplayid);
+        this->AddLine(buffer, nullptr, textColor, textColor, 0);
+    }
+
+    // FIX: HoT rounds the minimum damage up like the maximum.
+    int32_t minDamage = static_cast<int32_t>(ceil(static_cast<double>(unit->m_unit->m_unitFieldMindamage)));
     int32_t maxDamage = static_cast<int32_t>(ceil(static_cast<double>(unit->m_unit->m_unitFieldMaxdamage)));
 
     if (minDamage == maxDamage) {
@@ -7335,7 +7419,8 @@ void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
     SStrPrintf(buffer, size, FrameScript_GetText("ARMOR_TEMPLATE", -1, GENDER_NOT_APPLICABLE), armor);
     this->AddLine(buffer, nullptr, textColor, textColor, 0);
 
-    SStrPrintf(buffer, size, FrameScript_GetText("HP_TEMPLATE", -1, GENDER_NOT_APPLICABLE), unit->m_unit->m_unitFieldHealth);
+    // FIX: HoT shows maximum health.
+    SStrPrintf(buffer, size, FrameScript_GetText("HP_TEMPLATE", -1, GENDER_NOT_APPLICABLE), unit->m_unit->m_unitFieldMaxhealth);
     this->AddLine(buffer, nullptr, textColor, textColor, 0);
 
     for (int32_t i = 0; i < 7; i++) {
@@ -7353,77 +7438,7 @@ void CGTooltip::AddEmpathyText(CGUnit_C* unit, char* buffer, uint32_t size) {
         }
     }
 
-    CreatureFamilyRec* family = g_creatureFamilyDB.GetRecord(unit->GetCreatureFamily());
-
-    if (family && family->m_petFoodMask) {
-        char diet[256];
-        diet[0] = '\0';
-        int32_t first = 1;
-        uint32_t count = g_itemPetFoodDB.m_numRecords;
-
-        for (uint32_t i = 0; i < count; i++) {
-            ItemPetFoodRec* food = g_itemPetFoodDB.GetRecordByIndex(i);
-
-            if (food && ((1 << (food->m_id - 1)) & family->m_petFoodMask)) {
-                if (!first) {
-                    SStrPack(diet, ", ", sizeof(diet));
-                }
-
-                SStrPack(diet, food->m_name, sizeof(diet));
-                first = 0;
-            }
-        }
-
-        if (!first) {
-            SStrPrintf(buffer, size, FrameScript_GetText("PET_DIET_TEMPLATE", -1, GENDER_NOT_APPLICABLE), diet);
-            this->AddLine(buffer, nullptr, textColor, textColor, 0);
-        }
-    }
-
-    CreatureStats_C* stats = unit->m_creatureCacheEntry;
-
-    if (!stats || !(stats->m_typeFlags & 0x1) || !stats->m_family) {
-        this->AddLine(FrameScript_GetText("NOT_TAMEABLE", -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
-        return;
-    }
-
-    this->AddLine(FrameScript_GetText(stats->m_typeFlags & 0x10000 ? "TAMEABLE_EXOTIC" : "TAMEABLE", -1, GENDER_NOT_APPLICABLE), nullptr, textColor, textColor, 0);
-
-    family = g_creatureFamilyDB.GetRecord(unit->GetCreatureFamily());
-
-    if (!family) {
-        return;
-    }
-
-    char spells[512];
-    spells[0] = '\0';
-    int32_t first = 1;
-
-    for (uint32_t j = 0; j < 2; j++) {
-        for (int32_t i = 0; i < g_skillLineAbilityDB.m_numRecords; i++) {
-            SkillLineAbilityRec* ability = g_skillLineAbilityDB.GetRecordByIndex(i);
-
-            if (!ability || ability->m_skillLine != family->m_skillLine[j]) {
-                continue;
-            }
-
-            SpellRec spell;
-
-            if (g_spellDB.GetRecord(ability->m_spell, &spell) && !(spell.m_attributes & 0xC0) && !ability->m_supercededBySpell && ability->m_acquireMethod == 2) {
-                if (!first) {
-                    SStrPack(spells, ", ", sizeof(spells));
-                }
-
-                SStrPack(spells, spell.m_name, sizeof(spells));
-                first = 0;
-            }
-        }
-    }
-
-    if (!first) {
-        SStrPrintf(buffer, size, FrameScript_GetText("PET_SPELLS_TEMPLATE", -1, GENDER_NOT_APPLICABLE), spells);
-        this->AddLine(buffer, nullptr, textColor, textColor, 0);
-    }
+    // FIX: HoT ends the empathy text at the resistances, the pet diet and taming lines are gone.
 }
 
 // VERIFY: fa5a7b6d auto
@@ -7766,6 +7781,8 @@ void CGTooltip::SetFrameStack(bool showHidden) {
 // VERIFY: 21654104 auto
 // OFFSET: 0x00625350
 void CGTooltip::SetBuff(int32_t spellId, int32_t a2, int32_t a3, int32_t a4, int32_t a5, int32_t a6) {
+    // FIX: HoT spell descriptions read live aura amounts from the server while this tooltip builds.
+    HoT::AuraValues::TooltipScope auraValues(this, spellId);
     const CImVector& titleColor = *reinterpret_cast<const CImVector*>(&s_tooltipTitleColor);
     const CImVector& textColor = *reinterpret_cast<const CImVector*>(&s_tooltipTextColor);
 

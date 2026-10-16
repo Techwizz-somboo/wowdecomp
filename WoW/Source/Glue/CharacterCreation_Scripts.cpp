@@ -1,4 +1,5 @@
 #include "CharacterCreation.h"
+#include "HoT/Game/Session.h"
 #include <cstdint>
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/Frame/CScriptObject.h"
@@ -338,6 +339,8 @@ static int32_t Script_CreateCharacter(lua_State* L) {
         lua_tolstring(L, 1, nullptr);
     }
 
+    // FIX: HoT adds CreateCharacter(name, gameMode).
+    HoT::Session::SetCharCreateGameMode(static_cast<uint8_t>(lua_tonumber(L, 2)));
     CCharacterCreation::CreateCharacter(lua_tolstring(L, 1, nullptr));
     return 0;
 }

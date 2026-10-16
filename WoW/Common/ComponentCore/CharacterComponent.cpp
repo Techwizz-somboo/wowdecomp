@@ -11,6 +11,8 @@
 #include <alloca.h>
 #endif
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
+#include "HoT/Character/HandItemDisplay.h"
+#include "HoT/Character/HD/HDCharacters.h"
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
 #include "Engine/Source/Base/Prop.h"
@@ -1722,6 +1724,11 @@ static int32_t GetConditionalGeoset(CharacterPreferences* prefs) {
 // VERIFY: 4a5d8b79 manual
 // OFFSET: 0x004EA0B0
 void CCharacterComponent::ReplaceExtraSkinTexture(const char* debug) {
+    // FIX: an HD component takes its extra skin texture from the HD manifest.
+    if (HoT::HD::ReplaceExtraSkinTexture(this)) {
+        return;
+    }
+
     if (!ComponentValidateBase(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_SKIN, 0, this->m_data.m_preferences.m_skinID)) {
         return;
     }
@@ -1733,7 +1740,8 @@ void CCharacterComponent::ReplaceExtraSkinTexture(const char* debug) {
     }
 
     strcpy(s_pathEnd, textureName);
-    CTexture* texture = CreateTexture(s_path, &s_status);
+    // FIX: HD components load the HD texture when there is one.
+    CTexture* texture = CreateTexture(HoT::HD::ExtraSkinTexture(this, s_path), &s_status);
 
     if (texture) {
         this->m_data.m_model->ReplaceTexture(8, texture);
@@ -1755,7 +1763,8 @@ void CCharacterComponent::ReplaceHairTexture(int32_t hairStyleID, const char* de
     }
 
     strcpy(s_pathEnd, textureName);
-    CTexture* texture = CreateTexture(s_path, &s_status);
+    // FIX: HD components load the HD texture when there is one.
+    CTexture* texture = CreateTexture(HoT::HD::HairTexture(this, hairStyleID, s_path), &s_status);
 
     if (texture) {
         this->m_data.m_model->ReplaceTexture(6, texture);
@@ -1781,7 +1790,8 @@ void CCharacterComponent::LoadBaseVariation(COMPONENT_VARIATIONS variation, int3
 
     if (*textureName) {
         strcpy(s_pathEnd, textureName);
-        texture = TextureCacheCreateTexture(s_path);
+        // FIX: HD components load the HD texture when there is one.
+        texture = TextureCacheCreateTexture(HoT::HD::BaseVariationTexture(this, variation, textureIndex, variationIndex, colorIndex, s_path));
 
         if (!texture) {
             DebugLog("**** Unable to Load Texture %s\n", s_path);
@@ -1823,6 +1833,9 @@ void CCharacterComponent::SetHairColor(int32_t hairColorID, bool loadHair, const
 // VERIFY: 2d880572 manual
 // OFFSET: 0x004EA3E0
 void CCharacterComponent::SetHairStyle(int32_t hairStyleID, const char* debug) {
+    // FIX: HD components apply the manifest customization geosets on every way out.
+    HoT::HD::CustomizationScope hdScope(this);
+
     if (!ComponentValidateBase(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID, this->m_data.m_preferences.m_hairColorId)) {
         return;
     }
@@ -1873,6 +1886,9 @@ void CCharacterComponent::SetFace(int32_t faceID, bool loadHair, const char* deb
 // VERIFY: 336da2ea auto
 // OFFSET: 0x004EA590
 void CCharacterComponent::SetBeardStyle(int32_t facialHairID, bool loadVariation, const char* debug) {
+    // FIX: HD components apply the manifest customization geosets on every way out.
+    HoT::HD::CustomizationScope hdScope(this);
+
     if (facialHairID < 0 || facialHairID > static_cast<int32_t>(CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID])) {
         return;
     }
@@ -1931,7 +1947,8 @@ void CCharacterComponent::SetSkinColor(int32_t skinID, bool loadHair, bool rende
         }
 
         if (*underwearRec->m_textureName[0] && CopyStringToBuffer(underwearRec->m_textureName[0], s_pathEnd)) {
-            this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[0] = TextureCacheCreateTexture(s_path);
+            // FIX: HD components load the HD texture when there is one.
+            this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[0] = TextureCacheCreateTexture(HoT::HD::NamedTexture(this, s_path));
 
             if (!this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[0]) {
                 DebugLog("**** Unable to Load Texture %s\n", s_path);
@@ -1939,7 +1956,7 @@ void CCharacterComponent::SetSkinColor(int32_t skinID, bool loadHair, bool rende
         }
 
         if (*underwearRec->m_textureName[1] && CopyStringToBuffer(underwearRec->m_textureName[1], s_pathEnd)) {
-            this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[1] = TextureCacheCreateTexture(s_path);
+            this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[1] = TextureCacheCreateTexture(HoT::HD::NamedTexture(this, s_path));
 
             if (!this->m_baseVariation[VARIATION_UNDERWEAR].m_texture[1]) {
                 DebugLog("**** Unable to Load Texture %s\n", s_path);
@@ -2039,7 +2056,9 @@ void CCharacterComponent::AddLink(CM2Model* parent, GEOCOMPONENTLINKS link, cons
         return;
     }
 
-    CM2Model* model = parent->m_scene->CreateModel(modelPath, 0);
+    // FIX: an HD character wears the HD helm model when there is one.
+    char hdPath[260];
+    CM2Model* model = parent->m_scene->CreateModel(HoT::HD::HelmModelPath(parent, link, modelPath, hdPath), 0);
 
     if (!model) {
         return;
@@ -2127,7 +2146,9 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
         return ATTACH_NONE;
     }
 
-    const char* folder = "Item\\ObjectComponents\\Weapon\\";
+    // FIX: the folder follows where the model file is, so a shield can sit in either hand.
+    bool shieldFolder = HoT::HandItemDisplay::UsesShieldFolder(displayRec, shield);
+    const char* folder = shieldFolder ? "Item\\ObjectComponents\\Shield\\" : "Item\\ObjectComponents\\Weapon\\";
     GEOCOMPONENTLINKS hand;
     GEOCOMPONENTLINKS sheath;
 
@@ -2138,8 +2159,7 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
         hand = ATTACH_HANDLEFT;
         sheath = CCharacterComponent::GetSheatheLink(sheatheType, false);
 
-        if (shield) {
-            folder = "Item\\ObjectComponents\\Shield\\";
+        if (shieldFolder) {
             hand = ATTACH_SHIELD;
         }
     } else if (invSlot == INVSLOT_RANGED) {
@@ -2149,7 +2169,14 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
         return ATTACH_NONE;
     }
 
-    CCharacterComponent::RemoveLinkpt(model, hand);
+    // FIX: an off hand model can be on either the shield or the left hand attachment.
+    if (invSlot == INVSLOT_OFFHAND) {
+        CCharacterComponent::RemoveLinkpt(model, ATTACH_SHIELD);
+        CCharacterComponent::RemoveLinkpt(model, ATTACH_HANDLEFT);
+    } else {
+        CCharacterComponent::RemoveLinkpt(model, hand);
+    }
+
     CCharacterComponent::RemoveLinkpt(model, sheath);
 
     GEOCOMPONENTLINKS link = sheathed ? sheath : hand;
@@ -2168,6 +2195,11 @@ GEOCOMPONENTLINKS CCharacterComponent::AddHandItem(CM2Model* model, const ItemDi
     strcpy(s_pathEnd2, s_buffer);
 
     CCharacterComponent::AddLink(model, link, s_path, s_path2, itemVisual ? itemVisual : displayRec->m_itemVisual, displayRec);
+
+    // FIX: a shield held in the right hand is mirrored to face out.
+    if (shieldFolder && link == ATTACH_HANDRIGHT) {
+        HoT::HandItemDisplay::MirrorMainHandShield(model);
+    }
 
     return link;
 }
@@ -2220,6 +2252,12 @@ void CCharacterComponent::RemoveHandItem(CM2Model* model, INVENTORY_SLOTS invSlo
         if (shield) {
             hand = ATTACH_SHIELD;
         }
+    }
+
+    // FIX: an off hand model can be on either the shield or the left hand attachment.
+    if (invSlot == INVSLOT_OFFHAND) {
+        CCharacterComponent::RemoveLinkpt(model, ATTACH_SHIELD);
+        hand = ATTACH_HANDLEFT;
     }
 
     CCharacterComponent::RemoveLinkpt(model, hand);
@@ -3538,11 +3576,18 @@ void CCharacterComponent::GeosRenderPrep() {
 
     this->m_data.m_model->OptimizeVisibleGeometry();
     this->m_flags &= ~0x4;
+    // FIX: HD components apply the manifest geosets after the stock ones.
+    HoT::HD::ApplyGeosets(this);
 }
 
 // VERIFY: f3bbc113 manual
 // OFFSET: 0x004EE0D0
 void CCharacterComponent::PrepSections() {
+    // FIX: HD components upload the composited HD sheet instead.
+    if (HoT::HD::PrepSections(this)) {
+        return;
+    }
+
     for (int32_t section = 0; section < NUM_COMPONENT_SECTIONS; section++) {
         if (!((1 << section) & this->m_dirtySections)) {
             continue;
@@ -3841,6 +3886,8 @@ bool CCharacterComponent::IsHelmModelCorrect() {
 // VERIFY: 9417cc2f manual
 // OFFSET: 0x004EF0D0
 void CCharacterComponent::AddHelm(int32_t itemVisual) {
+    // FIX: HD components fix their helm geosets and placement on every way out.
+    HoT::HD::HelmScope hdScope(this);
     ItemDisplayInfoRec rec;
     const ItemDisplayInfoRec* displayRec;
 
@@ -4204,6 +4251,8 @@ CCharacterComponent::CCharacterComponent() {
     memset(this->m_itemSlotForAttachSlot, 0xFF, sizeof(this->m_itemSlotForAttachSlot));
     this->m_flags &= ~0x20;
     this->m_data.m_model = nullptr;
+    this->m_hd = false;
+    this->m_hdSheet = nullptr;
 }
 
 // VERIFY: 4f3c1a66 manual
@@ -4226,6 +4275,8 @@ CCharacterComponent::~CCharacterComponent() {
     }
 
     this->m_link.Unlink();
+    // FIX: frees the HD sheet state.
+    HoT::HD::OnComponentDestroyed(this);
 }
 
 // VERIFY: 87fa3e57 manual
@@ -4303,6 +4354,11 @@ void CCharacterComponent::Prep() {
 // VERIFY: f0225731 auto
 // OFFSET: 0x004EFF10
 void CCharacterComponent::CreateBaseTexture() {
+    // FIX: HD components get a 1024x512 sheet fed by the HD compositor.
+    if (HoT::HD::CreateBaseTexture(this)) {
+        return;
+    }
+
     EGxTexFormat dataFormat = GxTex_Argb8888;
 
     if (this->m_gxTexFormat == GxTex_Dxt1) {
@@ -5183,6 +5239,11 @@ int32_t CCharacterComponent::ThreadInitialize() {
 // VERIFY: 672afabf manual
 // OFFSET: 0x004F1790
 void CCharacterComponent::CreateComponentRequest() {
+    // FIX: HD components composite their sheet on the HD worker threads instead.
+    if (HoT::HD::RequestSheet(this)) {
+        return;
+    }
+
     this->m_request = CCharacterComponent::AllocComponentRequest();
     this->m_request->m_format = this->m_gxTexFormat;
 
@@ -5507,6 +5568,9 @@ bool CCharacterComponent::Destroy() {
 // VERIFY: 0acf5d15 manual
 // OFFSET: 0x004F24D0
 bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
+    // FIX: marks the component HD from its model before anything loads textures.
+    HoT::HD::OnComponentInit(this, data);
+
     if (this->m_data.m_model) {
         this->m_data.m_model->Release();
     }
@@ -5519,6 +5583,7 @@ bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
     this->m_handItemDisplayID[2] = 0;
 
     if (static_cast<int32_t>(data->m_preferences.m_raceID) < 0 || static_cast<int32_t>(data->m_preferences.m_raceID) > g_chrRacesDB.m_maxID || !ComponentValidateBase(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_SKIN, 0, this->m_data.m_preferences.m_skinID)) {
+        HoT::HD::OnComponentInitDone(this);
         return false;
     }
 
@@ -5547,6 +5612,8 @@ bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
     this->SetSkinColor(this->m_data.m_preferences.m_skinID, false, true, debug);
     this->SetHairStyle(this->m_data.m_preferences.m_hairStyleId, debug);
     this->SetBeardStyle(this->m_data.m_preferences.m_facialHairId, false, debug);
+    // FIX: HD components set the manifest texture slots once the stock ones are in.
+    HoT::HD::OnComponentInitDone(this);
 
     return true;
 }

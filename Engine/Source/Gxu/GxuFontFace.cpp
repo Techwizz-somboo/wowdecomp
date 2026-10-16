@@ -3,6 +3,7 @@
 #include "Engine/Source/Gxu/GxuFontFace.h"
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/MSDF/MSDF.h"
 
 // STATIC: 0x00C7D2FC
 TSHashTable<FACEDATA, HASHKEY_STRI> s_faceHash;
@@ -48,16 +49,25 @@ const char* FontFaceGetFontName(HFACE handle) {
     return reinterpret_cast<FACEDATA*>(handle)->m_key.m_str;
 }
 
+HoT::MSDF::Font* FontFaceGetMsdf(HFACE handle) {
+    return handle ? reinterpret_cast<FACEDATA*>(handle)->m_msdf : nullptr;
+}
+
 // VERIFY: 63774048 manual
 // OFFSET: 0x006C8190
 FACEDATA::FACEDATA() {
     this->m_data = nullptr;
     this->m_face = nullptr;
+    this->m_msdf = nullptr;
 }
 
 // VERIFY: 263b0e27 manual
 // OFFSET: 0x006C81C0
 FACEDATA::~FACEDATA() {
+    // FIX: the MSDF font reads the face data, so it goes first.
+    HoT::MSDF::CloseFont(this->m_msdf);
+    this->m_msdf = nullptr;
+
     if (this->m_face) {
         FT_Done_Face(this->m_face);
     }
@@ -95,6 +105,8 @@ HFACE FontFaceGetHandle(const char* fileName, FT_Library library) {
             FACEDATA* face = new ("HFACE", SLOG_OBJECT) FACEDATA;
             face->m_data = data;
             face->m_face = ftFace;
+            // FIX: give the face a distance field font when MSDF is on and the font passes validation.
+            face->m_msdf = HoT::MSDF::OpenFont(ftFace, data, size);
             s_faceHash.Insert(face, fileName);
             data = nullptr;
             ftFace = nullptr;

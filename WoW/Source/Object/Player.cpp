@@ -1,5 +1,6 @@
 #include "Player.h"
 #include "WoW/Source/Object/Unit.h"
+#include "HoT/Features/Features.h"
 
 // STATIC: 0x00AC4BC8
 const uint32_t CGPlayer::s_mirrorFields[173] = {
@@ -170,9 +171,6 @@ bool CGPlayer::HasAuraVision(uint8_t vision) {
 // VERIFY: d70d997f manual
 // OFFSET: 0x005E0870
 PlayerQuestLogEntry* CGPlayer::GetQuestLogEntry(uint32_t slot) {
-    if (slot > 25) {
-        return nullptr;
-    }
-
-    return &this->m_player->m_playerQuestLog[slot];
+    // FIX: HoT serves its 100 server pushed slots instead of the 25 descriptor slots.
+    return HoT::QuestLog::GetSlot(slot);
 }

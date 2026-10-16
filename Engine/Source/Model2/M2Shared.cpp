@@ -24,6 +24,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/CImVector.h"
 #include "Engine/Source/Os/OsMemory.h"
+#include "HoT/Models/ModernM2.h"
 
 // STATIC: 0x00A45644
 static const uint32_t s_skinProfileBoneCounts[4] = { 256, 64, 53, 21 };
@@ -58,6 +59,23 @@ static void AsyncFileReadFreeNear(CAsyncObject* object) {
     OsFreeNear(buffer);
 }
 #endif
+
+// Header arrays hold 32-bit self-relative offsets, so a block they point at must sit near the header.
+static void* AllocNear(const void* anchor, uint32_t size) {
+#if defined(WOWDECOMP_ARCH_64)
+    return OsAllocNear(anchor, size);
+#else
+    return SMemAlloc(size, __FILE__, __LINE__, 0);
+#endif
+}
+
+static void FreeNear(void* ptr) {
+#if defined(WOWDECOMP_ARCH_64)
+    OsFreeNear(ptr);
+#else
+    SMemFree(ptr, __FILE__, __LINE__, 0);
+#endif
+}
 
 // VERIFY: d89467e7 manual
 // OFFSET: 0x00835970
@@ -336,9 +354,14 @@ static void ConvertTextureComboEntry(TextureComboList* list, int32_t adjust, uin
 // VERIFY: 59c9e83f manual
 // OFFSET: 0x008360A0
 int32_t CM2Shared::SetIndices() {
+    // FIX: a skin past 65535 vertex slots draws from a 32-bit index buffer.
+    int32_t wide = this->m_skinData->IsWide();
+    uint32_t indexSize = wide ? sizeof(uint32_t) : sizeof(uint16_t);
+
     if (!this->m_indexPool) {
-        this->m_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic, sizeof(uint16_t) * this->m_instances * this->m_skinData->m_indices.m_count, GxPoolHintBit_Unk1, this->m_fileNameWithoutPath);
-        this->m_indexBuf = g_theGxDevicePtr->BufCreate(this->m_indexPool, sizeof(uint16_t), this->m_instances * this->m_skinData->m_indices.m_count, 0);
+        EGxPoolHintBits hint = wide ? static_cast<EGxPoolHintBits>(GxPoolHintBit_Unk1 | GxPoolHintBit_Index32) : GxPoolHintBit_Unk1;
+        this->m_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic, indexSize * this->m_instances * this->m_skinData->m_indices.m_count, hint, this->m_fileNameWithoutPath);
+        this->m_indexBuf = g_theGxDevicePtr->BufCreate(this->m_indexPool, indexSize, this->m_instances * this->m_skinData->m_indices.m_count, 0);
 
         if (!this->m_indexPool || !this->m_indexBuf) {
             return 0;
@@ -346,7 +369,7 @@ int32_t CM2Shared::SetIndices() {
     }
 
     if (!this->m_indexBuf->m_hasData || !this->m_indexBuf->m_valid) {
-        uint16_t* indices = reinterpret_cast<uint16_t*>(g_theGxDevicePtr->BufLock(this->m_indexBuf));
+        uint8_t* indices = reinterpret_cast<uint8_t*>(g_theGxDevicePtr->BufLock(this->m_indexBuf));
 
         if (!indices) {
             return 0;
@@ -357,19 +380,26 @@ int32_t CM2Shared::SetIndices() {
 
         for (uint32_t i = 0; i < this->m_skinData->m_skinSections.m_count; i++) {
             M2SkinSection* section = &this->m_skinSections[i];
-            uint32_t start = this->m_skinData->m_skinSections[i].m_indexStart;
-            uint16_t offset = sharedVertices ? 0 : static_cast<uint16_t>(-section->m_vertexStart);
+            const M2SkinSection& source = this->m_skinData->m_skinSections[i];
+            uint32_t start = source.m_indexStart;
+            uint32_t offset = sharedVertices ? 0 : 0u - section->m_vertexStart;
 
             for (uint32_t instance = 0; instance < this->m_instances; instance++) {
                 for (uint32_t j = 0; j < section->m_indexCount; j++) {
-                    indices[j] = offset + this->m_skinData->m_indices[start + j];
+                    uint32_t value = offset + this->m_skinData->IndexAt(source, start + j);
+
+                    if (wide) {
+                        reinterpret_cast<uint32_t*>(indices)[j] = value;
+                    } else {
+                        reinterpret_cast<uint16_t*>(indices)[j] = static_cast<uint16_t>(value);
+                    }
                 }
 
-                indices += section->m_indexCount;
-                offset += sharedVertices ? static_cast<uint16_t>(this->m_skinData->m_vertices.m_count) : section->m_vertexCount;
+                indices += indexSize * section->m_indexCount;
+                offset += sharedVertices ? this->m_skinData->m_vertices.m_count : section->m_vertexCount;
             }
 
-            section->m_indexStart = static_cast<uint16_t>(indexStart);
+            section->m_indexStart = indexStart;
             indexStart += this->m_instances * section->m_indexCount;
         }
 
@@ -408,7 +438,7 @@ int32_t CM2Shared::SetVertices(uint32_t texCoordIndex) {
                 uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
                 for (uint32_t j = section->m_vertexStart; j < end; j++) {
-                    M2Vertex* source = &this->m_data->m_vertices[this->m_skinData->m_vertices[j]];
+                    M2Vertex* source = &this->m_data->m_vertices[this->m_skinData->VertexAt(j)];
                     M2VertexPNT2* vertex = &vertices[j];
                     vertex->m_position = source->m_position;
                     vertex->m_normal = source->m_normal;
@@ -441,7 +471,7 @@ int32_t CM2Shared::SetVertices(uint32_t texCoordIndex) {
                 uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
                 for (uint32_t j = section->m_vertexStart; j < end; j++) {
-                    memcpy(&vertices[j], &this->m_data->m_vertices[this->m_skinData->m_vertices[j]], sizeof(M2Vertex));
+                    memcpy(&vertices[j], &this->m_data->m_vertices[this->m_skinData->VertexAt(j)], sizeof(M2Vertex));
                     *reinterpret_cast<uint32_t*>(&vertices[j].m_indices) = boneOffset + *reinterpret_cast<uint32_t*>(&this->m_skinData->m_bones[j]);
                 }
             }
@@ -741,7 +771,8 @@ CShaderEffect* CM2Shared::GetEffect(M2Batch* batch) {
                 alphaOp = static_cast<EGxTexOp>(3);
                 break;
             default:
-                break;
+                // FIX: an unknown effect index falls back to the plain combiner instead of reading a null shader name.
+                return this->GetEffect(batch->m_textureCount, 0x11, batch->m_textureCoordComboIndex);
         }
 
         char effectName[256];
@@ -870,39 +901,16 @@ void CM2Shared::ConvertTextureValuesToCombos() {
         }
     }
 
-#if defined(WOWDECOMP_ARCH_64)
-    uint32_t comboBytes = combos.m_count > this->m_data->m_textureCombos.m_count ? sizeof(uint16_t) * combos.m_count : 0;
-    uint32_t transformBytes = transforms.m_count > this->m_data->m_textureTransformCombos.m_count ? sizeof(uint16_t) * transforms.m_count : 0;
-
-    if (comboBytes || transformBytes) {
-        uint32_t size = (this->m_fileSize + 15) & ~15u;
-        M2Data* data = static_cast<M2Data*>(SIMD::AllocA16(size + comboBytes + transformBytes, __FILE__, __LINE__));
-        memcpy(data, this->m_data, this->m_fileSize);
-        SIMD::FreeA16(this->m_data);
-        this->m_data = data;
-        this->m_fileSize = size + comboBytes + transformBytes;
-        uint8_t* tail = reinterpret_cast<uint8_t*>(data) + size;
-
-        if (comboBytes) {
-            data->m_textureCombos.Set(reinterpret_cast<uint16_t*>(tail));
-            tail += comboBytes;
-        }
-
-        if (transformBytes) {
-            data->m_textureTransformCombos.Set(reinterpret_cast<uint16_t*>(tail));
-        }
-    }
-#else
+    // FIX: grown lists get their own near block instead of moving the model, so arrays outside the file buffer stay valid.
     if (combos.m_count > this->m_data->m_textureCombos.m_count) {
-        this->m_data->m_textureCombos.Set(static_cast<uint16_t*>(SMemAlloc(sizeof(uint16_t) * combos.m_count, __FILE__, __LINE__, 0)));
+        this->m_data->m_textureCombos.Set(static_cast<uint16_t*>(AllocNear(&this->m_data->m_textureCombos, sizeof(uint16_t) * combos.m_count)));
         this->m_data->m_flags |= 0x20;
     }
 
     if (transforms.m_count > this->m_data->m_textureTransformCombos.m_count) {
-        this->m_data->m_textureTransformCombos.Set(static_cast<uint16_t*>(SMemAlloc(sizeof(uint16_t) * transforms.m_count, __FILE__, __LINE__, 0)));
+        this->m_data->m_textureTransformCombos.Set(static_cast<uint16_t*>(AllocNear(&this->m_data->m_textureTransformCombos, sizeof(uint16_t) * transforms.m_count)));
         this->m_data->m_flags |= 0x40;
     }
-#endif
 
     memcpy(this->m_data->m_textureCombos.Data(), combos.m_data, sizeof(uint16_t) * combos.m_count);
     this->m_data->m_textureCombos.m_count = combos.m_count;
@@ -1135,6 +1143,11 @@ int32_t CM2Shared::InitializeSkinProfile() {
 
     this->m_maxInstances = skinData->m_indices.m_count ? 0x10000 / skinData->m_indices.m_count : 1;
 
+    // FIX: instances of a skin past 65535 vertex slots would overflow the vertex range.
+    if (skinData->IsWide()) {
+        this->m_maxInstances = 1;
+    }
+
     for (uint32_t i = 0; i < skinData->m_skinSections.m_count; i++) {
         uint32_t instances = skinData->m_boneCountMax / skinData->m_skinSections[i].m_boneCount;
 
@@ -1175,7 +1188,11 @@ int32_t CM2Shared::InitializeSkinProfile() {
         memset(this->m_effects, 0, sizeof(CShaderEffect*) * this->m_skinData->m_batches.m_count);
     }
 
-    this->SubstituteSimpleShaders();
+    // FIX: a modern skin arrives with its final packed shaders already.
+    if (!this->m_modern) {
+        this->SubstituteSimpleShaders();
+    }
+
     this->SubstituteSpecializedShaders();
 
     if (this->m_skinData->m_indices.m_count) {
@@ -1193,7 +1210,7 @@ int32_t CM2Shared::InitializeSkinProfile() {
             uint32_t end = section->m_vertexStart + section->m_vertexCount;
 
             for (uint32_t j = section->m_vertexStart; j < end; j++) {
-                vertices[j] = this->m_data->m_vertices[this->m_skinData->m_vertices[j]];
+                vertices[j] = this->m_data->m_vertices[this->m_skinData->VertexAt(j)];
 
                 for (uint32_t k = 0; k < section->m_boneInfluences; k++) {
                     vertices[j].m_indices.b[k] = static_cast<uint8_t>(this->m_data->m_boneCombos[section->m_boneComboIndex + this->m_skinData->m_bones[j].b[k]]);
@@ -1307,12 +1324,57 @@ int32_t CM2Shared::FinishLoadingSkinProfile(uint32_t size) {
     }
 
     M2Data* data = this->m_data;
-    M2SkinProfile* skinData = this->m_skinData;
-    uint8_t* base = reinterpret_cast<uint8_t*>(skinData);
 
-    if (!M2Init(base, size, *data, skinData->m_vertices) || !M2Init(base, size, *data, skinData->m_indices) || !M2Init(base, size, *data, skinData->m_bones) || !M2Init(base, size, *data, skinData->m_skinSections) || !M2Init(base, size, *data, skinData->m_batches)) {
-        DebugLog("Corrupt skin profile data: %s", this->m_fileName);
-        return 0;
+    if (this->m_modern) {
+        // FIX: a modern skin is rebuilt into the runtime layout, split to the bone palette and widened past 65535 vertices.
+        M2SkinProfile* skin = HoT::Models::BuildSkin(this->m_modern, data, this->m_skinData, size, this->m_maxBones);
+
+        if (!skin) {
+            DebugLog("Corrupt skin profile data: %s", this->m_fileName);
+            return 0;
+        }
+
+        SIMD::FreeA16(this->m_skinData);
+        this->m_skinData = skin;
+    } else {
+        M2SkinProfile* skinData = this->m_skinData;
+        uint8_t* base = reinterpret_cast<uint8_t*>(skinData);
+        M2Array<M2SkinSectionFile>& sections = reinterpret_cast<M2Array<M2SkinSectionFile>&>(skinData->m_skinSections);
+
+        if (!M2Init(base, size, *data, skinData->m_vertices) || !M2Init(base, size, *data, skinData->m_indices) || !M2Init(base, size, *data, skinData->m_bones) || !M2Init(base, size, *data, sections) || !M2Init(base, size, *data, skinData->m_batches)) {
+            DebugLog("Corrupt skin profile data: %s", this->m_fileName);
+            return 0;
+        }
+
+        // FIX: file sections are widened into the runtime layout with the stock id and starts.
+        if (sections.m_count) {
+            M2SkinSection* runtime = static_cast<M2SkinSection*>(AllocNear(&skinData->m_skinSections, sizeof(M2SkinSection) * sections.m_count));
+
+            if (!runtime) {
+                DebugLog("Corrupt skin profile data: %s", this->m_fileName);
+                return 0;
+            }
+
+            for (uint32_t i = 0; i < sections.m_count; i++) {
+                const M2SkinSectionFile& file = sections[i];
+                M2SkinSection& section = runtime[i];
+                section.m_skinSectionId = file.m_skinSectionId | (static_cast<uint32_t>(file.m_level) << 16);
+                section.m_vertexStart = file.m_vertexStart;
+                section.m_vertexCount = file.m_vertexCount;
+                section.m_indexStart = file.m_indexStart;
+                section.m_indexCount = file.m_indexCount;
+                section.m_boneCount = file.m_boneCount;
+                section.m_boneComboIndex = file.m_boneComboIndex;
+                section.m_boneInfluences = file.m_boneInfluences;
+                section.m_centerBoneIndex = file.m_centerBoneIndex;
+                section.m_centerPosition = file.m_centerPosition;
+                section.m_sortCenterPosition = file.m_sortCenterPosition;
+                section.m_sortRadius = file.m_sortRadius;
+            }
+
+            this->m_skinSectionData = runtime;
+            skinData->m_skinSections.Set(runtime);
+        }
     }
 
     if (!this->InitializeSkinProfile()) {
@@ -1527,6 +1589,9 @@ CM2Shared::CM2Shared(CM2Cache* cache) {
     this->m_billboardBoneCount = 0;
     this->m_lastUsedTime = 0;
     this->m_fileName[0] = '\0';
+    this->m_modern = nullptr;
+    this->m_skinSectionData = nullptr;
+    this->m_maxBones = 256;
 }
 
 // INLINED
@@ -1574,6 +1639,11 @@ int32_t CM2Shared::FinishLoadingLowPrioritySequence(uint32_t sequenceIndex, uint
 int32_t CM2Shared::FinishLoadingLowPrioritySequence(uint32_t sequenceIndex, CAsyncObject* object) {
     M2Sequence* sequence = &this->m_data->m_sequences[sequenceIndex];
 
+    // FIX: a chunked AFM2 anim file carries the raw key data inside its first chunk.
+    if (this->m_modern) {
+        object->m_size = HoT::Models::UnwrapAnim(object->m_buffer, object->m_size);
+    }
+
     if (!this->FinishLoadingLowPrioritySequence(sequenceIndex, static_cast<uint8_t*>(object->m_buffer), object->m_size)) {
         return 0;
     }
@@ -1603,8 +1673,15 @@ int32_t CM2Shared::LoadSkinProfile(uint32_t profile) {
     MakeSkinFileName(this->m_fileName, profile, fileName);
 
     SFileImpl* file;
+    int32_t opened = SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file);
 
-    if (!SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file)) {
+    // FIX: a modern model names its skins by FileDataID when the side by side file is missing.
+    if (!opened && this->m_modern) {
+        const char* path = HoT::Models::SkinFilePath(this->m_modern, profile);
+        opened = path && SFile::OpenEx(nullptr, path, (this->m_flags & 4) >> 2, &file);
+    }
+
+    if (!opened) {
         DebugLog("Model2: File not found: %s\n", fileName);
         return 0;
     }
@@ -1666,8 +1743,10 @@ int32_t CM2Shared::Initialize() {
     }
 
     this->m_skinData = nullptr;
+    this->m_maxBones = maxBones;
 
-    uint32_t profile = this->GetSkinProfileIndex(maxBones);
+    // FIX: a modern model always takes its full detail skin since sections past the palette are split.
+    uint32_t profile = this->m_modern ? 0 : this->GetSkinProfileIndex(maxBones);
 
     if (profile == 0xFFFFFFFF) {
         DebugLog("Failed to choose skin profile: %s", this->m_fileName);
@@ -1731,12 +1810,26 @@ int32_t CM2Shared::FinishLoading() {
         return 1;
     }
 
+    // FIX: a modern MD21 container is read natively into the 3.3.5 shape before relocation.
+    if (!this->m_modern && HoT::Models::IsModernContainer(this->m_data, this->m_fileSize)) {
+        this->m_modern = HoT::Models::PrepareModel(this->m_data, this->m_fileSize, this->m_fileName);
+
+        if (!this->m_modern) {
+            DebugLog("Corrupt model data: %s", this->m_fileName);
+            return 0;
+        }
+    }
+
     if (!M2Init(reinterpret_cast<uint8_t*>(this->m_data), this->m_fileSize, *this->m_data)) {
         DebugLog("Corrupt model data: %s", this->m_fileName);
         return 0;
     }
 
     this->m_data->m_flags &= ~0x60u;
+
+    if (this->m_modern) {
+        HoT::Models::FinishModel(this->m_modern, this->m_data);
+    }
 
     if (!this->Initialize()) {
         DebugLog("Failed to initialize model: %s", this->m_fileName);
@@ -1885,6 +1978,11 @@ CM2Shared::~CM2Shared() {
         SMemFree(this->m_skinSections, __FILE__, __LINE__, 0);
     }
 
+    if (this->m_skinSectionData) {
+        FreeNear(this->m_skinSectionData);
+        this->m_skinSectionData = nullptr;
+    }
+
     if (this->m_skinData) {
         if (pending) {
             pending = 0;
@@ -1915,17 +2013,18 @@ CM2Shared::~CM2Shared() {
 #endif
     }
 
-#if !defined(WOWDECOMP_ARCH_64)
     if (this->m_flags & 1) {
         if (this->m_data->m_flags & 0x20) {
-            SMemFree(this->m_data->m_textureCombos.Data(), __FILE__, __LINE__, 0);
+            FreeNear(this->m_data->m_textureCombos.Data());
         }
 
         if (this->m_data->m_flags & 0x40) {
-            SMemFree(this->m_data->m_textureTransformCombos.Data(), __FILE__, __LINE__, 0);
+            FreeNear(this->m_data->m_textureTransformCombos.Data());
         }
     }
-#endif
+
+    HoT::Models::Destroy(this->m_modern);
+    this->m_modern = nullptr;
 
     if (!pending) {
         SIMD::FreeA16(this->m_data);
@@ -2016,8 +2115,16 @@ CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
     MakeAnimFileName(this->m_fileName, source->m_id, source->m_variationIndex, fileName);
 
     SFileImpl* file;
+    int32_t opened = SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file);
 
-    if (!SFile::OpenEx(nullptr, fileName, (this->m_flags & 4) >> 2, &file)) {
+    // FIX: a modern model finds its anim files by FileDataID or by the sequence id the file was exported with.
+    if (!opened && this->m_modern) {
+        uint32_t sourceIndex = static_cast<uint32_t>(source - this->m_data->m_sequences.Data());
+        const char* path = HoT::Models::AnimFilePath(this->m_modern, this->m_fileName, sourceIndex, source->m_id, source->m_variationIndex);
+        opened = path && SFile::OpenEx(nullptr, path, (this->m_flags & 4) >> 2, &file);
+    }
+
+    if (!opened) {
         DebugLog("Model2: File not found: %s\n", fileName);
         this->m_sequenceLoads.DeleteNode(load);
         return nullptr;

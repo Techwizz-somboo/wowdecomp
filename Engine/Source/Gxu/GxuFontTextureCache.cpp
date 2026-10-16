@@ -367,6 +367,9 @@ void TEXTURECACHE::TextureCallback(EGxTexCommand command, uint32_t width, uint32
         return;
     }
 
+    // FIX: clear the shared upload buffer so empty cells do not upload pixels left from another page.
+    memset(s_textureData, 0, sizeof(s_textureData));
+
     TEXTURECACHE* cache = static_cast<TEXTURECACHE*>(userArg);
 
     for (uint32_t row = cache->m_textureRows.m_count; row > 0; row--) {

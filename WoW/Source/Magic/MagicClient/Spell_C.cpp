@@ -1,4 +1,6 @@
 #include "Spell_C.h"
+#include "HoT/DB/Custom.h"
+#include "HoT/Features/Features.h"
 #include "WoW/Source/Magic/Types.h"
 #include "Engine/Source/Base/CDataStore.h"
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
@@ -100,6 +102,10 @@
 // STATIC: 0x00D3F5AC
 static SpellHistory s_spellHistory[2];
 
+SpellHistory& Spell_C_GetSpellHistory(uint32_t index) {
+    return s_spellHistory[index];
+}
+
 // STATIC: 0x00D397C8
 static int32_t s_lastAutoRangedCombatError;
 
@@ -142,11 +148,16 @@ static uint32_t s_lastFailedTime;
 // STATIC: 0x00A439C8
 static const UIErrors s_powerErrors[] = { ERR_OUT_OF_MANA, ERR_OUT_OF_RAGE, ERR_OUT_OF_FOCUS, ERR_OUT_OF_ENERGY, ERR_NOT_HAPPY_ENOUGH, ERR_OUT_OF_RUNES, ERR_OUT_OF_RUNIC_POWER };
 
+// FIX: the tables are keyed by spell family as well and hold the custom ops, HoT servers send modifiers for every family.
 // STATIC: 0x00D397D8
-static int32_t s_spellPctModifiers[96][31];
+static int32_t s_spellPctModifiers[NUM_SPELL_MOD_FAMILIES][NUM_SPELL_MOD_BITS][NUM_SPELL_MOD_OPS];
 
 // STATIC: 0x00D3C658
-static int32_t s_spellFlatModifiers[96][31];
+static int32_t s_spellFlatModifiers[NUM_SPELL_MOD_FAMILIES][NUM_SPELL_MOD_BITS][NUM_SPELL_MOD_OPS];
+
+static uint32_t s_spellModOpCount[NUM_SPELL_MOD_OPS];
+
+static bool s_suspendRowOverrides;
 
 // STATIC: 0x00AF524C
 static TSList<PendingSpellCast, TSGetLink<PendingSpellCast> > s_pendingSpellCasts;
@@ -733,6 +744,7 @@ void Spell_C_Initialize() {
     s_targetingSpell = nullptr;
     memset(s_spellFlatModifiers, 0, sizeof(s_spellFlatModifiers));
     memset(s_spellPctModifiers, 0, sizeof(s_spellPctModifiers));
+    memset(s_spellModOpCount, 0, sizeof(s_spellModOpCount));
     s_autoRepeatingSpell = 0;
     s_autoRangedCombatSpell = 0;
     s_lastAutoRangedCombatError = 187;
@@ -970,6 +982,14 @@ void StartSpellCastVisuals(CGUnit_C* unit, PendingSpellCast* cast, const SpellRe
     }
 }
 
+// FIX: spell modifiers only describe the active player's spells, other casters read the row as authored.
+static int32_t Spell_C_GetCasterRecord(const WOWGUID& caster, int32_t spellId, SpellRec* rec) {
+    s_suspendRowOverrides = !(caster == ClntObjMgrGetActivePlayer());
+    int32_t found = g_spellDB.GetRecord(spellId, rec);
+    s_suspendRowOverrides = false;
+    return found;
+}
+
 // VERIFY: 0e9e554a manual
 // OFFSET: 0x00806700
 void PendingSpellCast::OnSpellStartPacket(CDataStore* msg) {
@@ -1020,7 +1040,7 @@ void PendingSpellCast::OnSpellStartPacket(CDataStore* msg) {
 
     SpellRec spell;
 
-    if (!g_spellDB.GetRecord(this->m_data.m_spellId, &spell)) {
+    if (!Spell_C_GetCasterRecord(caster, this->m_data.m_spellId, &spell)) {
         return;
     }
 
@@ -1171,15 +1191,136 @@ void CGUnit_C::ReleaseMissiles() {
     this->ReleaseMissiles(position);
 }
 
-// VERIFY: 936f6df8 manual
-// OFFSET: 0x007FD970
-bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t& flat, int32_t& pct) {
-    if (!spell->m_spellClassSet || spell->m_spellClassSet != s_spellClassSet) {
-        flat = 0;
-        pct = 100;
+// Calls visit(flat, pct) for every stored modifier on the spell's own family block, then its extension blocks, until visit returns true.
+template <class F>
+static bool Spell_C_VisitSpellModifiers(const SpellRec* spell, int32_t op, F&& visit) {
+    const HoT::DB::SpellClassMaskExtensionRec* ext = HoT::DB::g_spellClassMaskExtensionDB.GetRecord(spell->m_id);
+    uint32_t numBlocks = ext ? 4 : 1;
+
+    for (uint32_t b = 0; b < numBlocks; b++) {
+        int32_t family = b ? ext->m_blocks[b - 1].m_spellClassSet : spell->m_spellClassSet;
+        const int32_t* mask = b ? ext->m_blocks[b - 1].m_spellClassMask : spell->m_spellClassMask;
+
+        if (family <= 0 || family >= NUM_SPELL_MOD_FAMILIES) {
+            continue;
+        }
+
+        for (uint32_t word = 0; word < 3; word++) {
+            for (uint32_t bits = static_cast<uint32_t>(mask[word]); bits; bits &= bits - 1) {
+                uint32_t bit = word * 32;
+
+                for (uint32_t w = bits; !(w & 1); w >>= 1) {
+                    bit++;
+                }
+
+                int32_t flat = s_spellFlatModifiers[family][bit][op];
+                int32_t pct = s_spellPctModifiers[family][bit][op];
+
+                if ((flat || pct) && visit(flat, pct)) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+bool Spell_C_HasSpellModifier(const SpellRec* spell, int32_t op) {
+    if (op < 0 || op >= NUM_SPELL_MOD_OPS || !s_spellModOpCount[op]) {
         return false;
     }
 
+    return Spell_C_VisitSpellModifiers(spell, op, [](int32_t, int32_t) { return true; });
+}
+
+uint32_t Spell_C_GetSpellModifierMask(const SpellRec* spell, int32_t op) {
+    uint32_t mask = 0;
+
+    if (op >= 0 && op < NUM_SPELL_MOD_OPS && s_spellModOpCount[op]) {
+        Spell_C_VisitSpellModifiers(spell, op, [&](int32_t flat, int32_t) {
+            mask |= static_cast<uint32_t>(flat);
+            return false;
+        });
+    }
+
+    return mask;
+}
+
+bool Spell_C_CanCastWhileMoving(const SpellRec* spell) {
+    return Spell_C_HasSpellModifier(spell, SPELLMOD_CAST_WHILE_MOVING);
+}
+
+int32_t Spell_C_GetEffectivePowerType(const SpellRec* spell) {
+    if (!s_spellModOpCount[SPELLMOD_POWER_TYPE]) {
+        return spell->m_powerType;
+    }
+
+    int32_t powerType = spell->m_powerType;
+
+    // The value is biased by one so that mana (0) can be sent, and only -2 (health) or 0 to 6 index the power tables.
+    Spell_C_VisitSpellModifiers(spell, SPELLMOD_POWER_TYPE, [&](int32_t flat, int32_t) {
+        int32_t value = flat - 1;
+
+        if (flat && (value == -2 || (value >= 0 && value <= 6))) {
+            powerType = value;
+            return true;
+        }
+
+        return false;
+    });
+
+    return powerType;
+}
+
+// Waiving the weapon class also drops the slot pins the client enforces on their own.
+static void Spell_C_RelaxEquippedItemRequirements(SpellRec* spell) {
+    bool waiveWeaponClass = Spell_C_GetSpellModifierMask(spell, SPELLMOD_IGNORE_WEAPON_ITEM_CLASS) & (1 << 2);
+    int32_t itemClass = spell->m_equippedItemClass;
+    uint32_t subclass = static_cast<uint32_t>(spell->m_equippedItemSubclass);
+
+    if (itemClass >= 0 && itemClass < 32 && subclass) {
+        bool ignoreClass = false;
+        uint32_t ignoreSubclass = 0;
+
+        if (itemClass == 2) {
+            ignoreClass = waiveWeaponClass;
+            ignoreSubclass = Spell_C_GetSpellModifierMask(spell, SPELLMOD_IGNORE_ITEM_SUBCLASS) & subclass;
+        } else if (itemClass == 4) {
+            ignoreSubclass = Spell_C_GetSpellModifierMask(spell, SPELLMOD_IGNORE_ARMOR_SUBCLASS) & subclass;
+            ignoreClass = ignoreSubclass && !(subclass & ~ignoreSubclass);
+        }
+
+        if (ignoreClass) {
+            spell->m_equippedItemClass = -1;
+        }
+
+        spell->m_equippedItemSubclass = static_cast<int32_t>(subclass & ~ignoreSubclass);
+        spell->m_equippedItemInvTypes &= ~static_cast<int32_t>(Spell_C_GetSpellModifierMask(spell, SPELLMOD_IGNORE_ITEM_INV_TYPE));
+    }
+
+    if (waiveWeaponClass) {
+        spell->m_attributes &= ~0x2;
+        spell->m_attributesExC &= ~(0x400 | 0x1000000);
+    }
+}
+
+void Spell_C_ApplyRowOverrides(SpellRec* rec) {
+    if (s_suspendRowOverrides) {
+        return;
+    }
+
+    rec->m_powerType = Spell_C_GetEffectivePowerType(rec);
+
+    if (s_spellModOpCount[SPELLMOD_IGNORE_ITEM_SUBCLASS] || s_spellModOpCount[SPELLMOD_IGNORE_ITEM_INV_TYPE] || s_spellModOpCount[SPELLMOD_IGNORE_WEAPON_ITEM_CLASS] || s_spellModOpCount[SPELLMOD_IGNORE_ARMOR_SUBCLASS]) {
+        Spell_C_RelaxEquippedItemRequirements(rec);
+    }
+}
+
+// VERIFY: 936f6df8 manual
+// OFFSET: 0x007FD970
+bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t& flat, int32_t& pct) {
+    // FIX: the class set gate is gone, modifiers are looked up per family for the spell and its mask extensions.
     if (spell->m_attributesExC & 0x20000000) {
         flat = 0;
         pct = 100;
@@ -1189,12 +1330,15 @@ bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t&
     pct = 0;
     flat = 0;
 
-    for (uint32_t i = 0; i < sizeof(spell->m_spellClassMask) * 8; i++) {
-        if ((1 << (i & 31)) & spell->m_spellClassMask[i >> 5]) {
-            flat += s_spellFlatModifiers[i][modifier];
-            pct += s_spellPctModifiers[i][modifier];
-        }
+    if (modifier < 0 || modifier >= NUM_SPELL_MOD_OPS || !s_spellModOpCount[modifier]) {
+        return false;
     }
+
+    Spell_C_VisitSpellModifiers(spell, modifier, [&](int32_t f, int32_t p) {
+        flat += f;
+        pct += p;
+        return false;
+    });
 
     if (!flat && !pct) {
         return false;
@@ -1873,7 +2017,7 @@ void PendingSpellCast::OnSpellGo(CDataStore* msg) {
 
     SpellRec spell;
 
-    if (!g_spellDB.GetRecord(this->m_data.m_spellId, &spell)) {
+    if (!Spell_C_GetCasterRecord(caster, this->m_data.m_spellId, &spell)) {
         ReleasePendingSpellCast(this);
         return;
     }
@@ -2894,15 +3038,37 @@ int32_t Packet_SMSG_GAMEOBJECT_RESET_STATE(void* param, NETMESSAGE msgId, uint32
 int32_t Packet_Group_32(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     uint8_t group;
     uint8_t op;
-    uint32_t value;
+    int32_t value;
     msg->Get(group);
     msg->Get(op);
     msg->Get(value);
 
+    // FIX: HoT servers append the spell family, stock servers only send modifiers for the player's own class set.
+    uint32_t family = static_cast<uint32_t>(s_spellClassSet);
+
+    if (msg->m_read + sizeof(family) <= msg->m_size) {
+        msg->Get(family);
+    }
+
+    // FIX: drop out of range indices from the server, they used to overwrite s_spellWorldObject.
+    if (msg->m_read > msg->m_size || family >= NUM_SPELL_MOD_FAMILIES || group >= NUM_SPELL_MOD_BITS || op >= NUM_SPELL_MOD_OPS) {
+        return 1;
+    }
+
+    int32_t& flat = s_spellFlatModifiers[family][group][op];
+    int32_t& pct = s_spellPctModifiers[family][group][op];
+    bool wasSet = flat || pct;
+
     if (msgId == SMSG_SET_PCT_SPELL_MODIFIER) {
-        s_spellPctModifiers[group][op] = value;
+        pct = value;
     } else {
-        s_spellFlatModifiers[group][op] = value;
+        flat = value;
+    }
+
+    bool isSet = flat || pct;
+
+    if (isSet != wasSet) {
+        s_spellModOpCount[op] += isSet ? 1 : -1;
     }
 
     return 1;
@@ -4615,6 +4781,9 @@ void Spell_C_ClearCooldowns() {
     for (uint32_t i = 0; i < sizeof(s_spellHistory) / sizeof(s_spellHistory[0]); i++) {
         s_spellHistory[i].ClearAll();
     }
+
+    // FIX: HoT servers can scale cooldowns, the rate goes back to normal with the history.
+    HoT::CooldownRate::Forget();
 }
 
 // VERIFY: 1d8a9dca manual
@@ -5605,7 +5774,8 @@ void Spell_C_CancelCastingSpellByMovement() {
         if (cast != s_targetingSpell) {
             SpellRec spell;
 
-            if (g_spellDB.GetRecord(cast->m_data.m_spellId, &spell) && (spell.m_interruptFlags & 0x1)) {
+            // FIX: HoT lets spell modifiers waive the movement interrupt.
+            if (g_spellDB.GetRecord(cast->m_data.m_spellId, &spell) && (spell.m_interruptFlags & 0x1) && !Spell_C_CanCastWhileMoving(&spell)) {
                 Spell_C_CancelSpell(cast, false, true, 40);
             }
         }
@@ -6928,11 +7098,30 @@ bool Spell_C_HaveSpellTokens(CGUnit_C* unit, const SpellRec* spell, bool report,
     return true;
 }
 
+bool Spell_C_IsWeaponEquipped(CGPlayer_C* player, int32_t slot) {
+    const CGItem_C* item = player ? player->m_bag.GetItemPointer(slot) : nullptr;
+    return item && item->GetClassID() == 2;
+}
+
 // VERIFY: 3e98536b auto
 // OFFSET: 0x008093D0
 bool Spell_C_HaveEquippedSpellItems(CGUnit_C* unit, const SpellRec* spell, bool checkAmmo, bool report, PendingSpellCast* cast) {
     if (!unit->IsActivePlayer()) {
         return true;
+    }
+
+    // FIX: HoT spells can require a weapon in each hand.
+    if (HoT::DB::GetSpellCustomAttributes(spell->m_id) & HoT::DB::SPELL_ATTR0_CU_REQ_DUAL_WIELD) {
+        bool mainHand = Spell_C_IsWeaponEquipped(static_cast<CGPlayer_C*>(unit), 15);
+
+        if (!mainHand || !Spell_C_IsWeaponEquipped(static_cast<CGPlayer_C*>(unit), 16)) {
+            if (report) {
+                int32_t subclassMask = (spell->m_equippedItemClass == 2 && spell->m_equippedItemSubclass) ? spell->m_equippedItemSubclass : 0x2A5F3;
+                Spell_C_SpellFailed(cast, spell, mainHand ? SPELL_FAILED_EQUIPPED_ITEM_CLASS_OFFHAND : SPELL_FAILED_EQUIPPED_ITEM_CLASS_MAINHAND, 2, subclassMask, false);
+            }
+
+            return false;
+        }
     }
 
     if ((spell->m_targets & 0x10) || spell->m_equippedItemClass < 0 || !spell->m_equippedItemSubclass) {
@@ -6969,7 +7158,8 @@ bool Spell_C_HaveEquippedSpellItems(CGUnit_C* unit, const SpellRec* spell, bool 
         return false;
     }
 
-    if (!checkAmmo) {
+    // FIX: HoT ranged weapons need no ammo.
+    if (!checkAmmo || true) {
         return true;
     }
 

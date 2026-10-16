@@ -28,6 +28,22 @@ class CGPlayer_C;
 class CGUnit_C;
 class CM2Model;
 class CTerrainClickEvent;
+// FIX: HoT keeps modifiers for every spell family and adds ops after the 31 stock ones.
+enum SPELL_MOD_OP {
+    SPELLMOD_COOLDOWN = 11,
+    SPELLMOD_GLOBAL_COOLDOWN = 21,
+    SPELLMOD_CAST_WHILE_MOVING = 31,
+    SPELLMOD_POWER_TYPE = 32,
+    SPELLMOD_IGNORE_ITEM_SUBCLASS = 33,
+    SPELLMOD_IGNORE_ITEM_INV_TYPE = 34,
+    SPELLMOD_IGNORE_WEAPON_ITEM_CLASS = 35,
+    SPELLMOD_IGNORE_ARMOR_SUBCLASS = 36,
+    NUM_SPELL_MOD_OPS = 37,
+};
+
+static const uint32_t NUM_SPELL_MOD_FAMILIES = 32;
+static const uint32_t NUM_SPELL_MOD_BITS = 96;
+
 class PendingSpellCast : public TSLinkedNode<PendingSpellCast> {
     public:
     /* 0008 */ PendingSpellCastData m_data;
@@ -227,6 +243,11 @@ int32_t Spell_C_IsActionOnHold(const int32_t* spellId, int32_t index);
 int32_t Spell_C_NeedsCooldownEvent(int32_t itemId);
 bool Spell_C_IsUsableAction(CGUnit_C* unit, const SpellRec* spell, const WOWGUID& target, const ItemStats_C* item, bool ignoreControl);
 bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t& flat, int32_t& pct);
+bool Spell_C_HasSpellModifier(const SpellRec* spell, int32_t op);
+uint32_t Spell_C_GetSpellModifierMask(const SpellRec* spell, int32_t op);
+bool Spell_C_CanCastWhileMoving(const SpellRec* spell);
+int32_t Spell_C_GetEffectivePowerType(const SpellRec* spell);
+bool Spell_C_IsWeaponEquipped(CGPlayer_C* player, int32_t slot);
 bool Spell_C_CancelsAuraEffect(const CGUnit_C* unit, const SpellRec* spell, int32_t auraType, int32_t* reason);
 bool Spell_C_CancelsStun(const CGUnit_C* unit, const SpellRec* spell, int32_t* reason);
 bool Spell_C_CancelsSilence(const CGUnit_C* unit, const SpellRec* spell, int32_t* reason);
@@ -250,6 +271,7 @@ bool Spell_C_IsActivePlayerCasting();
 bool OnCancelCombat();
 
 void Spell_C_ClearCooldowns();
+SpellHistory& Spell_C_GetSpellHistory(uint32_t index);
 void Spell_C_ClearPetCooldowns();
 const SpellVisualRec* GetSpellVisual(const SpellRec* spell);
 void Spell_C_Destroy();

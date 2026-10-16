@@ -1,4 +1,5 @@
 #include <cstdint>
+#include "HoT/Features/Units.h"
 #include "Engine/Source/ConsoleBase/IConsole.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/FrameScript/FrameScript_Object.h"
@@ -1222,6 +1223,19 @@ static int32_t Script_GetRangedCritChance(lua_State* L) {
 // VERIFY: a05d6e3f manual
 // OFFSET: 0x0060E3B0
 static int32_t Script_GetSpellBonusHealing(lua_State* L) {
+    // FIX: HoT servers track healing per school, GetSpellBonusHealing(school) reads it.
+    if (lua_gettop(L) >= 1) {
+        int32_t school = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+
+        if (school < 0 || school >= 7) {
+            luaL_error(L, "Usage: GetSpellBonusHealing(school)");
+            return 0;
+        }
+
+        lua_pushnumber(L, CGPlayer_C::s_customStats.m_spellHealing[school]);
+        return 1;
+    }
+
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (player) {
@@ -1230,6 +1244,54 @@ static int32_t Script_GetSpellBonusHealing(lua_State* L) {
         lua_pushnumber(L, 0.0);
     }
 
+    return 1;
+}
+
+static int32_t Script_GetSpellPen(lua_State* L) {
+    int32_t school = static_cast<int32_t>(lua_tonumber(L, 1));
+
+    if (school < 0 || school >= 7) {
+        luaL_error(L, "%d is not a valid school", school);
+        return 0;
+    }
+
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_spellPenetration[school]);
+    return 1;
+}
+
+static int32_t Script_GetTotalSpellPen(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_spellPenetrationTotal);
+    return 1;
+}
+
+static int32_t Script_GetMagicFind(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_magicFind);
+    return 1;
+}
+
+static int32_t Script_GetHealthLeech(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_healthLeech);
+    return 1;
+}
+
+static int32_t Script_GetManaLeech(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_manaLeech);
+    return 1;
+}
+
+static int32_t Script_GetHealthRegen(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_healthRegen);
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_healthRegenInCombat);
+    return 2;
+}
+
+static int32_t Script_GetCritDamageMod(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_critDamageMod);
+    return 1;
+}
+
+static int32_t Script_GetCritHealingMod(lua_State* L) {
+    lua_pushnumber(L, CGPlayer_C::s_customStats.m_critHealingMod);
     return 1;
 }
 
@@ -2551,7 +2613,7 @@ static int32_t Script_UnitCanCooperate(lua_State* L) {
 
 // VERIFY: 256059b3 manual
 // OFFSET: 0x0060F9E0
-static int32_t Script_UnitLevel(lua_State* L) {
+static int32_t Script_TrueLevel(lua_State* L) {
     if (!lua_isstring(L, 1)) {
         luaL_error(L, "Usage: UnitLevel(\"unit\")");
         return 0;
@@ -2567,7 +2629,8 @@ static int32_t Script_UnitLevel(lua_State* L) {
         CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
         level = unit->m_unit->m_unitFieldLevel;
 
-        if ((player && unit->UnitReaction(player) <= 1 && static_cast<int32_t>(player->m_unit->m_unitFieldLevel) <= static_cast<int32_t>(unit->m_unit->m_unitFieldLevel) - 10) || unit->IsBossMob()) {
+        // FIX: HoT only hides the level of bosses.
+        if (unit->IsBossMob()) {
             level = -1;
         } else if (level > 0 && player && (player->m_player->m_playerBytes3[1] || player->m_player->m_playerFakeInebriation) && player->CanAttack(unit)) {
             level -= RoundToInt64(player->GetDrunknessTurnValue() * 5.0f);
@@ -2591,6 +2654,15 @@ static int32_t Script_UnitLevel(lua_State* L) {
 
     lua_pushnumber(L, level);
     return 1;
+}
+
+// FIX: HoT reports the scaled level for everything but bosses, TrueLevel keeps the stock answer.
+static int32_t Script_UnitLevel(lua_State* L) {
+    if (lua_isstring(L, 1) && HoT::UnitLevel::PushScaledLevel(L)) {
+        return 1;
+    }
+
+    return Script_TrueLevel(L);
 }
 
 // VERIFY: 220e2bdf auto
@@ -2884,12 +2956,8 @@ static int32_t Script_GetComboPoints(lua_State* L) {
     double points = 0.0;
 
     if (unit == ClntObjMgrGetActivePlayer()) {
-        CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
-        uint8_t classId = player ? player->m_unit->m_unitFieldBytes0[1] : 0;
-
-        if (!player || classId == 4 || classId == 11) {
-            points = CGGameUI::GetComboPoints(target);
-        }
+        // FIX: HoT combo points work for every class, not just rogues and druids.
+        points = CGGameUI::GetComboPoints(target);
     } else if (unit == CGPetInfo::GetPet(0)) {
         points = CGPetInfo::GetComboPoints(target);
     }
@@ -3445,6 +3513,16 @@ static int32_t PushItemStatsTable(lua_State* L, const CGItemStatsSummary* summar
         if (value) {
             lua_pushstring(L, name);
             lua_pushnumber(L, value);
+            lua_settable(L, -3);
+        }
+    }
+
+    for (int32_t i = 0; i < NUM_CUSTOM_ITEM_MODS; i++) {
+        char buffer[1024];
+
+        if (summary->m_customStats[i]) {
+            lua_pushstring(L, CGItemStatsSummary::GetCustomStatName(i, buffer, sizeof(buffer)));
+            lua_pushnumber(L, summary->m_customStats[i]);
             lua_settable(L, -3);
         }
     }
@@ -4509,6 +4587,7 @@ static FrameScript_Method s_UnitFunctions[] = {
     { "UnitAffectingCombat", &Script_UnitAffectingCombat },
     { "UnitSex", &Script_UnitSex },
     { "UnitLevel", &Script_UnitLevel },
+    { "TrueLevel", &Script_TrueLevel },
     { "GetMoney", &Script_GetMoney },
     { "GetHonorCurrency", &Script_GetHonorCurrency },
     { "GetArenaCurrency", &Script_GetArenaCurrency },
@@ -4559,6 +4638,14 @@ static FrameScript_Method s_UnitFunctions[] = {
     { "GetSpellBonusHealing", &Script_GetSpellBonusHealing },
     { "GetPetSpellBonusDamage", &Script_GetPetSpellBonusDamage },
     { "GetSpellPenetration", &Script_GetSpellPenetration },
+    { "GetSpellPen", &Script_GetSpellPen },
+    { "GetTotalSpellPen", &Script_GetTotalSpellPen },
+    { "GetMagicFind", &Script_GetMagicFind },
+    { "GetHealthLeech", &Script_GetHealthLeech },
+    { "GetManaLeech", &Script_GetManaLeech },
+    { "GetHealthRegen", &Script_GetHealthRegen },
+    { "GetCritDamageMod", &Script_GetCritDamageMod },
+    { "GetCritHealingMod", &Script_GetCritHealingMod },
     { "GetArmorPenetration", &Script_GetArmorPenetration },
     { "GetAttackPowerForStat", &Script_GetAttackPowerForStat },
     { "UnitCreatureType", &Script_UnitCreatureType },

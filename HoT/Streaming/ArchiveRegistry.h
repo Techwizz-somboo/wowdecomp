@@ -1,0 +1,41 @@
+#ifndef HOT_STREAMING_ARCHIVEREGISTRY_H
+#define HOT_STREAMING_ARCHIVEREGISTRY_H
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+struct SArchive;
+
+namespace HoT::Streaming {
+
+// Called from SFile::OpenArchive on success and from SFile::CloseArchive before the close.
+void OnArchiveOpened(const char* path, int32_t priority, uint32_t flags, SArchive* archive);
+void OnArchiveClosed(SArchive* archive);
+
+struct ArchiveMount {
+    std::wstring m_key;
+    std::string m_openName;
+    int32_t m_priority = 0;
+    uint32_t m_flags = 0;
+    SArchive* m_archive = nullptr;
+    bool m_writable = false;
+};
+
+// Every archive opened through SFile::OpenArchive, keyed by lowercased absolute path.
+namespace ArchiveRegistry {
+
+bool Find(const std::wstring& absPath, ArchiveMount& out);
+size_t Count();
+
+bool EnsureWritable(const std::wstring& absPath, std::string* error = nullptr);
+bool Commit(const std::wstring& absPath, std::string* error = nullptr);
+
+std::wstring KeyFor(const std::string& openName);
+std::wstring KeyFor(const std::wstring& path);
+
+}
+
+}
+
+#endif

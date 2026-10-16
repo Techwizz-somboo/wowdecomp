@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "Engine/Source/Frame/CSimpleRender.h"
+#include "HoT/Runtime/LuaRuntime.h"
 #include <malloc.h>
 #include <cctype>
 #include <cstring>
@@ -653,6 +654,7 @@ int32_t CSimpleRender::CalcBatchCounts(CRenderBatch* batch, uint32_t* vertCounts
 // VERIFY: 9b5bcef4 manual
 // OFFSET: 0x00484B00
 void CSimpleRender::DrawBatch(CRenderBatch* batch) {
+    HoT::LuaRuntime::Count(HoT::LuaRuntime::Counter::Batches);
     uint32_t meshCount = batch->m_texturelist.Count();
 
     if (meshCount) {

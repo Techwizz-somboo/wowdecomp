@@ -310,8 +310,8 @@ class CGxDeviceD3d : public CGxDevice {
     static const EGxTexFormat s_tolerableTexFmtMapping[GxTexFormats_Last];
     static const D3DCUBEMAP_FACES s_faceTypes[6];
     static const D3DPRIMITIVETYPE s_primitiveConversion[GxPrims_Last];
-    static const D3DBLEND s_srcBlend[12];
-    static const D3DBLEND s_dstBlend[12];
+    static const D3DBLEND s_srcBlend[GxBlends_Last];
+    static const D3DBLEND s_dstBlend[GxBlends_Last];
     static const D3DCMPFUNC s_cmpFunc[4];
     static const D3DCULL s_cullMode[3];
     static D3DTEXTUREFILTERTYPE s_filterModes[GxTexFilters_Last][3];
@@ -339,7 +339,7 @@ class CGxDeviceD3d : public CGxDevice {
     int32_t CreatePoolAPI(CGxPool* pool);
     int32_t ICreateD3d();
     int32_t ICreateD3dDevice(const CGxFormat& format);
-    LPDIRECT3DINDEXBUFFER9 ICreateD3dIB(EGxPoolUsage usage, uint32_t size);
+    LPDIRECT3DINDEXBUFFER9 ICreateD3dIB(EGxPoolUsage usage, uint32_t size, int32_t wide);
     LPDIRECT3DVERTEXBUFFER9 ICreateD3dVB(EGxPoolUsage usage, uint32_t size);
     int32_t ICreateWindow(CGxFormat& format);
     void IDestroyD3d();

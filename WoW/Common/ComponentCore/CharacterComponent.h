@@ -22,6 +22,10 @@ class CreatureModelDataRec;
 class CTexture;
 struct CVar;
 class ItemDisplayInfoRec;
+
+namespace HoT::HD {
+struct SheetSlot;
+}
 struct st_race;
 
 struct CharacterBaseVariation {
@@ -157,6 +161,9 @@ class CCharacterComponent {
     /* 0458 */ uint32_t m_handItemDisplayID [3];
     /* 0464 */ int32_t m_itemSlotForAttachSlot [50];
     /* 052C */ CComponentRequest* m_request;
+    // FIX: the HD character state lives on the component so the hooks need no side tables.
+    bool m_hd;
+    HoT::HD::SheetSlot* m_hdSheet;
 
     CCharacterComponent();
     ~CCharacterComponent();

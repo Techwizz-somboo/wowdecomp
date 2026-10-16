@@ -19,6 +19,7 @@
 #include "Engine/Source/BlizzardCore/Source/Packages/Util/Hash.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Storm/Source/MD5.h"
+#include "HoT/Streaming/ArchiveRegistry.h"
 
 // STATIC: 0x00B32038
 static SFileStreamingStatus s_streamingStatus;
@@ -128,6 +129,7 @@ void SFile::Destroy() {
 // VERIFY: bd1bd823 auto
 // OFFSET: 0x00421720
 int32_t STORMAPI SFile::CloseArchive(SArchive* archive) {
+    HoT::Streaming::OnArchiveClosed(archive);
     int32_t result = Blizzard::Mopaq::SFileCloseArchive(archive->m_archive);
     delete archive;
     return result;
@@ -204,6 +206,7 @@ int32_t STORMAPI SFile::OpenArchive(const char* path, int32_t priority, uint32_t
 
         if (result) {
             fprintf(stderr, "archive %s opened\n", path);
+            HoT::Streaming::OnArchiveOpened(path, priority, flags, *archive);
             return result;
         }
     }

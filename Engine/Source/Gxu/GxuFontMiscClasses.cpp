@@ -13,6 +13,17 @@
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
+#include "HoT/MSDF/MSDF.h"
+
+// GxVBF_PCT2 layout, TEXCOORD1 holds the MSDF atlas page and the outline hint.
+struct MSDFVERT {
+    /* 0000 */ C3Vector p;
+    /* 000C */ CImVector c;
+    /* 0010 */ C2Vector tc;
+    /* 0018 */ C2Vector tc1;
+};
+
+static_assert(sizeof(MSDFVERT) == 32, "MSDFVERT must match GxVBF_PCT2");
 
 // STATIC: 0x00AD9BCC
 TSList<TEXTLINETEXTURE, TSGetLink<TEXTLINETEXTURE> > TEXTLINETEXTURE::s_freeTextLineTextures;
@@ -219,8 +230,9 @@ void TEXTLINETEXTURE::WriteGeometry(CGxVertexPCT* buf, const CImVector& fontColo
 // VERIFY: 4249ae07 auto
 // OFFSET: 0x006C47B0
 void BATCHEDRENDERFONTDESC::Initialize() {
-    BATCHEDRENDERFONTDESC::s_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Static, 6144, GxPoolHintBit_Unk0, "BATCHEDRENDERFONTDESC_idx");
-    BATCHEDRENDERFONTDESC::s_indexBuf = g_theGxDevicePtr->BufCreate(BATCHEDRENDERFONTDESC::s_indexPool, sizeof(uint16_t), 3072, 0);
+    // FIX: room for 16383 quads so an MSDF batch of up to 65532 vertices draws in one call.
+    BATCHEDRENDERFONTDESC::s_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Static, 0x30000, GxPoolHintBit_Unk0, "BATCHEDRENDERFONTDESC_idx");
+    BATCHEDRENDERFONTDESC::s_indexBuf = g_theGxDevicePtr->BufCreate(BATCHEDRENDERFONTDESC::s_indexPool, sizeof(uint16_t), 16383 * 6, 0);
 }
 
 // VERIFY: 416d5eb2 manual
@@ -230,7 +242,8 @@ void BATCHEDRENDERFONTDESC::InitializeIndexBuff() {
 
     uint16_t vertex = 0;
 
-    for (uint32_t i = 0; i < 512; i++) {
+    // FIX: fill every quad of the enlarged buffer.
+    for (uint32_t i = 0; i < 16383; i++) {
         indices[0] = vertex;
         indices[1] = vertex + 2;
         indices[2] = vertex + 1;
@@ -291,8 +304,34 @@ void BATCHEDRENDERFONTDESC::RenderBatch() {
         return;
     }
 
+    // FIX: a rebuild can evict glyph pages another string uses, rebuild the evicted strings until the cache settles.
+    for (int32_t pass = 0; pass < 4; pass++) {
+        bool rebuilt = false;
+
+        for (CGxString* string = this->m_strings.Head(); string; string = this->m_strings.Next(string)) {
+            bool evicted = string->m_textureEvicted != 0;
+
+            if (!evicted && pass > 0) {
+                continue;
+            }
+
+            string->CheckGeometry();
+            rebuilt = rebuilt || evicted;
+        }
+
+        if (!rebuilt) {
+            break;
+        }
+    }
+
     for (CGxString* string = this->m_strings.Head(); string; string = this->m_strings.Next(string)) {
         string->CheckGeometry();
+    }
+
+    // FIX: MSDF fonts draw through their own shaders and atlas.
+    if (this->m_face->GetMsdfFont()) {
+        this->RenderBatchMsdf();
+        return;
     }
 
     for (uint32_t i = 0; i < 8; i++) {
@@ -350,6 +389,109 @@ void BATCHEDRENDERFONTDESC::RenderBatch() {
     }
 
     GxBufUnlock(buf, 0);
+}
+
+static MSDFVERT* UnlockMsdfVertsAndRender(CGxBuf*& buf, int32_t count) {
+    GxBufUnlock(buf, sizeof(MSDFVERT) * count);
+
+    if (!BATCHEDRENDERFONTDESC::s_indexBuf->m_hasData || !BATCHEDRENDERFONTDESC::s_indexBuf->m_valid) {
+        BATCHEDRENDERFONTDESC::InitializeIndexBuff();
+    }
+
+    if (BATCHEDRENDERFONTDESC::s_indexBuf->m_hasData && BATCHEDRENDERFONTDESC::s_indexBuf->m_valid) {
+        GxPrimVertexPtr(buf, GxVBF_PCT2);
+        g_theGxDevicePtr->PrimIndexPtr(BATCHEDRENDERFONTDESC::s_indexBuf);
+
+        CGxBatch batch;
+        batch.m_primType = GxPrim_Triangles;
+        batch.m_start = 0;
+        batch.m_count = 6 * (count / 4);
+        batch.m_minIndex = 0;
+        batch.m_maxIndex = count - 1;
+
+        GxDraw(&batch, 1);
+    }
+
+    return reinterpret_cast<MSDFVERT*>(GxBufLock(buf));
+}
+
+// All glyphs of an MSDF font sit in text line 0, so the whole batch goes out in one pass sized to fit it.
+void BATCHEDRENDERFONTDESC::RenderBatchMsdf() {
+    static TSGrowableArray<CGxVertexPCT> s_scratch;
+
+    int32_t total = 0;
+
+    for (CGxString* string = this->m_strings.Head(); string; string = this->m_strings.Next(string)) {
+        if (string->m_textLines[0]) {
+            total += string->CalculateVertsNeeded(0);
+        }
+    }
+
+    if (!total) {
+        return;
+    }
+
+    g_theGxDevicePtr->RsPush();
+
+    if (!HoT::MSDF::BeginDraw(this->m_face->GetMsdfFont())) {
+        g_theGxDevicePtr->RsPop();
+        return;
+    }
+
+    C44Matrix viewProj;
+    GxXformViewProjNativeTranspose(viewProj);
+    GxShaderConstantsSet(GxSh_Vertex, 0, reinterpret_cast<const float*>(&viewProj), 4);
+
+    int32_t capacity = total < 2048 ? 2048 : (total > 65532 ? 65532 : total);
+    CGxBuf* buf = GxBufStream(GxPoolTarget_Vertex, sizeof(MSDFVERT), capacity);
+    MSDFVERT* verts = reinterpret_cast<MSDFVERT*>(GxBufLock(buf));
+    int32_t space = capacity;
+
+    for (CGxString* string = this->m_strings.Head(); string; string = this->m_strings.Next(string)) {
+        TEXTLINETEXTURE* textLine = string->m_textLines[0];
+
+        if (!textLine || !textLine->m_verts.m_count) {
+            continue;
+        }
+
+        int32_t vertCount = textLine->m_verts.m_count;
+        float outlineHint = HoT::MSDF::OutlineHint(this->m_face->m_fontFlags, (string->m_flags & 0x80) != 0);
+        int32_t vertsNeeded = string->CalculateVertsNeeded(0);
+        int32_t vertIndex = 0;
+
+        while (vertsNeeded) {
+            int32_t count = space < vertsNeeded ? space : vertsNeeded;
+
+            s_scratch.SetCount(count);
+            string->WriteGeometry(s_scratch.m_data, 0, vertIndex, count);
+
+            for (int32_t i = 0; i < count; i++) {
+                const CGxVertexPCT& source = s_scratch.m_data[i];
+                verts[i].p = source.p;
+                verts[i].c = source.c;
+                verts[i].tc = source.tc;
+                verts[i].tc1.x = textLine->m_verts.m_data[(vertIndex + i) % vertCount].m_page;
+                verts[i].tc1.y = outlineHint;
+            }
+
+            vertsNeeded -= count;
+            vertIndex += count;
+            space -= count;
+            verts += count;
+
+            if (!space) {
+                verts = UnlockMsdfVertsAndRender(buf, capacity);
+                space = capacity;
+            }
+        }
+    }
+
+    if (space != capacity) {
+        UnlockMsdfVertsAndRender(buf, capacity - space);
+    }
+
+    GxBufUnlock(buf, 0);
+    g_theGxDevicePtr->RsPop();
 }
 
 // VERIFY: cb7c9536 manual
@@ -417,9 +559,30 @@ void TEXTURECACHEROW::EvictGlyph(CHARCODEDESC* desc) {
     }
 }
 
+static uint32_t ComputeWidestFreeSlot(TEXTURECACHEROW* row) {
+    uint32_t widest = 0;
+    uint32_t cursor = 0;
+
+    for (CHARCODEDESC* glyph = row->m_glyphlist.Head(); glyph; glyph = row->m_glyphlist.Next(glyph)) {
+        if (glyph->m_glyphStartPixel > cursor && glyph->m_glyphStartPixel - cursor > widest) {
+            widest = glyph->m_glyphStartPixel - cursor;
+        }
+
+        cursor = glyph->m_glyphEndPixel + 1;
+    }
+
+    if (cursor < 256 && 256 - cursor > widest) {
+        widest = 256 - cursor;
+    }
+
+    return widest;
+}
+
 // VERIFY: 2ccd62da manual
 // OFFSET: 0x006C5120
 CHARCODEDESC* TEXTURECACHEROW::CreateNewDesc(GLYPHBITMAPDATA* data, uint32_t rowNumber, uint32_t cellHeight) {
+    // FIX: the stored widest slot goes stale after evictions, measure the free gaps again.
+    this->m_widestFreeSlot = ComputeWidestFreeSlot(this);
     uint32_t width = data->m_glyphCellWidth;
 
     if (this->m_widestFreeSlot < width) {

@@ -10,6 +10,7 @@
 #include "Engine/Source/Gxu/IGxuFontGlyph.h"
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/MSDF/MSDF.h"
 
 // INLINED
 KERNINGHASHKEY& KERNINGHASHKEY::operator=(const KERNINGHASHKEY& key) {
@@ -35,6 +36,10 @@ const char* CGxFont::GetName() {
 // OFFSET: 0x006C2270
 uint32_t CGxFont::GetPixelSize() {
     return this->m_pixelSize;
+}
+
+HoT::MSDF::Font* CGxFont::GetMsdfFont() {
+    return FontFaceGetMsdf(this->m_fontFaceHandle);
 }
 
 // VERIFY: 3c5dbf73 manual
@@ -114,7 +119,8 @@ bool CGxFont::GetGlyphData(GLYPHBITMAPDATA* data, uint32_t code) {
         padding = 2;
     }
 
-    return IGxuFontGlyphRenderGlyph(face, this->m_pixelSize, code, this->m_baseline, data, this->m_fontFlags & 2, padding);
+    // FIX: MSDF fonts measure the glyph against the raw baseline.
+    return IGxuFontGlyphRenderGlyph(face, this->m_pixelSize, code, this->m_baseline, data, this->m_fontFlags & 2, padding, this->GetMsdfFont() != nullptr);
 }
 
 // VERIFY: 3597e899 auto
@@ -345,6 +351,17 @@ CHARCODEDESC* CGxFont::NewCodeDesc(uint32_t code) {
 
     if (!this->GetGlyphData(&data, code)) {
         return nullptr;
+    }
+
+    // FIX: MSDF glyphs live in the MSDF atlas, so the descriptor only carries metrics and stays on page 0.
+    if (this->GetMsdfFont()) {
+        desc = new (__FILE__, __LINE__) CHARCODEDESC;
+        desc->m_textureNumber = 0;
+        desc->m_bitmapData.CopyFrom(&data);
+        this->m_activeCharacters.Insert(desc, code, HASHKEY_NONE());
+        this->m_activeCharacterCache.LinkToHead(desc);
+
+        return desc;
     }
 
     TEXTURECACHE* cache = nullptr;

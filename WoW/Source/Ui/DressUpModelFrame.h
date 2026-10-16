@@ -49,4 +49,8 @@ class CGDressUpModelFrame : public CGCharacterModelBase {
     void TryOnItem(CGItem_C* item, int32_t hand);
 };
 
+// Exposed for HoT transmog try on.
+extern int32_t s_mainHandItemId;
+extern int32_t s_offHandItemId;
+
 #endif

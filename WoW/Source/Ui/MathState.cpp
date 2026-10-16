@@ -1,4 +1,5 @@
 #include "MathState.h"
+#include "HoT/Spells/DescriptionVars.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Source/DB/DBClient/DBCacheInstances.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
@@ -32,8 +33,9 @@ static const MathFunction s_mathFunctions[12] = {
     { "clamp", 3 },
 };
 
+// FIX: HoT appends its own variables, their ops follow MATHOP_BONUS_COEFFICIENT_3_UPPER.
 // STATIC: 0x00ACE8F8
-static const char* s_mathVariables[140] = {
+static const char* s_mathVariables[162] = {
     "STR", "AGI", "STA", "INT", "SPI", "str", "agi", "sta", "int", "spi",
     "m1", "m2", "m3", "M1", "M2", "M3", "a1", "a2", "a3", "A1", "A2", "A3",
     "d", "D", "c", "C", "p", "P", "x1", "x2", "x3", "X1", "X2", "X3",
@@ -46,6 +48,8 @@ static const char* s_mathVariables[140] = {
     "sp", "SP", "sph", "spfi", "spn", "spfr", "sps", "spa", "SPH", "SPFI", "SPN", "SPFR", "SPS", "SPA",
     "bh", "BH", "ph", "pfi", "pn", "pfr", "ps", "pa", "PH", "PFI", "PN", "PFR", "PS", "PA",
     "pbh", "pBH", "pbhd", "pBHD", "bc1", "bc2", "bc3", "BC1", "BC2", "BC3",
+    "hp", "HP", "mp", "MP", "fp", "FP", "ilvl", "ILVL", "dodge", "DODGE", "parry", "PARRY",
+    "aura1", "aura2", "aura3", "AURA1", "AURA2", "AURA3", "absorb", "ABSORB", "stacks", "STACKS",
 };
 
 // STATIC: 0x00ACEB2C
@@ -72,7 +76,7 @@ static uint8_t LookupMathVariable(const char* name) {
         return 0;
     }
 
-    for (uint32_t i = 0; i < 140; i++) {
+    for (uint32_t i = 0; i < sizeof(s_mathVariables) / sizeof(s_mathVariables[0]); i++) {
         if (!SStrCmp(name, s_mathVariables[i], STORM_MAX_STR)) {
             return i + MATHOP_STAT_STRENGTH;
         }
@@ -476,7 +480,8 @@ void MathState::GetVariableValue(uint32_t op, MathStack* stack, const SpellRec* 
     float value = 0.0f;
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
-    if (player) {
+    // FIX: HoT resolves its own variables and the unrounded ranged damage and speed first.
+    if (player && !HoT::Spells::GetDescriptionVariable(op, player, spell, value)) {
         switch (op) {
             case MATHOP_STAT_STRENGTH:
             case MATHOP_STAT_AGILITY:

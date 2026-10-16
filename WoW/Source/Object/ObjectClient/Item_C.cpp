@@ -698,11 +698,35 @@ void CGItem_C::GetCooldowns(int32_t itemId, uint32_t& cooldown, uint32_t& catego
         return;
     }
 
+    // FIX: no delay use spells count too, -1 falls back to the spell's own recovery, and spell modifiers apply.
     for (uint32_t i = 0; i < 5; i++) {
-        if (stats->m_spellId[i] && !stats->m_spellTrigger[i]) {
+        if (stats->m_spellId[i] && (stats->m_spellTrigger[i] == 0 || stats->m_spellTrigger[i] == 5)) {
             cooldown = stats->m_spellCooldown[i];
             categoryCooldown = stats->m_spellCategoryCooldown[i];
             category = stats->m_spellCategory[i];
+
+            SpellRec spell;
+
+            if (g_spellDB.GetRecord(stats->m_spellId[i], &spell)) {
+                if (stats->m_spellCooldown[i] == 0xFFFFFFFF) {
+                    cooldown = spell.m_recoveryTime;
+                }
+
+                if (stats->m_spellCategoryCooldown[i] == 0xFFFFFFFF) {
+                    categoryCooldown = spell.m_categoryRecoveryTime;
+                }
+
+                int32_t flat;
+                int32_t pct;
+
+                if (Spell_C_GetSpellModifiers(&spell, SPELLMOD_GLOBAL_COOLDOWN, flat, pct)) {
+                    int32_t value = (static_cast<int32_t>(cooldown) + flat) * pct / 100;
+                    cooldown = value > 0 ? value : 0;
+                    value = (static_cast<int32_t>(categoryCooldown) + flat) * pct / 100;
+                    categoryCooldown = value > 0 ? value : 0;
+                }
+            }
+
             return;
         }
     }

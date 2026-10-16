@@ -1,4 +1,5 @@
 #include "SpellBookFrame.h"
+#include "HoT/Spells/ActionBar.h"
 #include <cstdlib>
 #include <cstring>
 #include "Engine/Source/Base/ConvertUTF.h"
@@ -531,10 +532,18 @@ void CGSpellBook::AddKnownSpell(int32_t spellId, int32_t notify, int32_t replace
     int32_t updateMultiCast = 0;
     bool tutorialShown = CGTutorial::m_tutorialShown.m_count ? !((CGTutorial::m_tutorialShown.m_bits.m_data[1] >> 14) & 1) : false;
 
-    if (spell.m_attributesExG & 0x20) {
+    // FIX: HoT totems are found through their summon properties when the stock flag or categories are missing.
+    uint32_t hotTotemMask = HoT::Spells::GetTotemSlotMask(&spell);
+
+    if ((spell.m_attributesExG & 0x20) || hotTotemMask) {
         for (uint32_t i = 0; i < 2; i++) {
             int32_t category = spell.m_requiredTotemCategoryID[i];
             uint32_t slotMask = CGActionBar::GetMultiCastSlotMaskForTotemCategory(category);
+
+            if (!slotMask) {
+                slotMask = hotTotemMask;
+                hotTotemMask = 0;
+            }
 
             for (uint32_t slot = 0; slot < 4; slot++) {
                 if (!((1 << slot) & slotMask)) {
@@ -671,13 +680,14 @@ void CGSpellBook::AddKnownSpell(int32_t spellId, int32_t notify, int32_t replace
             }
         }
 
-        if (player && player->m_unit->m_unitFieldLevel <= 10 && CGSpellBook::GetSpellProgressionRank(&spell) <= 1 && !(spell.m_attributes & 0x40) && !(spell.m_attributesExB & 0x10) && !SpellRec::HasAura(&spell, 36)) {
+        // FIX: HoT offers new spells for the bar at any level and rank.
+        if (player && !(spell.m_attributes & 0x40) && !(spell.m_attributesExB & 0x10) && !SpellRec::HasAura(&spell, 36)) {
             int32_t offset = GetActionBarPageOffset(player, &spell);
 
             for (int32_t slot = offset; slot < offset + 12; slot++) {
                 if (!CGActionBar::HasAction(slot)) {
-                    CGGameUI::SetCursorSpell(spell.m_id);
-                    CGActionBar::PutActionInSlot(slot);
+                    // FIX: HoT lets the UI place the spell through HOT_PLACE_ACTION instead of filling the slot.
+                    HoT::Spells::OfferLearnedSpell(&spell, slot);
                     break;
                 }
             }

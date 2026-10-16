@@ -1,4 +1,5 @@
 #include "NamePlateFrame.h"
+#include "HoT/Features/Units.h"
 #include <new>
 #include <typeinfo>
 #include "Engine/Source/Frame/CSimpleRender.h"
@@ -382,9 +383,11 @@ void CGNamePlateFrame::UpdateLevelDisplay(CGUnit_C* unit) {
         return;
     }
 
-    int32_t level = GetAdjustedLevel(player, unit);
+    // FIX: HoT shows scaled levels, skulls only bosses and colors against the player's item level.
+    int32_t level = HoT::UnitLevel::GetDisplayLevel(unit, GetAdjustedLevel(player, unit));
+    int32_t playerLevel = HoT::UnitLevel::GetDisplayLevel(player, player->m_unit->m_unitFieldLevel);
 
-    if (unit->IsBossMob() || ((unit->UnitReaction(player) > 1 || !CGPlayer_C::UnitIsTrivial(unit)) && unit->UnitReaction(player) <= 1 && static_cast<int32_t>(player->m_unit->m_unitFieldLevel) <= level - 10)) {
+    if (unit->IsBossMob()) {
         this->m_levelText->m_shown = 0;
         this->m_levelText->HideThis();
         this->m_targetingFrameSkull->m_shown = 1;
@@ -400,7 +403,7 @@ void CGNamePlateFrame::UpdateLevelDisplay(CGUnit_C* unit) {
         return;
     }
 
-    this->m_levelText->SetVertexColor(*GetDifficultyColor(level, player->m_unit->m_unitFieldLevel));
+    this->m_levelText->SetVertexColor(*GetDifficultyColor(level, playerLevel));
 
     char text[32];
     SStrPrintf(text, sizeof(text), "%d", level);
