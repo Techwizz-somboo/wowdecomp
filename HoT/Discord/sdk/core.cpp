@@ -21,7 +21,7 @@ static bool LoadDiscordSDK()
 {
     if (s_discordModule)
         return s_DiscordCreate != nullptr;
-    s_discordModule = LoadLibraryA("discord_game_sdk.dll");
+    s_discordModule = LoadLibraryA("discord_game_sdk_64.dll");
     if (!s_discordModule)
         return false;
     s_DiscordCreate = reinterpret_cast<DiscordCreateProc>(

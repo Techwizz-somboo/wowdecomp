@@ -34,7 +34,7 @@ target_include_directories(HoT
 
 # The Discord SDK is loaded at runtime, the client just needs it next to the exe.
 if (WOWDECOMP_ARCH_64)
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Discord/redist/discord_game_sdk.dll" "${CMAKE_SOURCE_DIR}/bin/Win/discord_game_sdk.dll" COPYONLY)
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Discord/redist/discord_game_sdk.dll" "${CMAKE_SOURCE_DIR}/bin/Win/discord_game_sdk_64.dll" COPYONLY)
 endif ()
 
 # MSDF text, FreeType and msdfgen come from ThirdParty.
@@ -51,7 +51,7 @@ if (TARGET msdfgen::msdfgen-ext)
     )
 endif ()
 
-option(AUTO_UPDATER_IGNORES_EXE "Background downloader leaves the running client exe and discord_game_sdk.dll alone" OFF)
+option(AUTO_UPDATER_IGNORES_EXE "Background downloader leaves the running client exe and discord_game_sdk_64.dll alone" OFF)
 if (AUTO_UPDATER_IGNORES_EXE)
     target_compile_definitions(HoT PRIVATE AUTO_UPDATER_IGNORES_EXE)
 endif ()

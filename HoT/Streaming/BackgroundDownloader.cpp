@@ -155,7 +155,7 @@ static std::string NarrowOem(const std::wstring& s, bool* lossy) {
 static bool IsDiscordDll(const std::string& path) {
     size_t slash = path.find_last_of("/\\");
     std::string name = (slash == std::string::npos) ? path : path.substr(slash + 1);
-    return Text::LowerAscii(name) == "discord_game_sdk.dll";
+    return Text::LowerAscii(name) == "discord_game_sdk_64.dll";
 }
 #endif
 

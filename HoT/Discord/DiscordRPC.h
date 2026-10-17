@@ -1,7 +1,7 @@
 #ifndef HOT_DISCORD_DISCORDRPC_H
 #define HOT_DISCORD_DISCORDRPC_H
 
-// Discord rich presence on a worker thread. discord_game_sdk.dll is loaded at runtime and everything is a no-op without it.
+// Discord rich presence on a worker thread. discord_game_sdk_64.dll is loaded at runtime and everything is a no-op without it.
 namespace HoT::Discord::RPC {
 
 // Starts the worker, false under Wine or when it is already running.

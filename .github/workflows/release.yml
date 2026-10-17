@@ -1,21 +1,19 @@
-name: Build and Release
-
+name: Build HoTClient64
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: write
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   build:
-    runs-on: windows-latest
-
+    runs-on: [windows]
+    defaults:
+      run:
+        shell: powershell
+    env:
+      CLIENTDIR: ${{ vars.CLIENTDIR }}
+      PATCHDIR: ${{ vars.PATCHDIR }}
+      MANIFESTDIR: ${{ vars.MANIFESTDIR }}
+      SOAPDIR: ${{ vars.SOAPDIR }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -23,25 +21,40 @@ jobs:
           submodules: recursive
 
       - name: Configure
-        run: cmake -S . -B build/x64 -A x64 -DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64 -DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=1 -DWOWCLIENT_FREEZE_DETECTOR=1 -DWOWCLIENT_CRASH_LOG=1
+        run: cmake -S . -B build/x64 -G "Visual Studio 18 2026" -A x64 -DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64 -DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=1 -DWOWCLIENT_FREEZE_DETECTOR=1 -DWOWCLIENT_CRASH_LOG=1
 
       - name: Build
         run: cmake --build build/x64 --config Release --target WowClient --parallel
 
-      - name: Version
-        id: version
-        shell: pwsh
+      - name: Copy binaries
         run: |
-          "tag=build-${{ github.run_number }}" >> $env:GITHUB_OUTPUT
-          "sha=$("${{ github.sha }}".Substring(0, 7))" >> $env:GITHUB_OUTPUT
+          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll") {
+            Copy-Item -Path "bin\Win\$f" -Destination "$env:CLIENTDIR\_DO_NOT_PACKAGE\Assets\Binaries\$f" -Force
+          }
 
-      - name: Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: Build ${{ github.run_number }} (${{ steps.version.outputs.sha }})
-          generate_release_notes: true
-          make_latest: true
-          files: bin/Win/HoTClient64.exe
-          fail_on_unmatched_files: true
+      - name: Copy binaries to patch directory
+        run: |
+          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll") {
+            Copy-Item -Path "bin\Win\$f" -Destination "$env:PATCHDIR\$f" -Force
+          }
+
+      - name: Run manifest tool
+        run: |
+          Push-Location "$env:MANIFESTDIR"
+          cmd.exe /c "Run.bat"
+          Pop-Location
+
+      - name: Trigger streamall
+        continue-on-error: true
+        run: |
+          Push-Location "$env:SOAPDIR"
+          cmd.exe /c "SoapCommand.exe dev streamall"
+          Pop-Location
+
+      - name: Commit and push
+        run: |
+          Push-Location "$env:CLIENTDIR"
+          git add _DO_NOT_PACKAGE\Assets\Binaries\HoTClient64.exe _DO_NOT_PACKAGE\Assets\Binaries\discord_game_sdk_64.dll
+          git commit -m "Update HoTClient64.exe"
+          git push
+          Pop-Location
