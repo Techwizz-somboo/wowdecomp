@@ -1085,7 +1085,7 @@ void CGActionBar::PutActionInSlot(int32_t slot) {
     }
 
     int32_t cursorSpell = CGGameUI::GetCursorSpell();
-    int32_t itemId = CGGameUI::m_cursorItemType == 7 ? CGGameUI::GetCursorVirtualItem() : 0;
+    int32_t itemId = CGGameUI::m_cursorItemType == UICURSOR_ACTIONBAR ? CGGameUI::GetCursorVirtualItem() : 0;
     CGItem_C* item = nullptr;
     int32_t cursorMacro = CGGameUI::m_cursorMacro;
 
@@ -1138,7 +1138,7 @@ void CGActionBar::PutActionInSlot(int32_t slot) {
 
         if (CGActionBar::IsItem(slot)) {
             ItemRec* rec = g_itemDB.GetRecord(CGActionBar::GetItem(slot));
-            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, 7, 0);
+            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, UICURSOR_ACTIONBAR, 0);
         } else if (CGActionBar::IsSpell(slot)) {
             int32_t spellId = CGActionBar::GetSpell(slot, petSpell);
 
@@ -1190,7 +1190,7 @@ void CGActionBar::PutActionInSlot(int32_t slot) {
             }
 
             ItemRec* rec = g_itemDB.GetRecord(slotItem);
-            CGGameUI::SetCursorVirtualItem(slotItem, rec ? rec->m_displayInfoID : 0, slot, 7, 0);
+            CGGameUI::SetCursorVirtualItem(slotItem, rec ? rec->m_displayInfoID : 0, slot, UICURSOR_ACTIONBAR, 0);
         } else if (CGActionBar::IsSpell(slot)) {
             CGGameUI::SetCursorSpell(CGActionBar::GetSpell(slot, petSpell));
         } else if (CGActionBar::IsMacro(slot) && CGActionBar::HasMacro(slot)) {
@@ -1212,7 +1212,7 @@ void CGActionBar::PutActionInSlot(int32_t slot) {
     } else if (cursorMacro) {
         if (CGActionBar::IsItem(slot)) {
             ItemRec* rec = g_itemDB.GetRecord(CGActionBar::GetItem(slot));
-            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, 7, 0);
+            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, UICURSOR_ACTIONBAR, 0);
         } else if (CGActionBar::IsSpell(slot)) {
             CGGameUI::SetCursorSpell(CGActionBar::GetSpell(slot, petSpell));
         } else if (CGActionBar::IsMacro(slot) && CGActionBar::HasMacro(slot)) {
@@ -1245,7 +1245,7 @@ void CGActionBar::PutActionInSlot(int32_t slot) {
 
         if (CGActionBar::IsItem(slot)) {
             ItemRec* rec = g_itemDB.GetRecord(CGActionBar::GetItem(slot));
-            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, 7, 0);
+            CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), rec ? rec->m_displayInfoID : 0, slot, UICURSOR_ACTIONBAR, 0);
         } else if (CGActionBar::IsSpell(slot)) {
             CGGameUI::SetCursorSpell(CGActionBar::GetSpell(slot, petSpell));
         } else if (CGActionBar::IsMacro(slot) && CGActionBar::HasMacro(slot)) {
@@ -1324,7 +1324,7 @@ void CGActionBar::UseAction(int32_t slot, const WOWGUID& target, const char* but
         return;
     }
 
-    if (!CGUIBindings::s_bindings->m_keyStateOverride && (slot < 120 || slot >= 132) && (CGGameUI::GetCursorSpell() || CGGameUI::GetCursorItem() || CGGameUI::m_cursorMacro || CGGameUI::GetCursorVirtualItemOfType(7) || CGGameUI::m_cursorEquipmentSet >= 0)) {
+    if (!CGUIBindings::s_bindings->m_keyStateOverride && (slot < 120 || slot >= 132) && (CGGameUI::GetCursorSpell() || CGGameUI::GetCursorItem() || CGGameUI::m_cursorMacro || CGGameUI::GetCursorVirtualItemOfType(UICURSOR_ACTIONBAR) || CGGameUI::m_cursorEquipmentSet >= 0)) {
         CGActionBar::PutActionInSlot(slot);
         return;
     }
@@ -2019,7 +2019,7 @@ void CGActionBar::PickupAction(uint32_t slot) {
         return;
     }
 
-    if (CGGameUI::GetCursorSpell() || CGGameUI::GetCursorItem() || CGGameUI::m_cursorMacro || CGGameUI::GetCursorVirtualItemOfType(7) || CGGameUI::m_cursorEquipmentSet >= 0) {
+    if (CGGameUI::GetCursorSpell() || CGGameUI::GetCursorItem() || CGGameUI::m_cursorMacro || CGGameUI::GetCursorVirtualItemOfType(UICURSOR_ACTIONBAR) || CGGameUI::m_cursorEquipmentSet >= 0) {
         CGActionBar::PutActionInSlot(slot);
         return;
     }
@@ -2031,7 +2031,7 @@ void CGActionBar::PickupAction(uint32_t slot) {
     if (CGActionBar::IsItem(slot)) {
         ItemRec* rec = g_itemDB.GetRecord(CGActionBar::GetItem(slot));
         int32_t displayId = rec ? rec->m_displayInfoID : 0;
-        CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), displayId, slot, 7, 0);
+        CGGameUI::SetCursorVirtualItem(CGActionBar::GetItem(slot), displayId, slot, UICURSOR_ACTIONBAR, 0);
         CGActionBar::RemoveAction(slot);
     } else if (CGActionBar::IsSpell(slot)) {
         int32_t petSpell;

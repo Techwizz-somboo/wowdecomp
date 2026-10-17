@@ -22,7 +22,7 @@ void PredictFocusRegen(CGUnit_C* unit, uint32_t elapsed) {
         return;
     }
 
-    float rate = unit->GetPowerRegen(POWER_FOCUS, false);
+    float rate = unit->GetPowerRegen(POWER_TYPE_FOCUS, false);
 
     if (rate == 0.0f) {
         return;
@@ -39,7 +39,7 @@ void PredictFocusRegen(CGUnit_C* unit, uint32_t elapsed) {
 
     s_focusFraction -= static_cast<float>(whole);
 
-    int32_t value = unit->GetPredictedPower(POWER_FOCUS) + whole;
+    int32_t value = unit->GetPredictedPower(POWER_TYPE_FOCUS) + whole;
 
     if (value < 0) {
         value = 0;
@@ -47,7 +47,7 @@ void PredictFocusRegen(CGUnit_C* unit, uint32_t elapsed) {
         value = static_cast<int32_t>(maxFocus);
     }
 
-    unit->SetPredictedPower(POWER_FOCUS, value);
+    unit->SetPredictedPower(POWER_TYPE_FOCUS, value);
 }
 
 void UpdateDismountedSelectionRadius(CGUnit_C* unit) {
