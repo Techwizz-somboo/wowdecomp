@@ -153,8 +153,7 @@ static int32_t IsValidKeyName(const char* key) {
         }
     }
 
-    // Controller: PAD1, PADLSHOULDER and the other pad keys are bindable.
-    return Controller::IsKeyName(key);
+    return 0;
 }
 
 // VERIFY: 532ce7dd manual
@@ -1188,7 +1187,10 @@ const char* CGUIBindings::GetCommandAction(BINDING_MODE mode, const char* key, i
     }
 
     if (!binding) {
-        binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(key);
+        // Controller: pad keys resolve through the separate gamepad binding set.
+        if (!Controller::FindBinding(key, binding)) {
+            binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(key);
+        }
 
         if (!binding) {
             return nullptr;
@@ -1235,7 +1237,10 @@ KEYBINDING* CGUIBindings::GetKeyBinding(BINDING_MODE mode, const char* key) {
     }
 
     if (!binding) {
-        binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(key);
+        // Controller: pad keys resolve through the separate gamepad binding set.
+        if (!Controller::FindBinding(key, binding)) {
+            binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(key);
+        }
 
         if (!binding) {
             if (!SStrChr(key, '-')) {
@@ -1270,7 +1275,9 @@ KEYBINDING* CGUIBindings::GetKeyBinding(BINDING_MODE mode, const char* key) {
             }
 
             if (!binding) {
-                binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(genericKey);
+                if (!Controller::FindBinding(genericKey, binding)) {
+                    binding = this->m_bindings[BINDING_SET_CURRENT].Ptr(genericKey);
+                }
 
                 if (!binding) {
                     return nullptr;

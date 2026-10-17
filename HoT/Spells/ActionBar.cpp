@@ -4,6 +4,7 @@
 #include "WoW/Source/DB/Rec/SpellRec.h"
 #include "WoW/Source/DB/Rec/SummonPropertiesRec.h"
 #include "WoW/Source/Ui/ActionBarFrame.h"
+#include "WoW/Source/Ui/GameUI.h"
 
 namespace HoT::Spells {
 
@@ -64,7 +65,10 @@ void OfferLearnedSpell(const SpellRec* spell, int32_t slot) {
         }
     }
 
+    // The UI handler places the spell with PlaceAction, which takes whatever is on the cursor.
+    CGGameUI::SetCursorSpell(spell->m_id);
     Lua::SignalEvent("HOT_PLACE_ACTION", "%u%u", static_cast<uint32_t>(spell->m_id), static_cast<uint32_t>(slot));
+    CGGameUI::ClearCursor(1, 1);
 }
 
 }

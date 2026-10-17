@@ -1,4 +1,5 @@
 #include "Controller/Controller.h"
+#include "Controller/Bindings.h"
 #include "Controller/Buttons.h"
 #include "Controller/CVars.h"
 #include "Controller/Config.h"
@@ -56,8 +57,8 @@ const char* KeyName(KEY key) {
     return button >= 0 ? ButtonBinding(button) : nullptr;
 }
 
-bool IsKeyName(const char* name) {
-    return ButtonFromBinding(name) >= 0;
+bool FindBinding(const char* key, KEYBINDING*& binding) {
+    return Bindings::Find(key, binding);
 }
 
 const char** ScriptEvents(bool game, const char** stockEvents, uint32_t stockCount, uint32_t* count) {
@@ -65,6 +66,7 @@ const char** ScriptEvents(bool game, const char** stockEvents, uint32_t stockCou
 }
 
 void LoadGameUI(CStatus* status) {
+    Bindings::Load();
     Lua::LoadGameUI(status);
 }
 

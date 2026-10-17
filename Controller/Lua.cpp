@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "Controller/Bindings.h"
 #include "Controller/Buttons.h"
 #include "Controller/CVars.h"
 #include "Controller/Config.h"
@@ -13,6 +14,7 @@
 #include "Engine/Source/FrameXML/XMLTree.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "WoW/Source/Ui/GameUI.h"
 #include "WoW/Source/Ui/Types.h"
 #include "WoW/Source/Ui/UIBindings.h"
 
@@ -587,6 +589,47 @@ static int32_t Script_GetConvertedKeyOrButton(lua_State* L) {
     return 1;
 }
 
+static int32_t Script_GetBindingKey(lua_State* L) {
+    const char* command = luaL_checklstring(L, 1, nullptr);
+    int32_t count = 0;
+
+    for (const char* key = Bindings::GetKey(command, 0); key; key = Bindings::GetKey(command, count)) {
+        count++;
+        lua_pushstring(L, key);
+    }
+
+    return count;
+}
+
+static int32_t Script_GetBindingAction(lua_State* L) {
+    const char* action = Bindings::GetAction(luaL_checklstring(L, 1, nullptr));
+    lua_pushstring(L, action ? action : "");
+    return 1;
+}
+
+static int32_t Script_SetBinding(lua_State* L) {
+    const char* key = luaL_checklstring(L, 1, nullptr);
+    const char* command = lua_isstring(L, 2) ? lua_tolstring(L, 2, nullptr) : nullptr;
+
+    if (!CGGameUI::CanPerformAction(13) || !Bindings::Set(key, command)) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    FrameScript_SignalEvent(SCRIPT_EVENT_UPDATE_BINDINGS, nullptr);
+    lua_pushnumber(L, 1.0);
+    return 1;
+}
+
+static int32_t Script_ResetBindings(lua_State* L) {
+    if (CGGameUI::CanPerformAction(13)) {
+        Bindings::Reset();
+        FrameScript_SignalEvent(SCRIPT_EVENT_UPDATE_BINDINGS, nullptr);
+    }
+
+    return 0;
+}
+
 static const luaL_Reg s_gamePadFunctions[] = {
     { "AddSDLMapping", Script_AddSDLMapping },
     { "ApplyConfigs", Script_ApplyConfigs },
@@ -600,6 +643,8 @@ static const luaL_Reg s_gamePadFunctions[] = {
     { "GetAllConfigIDs", Script_GetAllConfigIDs },
     { "GetAllDeviceIDs", Script_GetAllDeviceIDs },
     { "GetAllowHoverEventsWithFreeLook", Script_GetAllowHoverEventsWithFreeLook },
+    { "GetBindingAction", Script_GetBindingAction },
+    { "GetBindingKey", Script_GetBindingKey },
     { "GetCombinedDeviceID", Script_GetCombinedDeviceID },
     { "GetConfig", Script_GetConfig },
     { "GetDeviceMappedState", Script_GetDeviceMappedState },
@@ -607,7 +652,9 @@ static const luaL_Reg s_gamePadFunctions[] = {
     { "GetLedColor", Script_GetLedColor },
     { "GetPowerLevel", Script_GetPowerLevel },
     { "IsEnabled", Script_IsEnabled },
+    { "ResetBindings", Script_ResetBindings },
     { "SetAllowHoverEventsWithFreeLook", Script_SetAllowHoverEventsWithFreeLook },
+    { "SetBinding", Script_SetBinding },
     { "SetConfig", Script_SetConfig },
     { "SetLedColor", Script_SetLedColor },
     { "SetVibration", Script_SetVibration },
@@ -693,38 +740,6 @@ static const char* s_bindingCommands =
     "<Binding name=\"GAMEPADINTERACT\">GamePadInteract()</Binding>"
     "</Bindings>";
 
-static const char* s_defaultBindings[][2] = {
-    { "PAD1", "JUMP" },
-    { "PAD2", "GAMEPADINTERACT" },
-    { "PAD3", "ACTIONBUTTON1" },
-    { "PAD4", "ACTIONBUTTON2" },
-    { "SHIFT-PAD1", "ACTIONBUTTON3" },
-    { "SHIFT-PAD2", "ACTIONBUTTON4" },
-    { "SHIFT-PAD3", "ACTIONBUTTON5" },
-    { "SHIFT-PAD4", "ACTIONBUTTON6" },
-    { "CTRL-PAD1", "ACTIONBUTTON7" },
-    { "CTRL-PAD2", "ACTIONBUTTON8" },
-    { "CTRL-PAD3", "ACTIONBUTTON9" },
-    { "CTRL-PAD4", "ACTIONBUTTON10" },
-    { "CTRL-PADLSHOULDER", "ACTIONBUTTON11" },
-    { "CTRL-PADRSHOULDER", "ACTIONBUTTON12" },
-    { "PADLSHOULDER", "TARGETNEARESTFRIEND" },
-    { "PADRSHOULDER", "TARGETNEARESTENEMY" },
-    { "SHIFT-PADLSHOULDER", "TARGETSELF" },
-    { "SHIFT-PADRSHOULDER", "TARGETPREVIOUSENEMY" },
-    { "PADDUP", "TOGGLECHARACTER0" },
-    { "PADDDOWN", "OPENALLBAGS" },
-    { "PADDLEFT", "TOGGLESPELLBOOK" },
-    { "PADDRIGHT", "TOGGLEWORLDMAP" },
-    { "SHIFT-PADDUP", "TOGGLEQUESTLOG" },
-    { "SHIFT-PADDDOWN", "TOGGLESOCIAL" },
-    { "SHIFT-PADDLEFT", "TOGGLETALENTS" },
-    { "SHIFT-PADDRIGHT", "TOGGLEACHIEVEMENT" },
-    { "PADLSTICK", "TOGGLERUN" },
-    { "PADRSTICK", "TOGGLEAUTORUN" },
-    { "PADBACK", "TOGGLEGAMEPADCURSOR" },
-};
-
 static const char* s_gameUIScript = R"LUA(
 local LABELS = {
     Letters = { PAD1 = "A", PAD2 = "B", PAD3 = "X", PAD4 = "Y", PADLSHOULDER = "LB", PADRSHOULDER = "RB", PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADLSTICK = "LS", PADRSTICK = "RS", PADFORWARD = "Menu", PADBACK = "View", PADSYSTEM = "Guide", PADSOCIAL = "Share" },
@@ -775,15 +790,15 @@ local function HookBindingUI()
     end
 
     KeyBindingFrame.gamePadHooked = true
-    KeyBindingFrame:SetScript("OnGamePadButtonDown", function(self, button)
-        if KeyBindingFrame_OnKeyDown then
-            KeyBindingFrame_OnKeyDown(self, button)
-        end
-    end)
 
-    if KeyBindingFrame_SetSelected then
-        hooksecurefunc("KeyBindingFrame_SetSelected", function(value)
-            KeyBindingFrame:EnableGamePadButton(value ~= nil)
+    -- Pad keys belong to the gamepad set, letting them through would clear the keyboard keys being replaced.
+    local onKeyDown = KeyBindingFrame:GetScript("OnKeyDown")
+
+    if onKeyDown then
+        KeyBindingFrame:SetScript("OnKeyDown", function(self, key, ...)
+            if not IsBindingForGamePad(key) then
+                return onKeyDown(self, key, ...)
+            end
         end)
     end
 end
@@ -876,12 +891,6 @@ void LoadGameUI(CStatus* status) {
             }
 
             XMLTree_Free(tree);
-        }
-
-        for (const auto& binding : s_defaultBindings) {
-            if (!bindings->m_bindings[BINDING_SET_DEFAULT].Ptr(binding[0])) {
-                bindings->Bind(BINDING_SET_DEFAULT, BINDING_MODE_0, binding[0], binding[1]);
-            }
         }
     }
 
