@@ -4,7 +4,6 @@
 
 namespace HoT::UnitFixes {
 
-static const int32_t POWER_FOCUS = 2;
 static const uint32_t UNIT_FLAG2_REGENERATE_POWER = 0x800;
 
 void PredictFocusRegen(CGUnit_C* unit, uint32_t elapsed) {
@@ -12,11 +11,11 @@ void PredictFocusRegen(CGUnit_C* unit, uint32_t elapsed) {
         return;
     }
 
-    if (unit->m_unit->m_unitFieldBytes0[3] == POWER_FOCUS) {
+    if (unit->m_unit->m_unitFieldBytes0[3] == POWER_TYPE_FOCUS) {
         return;
     }
 
-    uint32_t maxFocus = unit->m_unit->m_unitFieldMaxpower[POWER_FOCUS];
+    uint32_t maxFocus = unit->m_unit->m_unitFieldMaxpower[POWER_TYPE_FOCUS];
 
     if (!maxFocus || !(unit->m_unit->m_unitFieldFlags2 & UNIT_FLAG2_REGENERATE_POWER) || unit->IsDeadOrGhost()) {
         return;

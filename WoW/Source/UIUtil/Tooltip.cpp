@@ -5771,7 +5771,7 @@ static void AddItemSpellStatLines(CGTooltip* tooltip, const ItemStats_C* stats, 
                     SStrPrintf(bonus, sizeof(bonus), format, value);
                 }
 
-                SStrPrintf(text, sizeof(text), "%s %s", FrameScript_GetText("ITEM_SPELL_TRIGGER_ONEQUIP", -1, GENDER_NOT_APPLICABLE), bonus);
+                SStrPrintf(text, sizeof(text), "%s%s", FrameScript_GetText("ITEM_PLUS", -1, GENDER_NOT_APPLICABLE), bonus);
                 tooltip->AddLine(text, nullptr, greenColor, greenColor, 0);
             }
         }
@@ -5891,7 +5891,7 @@ static int32_t AddItemSpellTriggerLines(CGTooltip* tooltip, const ItemStats_C* s
                         int32_t categoryRecoveryTime = spell.m_categoryRecoveryTime;
                         Spell_C_ModifySpellValue(&spell, recoveryTime, 11);
 
-                        if (spell.m_attributesExF >= 0) {
+                        if (!(spell.m_attributesExF & 0x80000000)) {
                             Spell_C_ModifySpellValue(&spell, categoryRecoveryTime, 11);
                         }
 
@@ -6189,7 +6189,7 @@ static void AddItemUseEnchantLine(CGTooltip* tooltip, CGPlayer_C* player, int32_
     int32_t categoryRecoveryTime = spell.m_categoryRecoveryTime;
     Spell_C_ModifySpellValue(&spell, recoveryTime, 11);
 
-    if (spell.m_attributesExF >= 0) {
+    if (!(spell.m_attributesExF & 0x80000000)) {
         Spell_C_ModifySpellValue(&spell, categoryRecoveryTime, 11);
     }
 
