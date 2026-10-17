@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      fresh:
+        description: 'Wipe the CMake cache and configure from scratch'
+        type: boolean
+        default: false
 jobs:
   build:
     runs-on: [windows]
@@ -14,28 +19,56 @@ jobs:
       PATCHDIR: ${{ vars.PATCHDIR }}
       MANIFESTDIR: ${{ vars.MANIFESTDIR }}
       SOAPDIR: ${{ vars.SOAPDIR }}
+      PERSIST_DIR: ${{ vars.PERSIST_DIR }}
     steps:
+      - name: Link persistent source directory
+        run: |
+          $persistentPath = "$env:PERSIST_DIR\source"
+          $workspaceSource = "$env:GITHUB_WORKSPACE\source"
+          if (-Not (Test-Path $persistentPath)) {
+              New-Item -ItemType Directory -Path $persistentPath -Force | Out-Null
+          }
+          if (-Not (Test-Path $workspaceSource)) {
+              New-Item -ItemType Junction -Path $workspaceSource -Target $persistentPath | Out-Null
+          }
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
+          path: source
           submodules: recursive
 
       - name: Configure
-        run: cmake -S . -B build/x64 -G "Visual Studio 18 2026" -A x64 -DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64 -DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=1 -DWOWCLIENT_FREEZE_DETECTOR=1 -DWOWCLIENT_CRASH_LOG=1
+        run: |
+          $cmakeArgs = @(
+            '-S', 'source',
+            '-B', "$env:PERSIST_DIR\build",
+            '-G', 'Visual Studio 18 2026',
+            '-A', 'x64',
+            '-DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64',
+            '-DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=1',
+            '-DWOWCLIENT_FREEZE_DETECTOR=1',
+            '-DWOWCLIENT_CRASH_LOG=1'
+          )
+          if ('${{ github.event.inputs.fresh }}' -eq 'true') { $cmakeArgs += '--fresh' }
+          & cmake @cmakeArgs
+          if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
 
       - name: Build
-        run: cmake --build build/x64 --config Release --target WowClient --parallel
+        run: |
+          cmake --build "$env:PERSIST_DIR\build" --config Release --target WowClient --parallel
+          if ($LASTEXITCODE -ne 0) { throw "cmake build failed with exit code $LASTEXITCODE" }
 
       - name: Copy binaries
         run: |
-          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll") {
-            Copy-Item -Path "bin\Win\$f" -Destination "$env:CLIENTDIR\_DO_NOT_PACKAGE\Assets\Binaries\$f" -Force
+          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll", "XvidDecoder.dll") {
+            Copy-Item -Path "source\bin\Win\$f" -Destination "$env:CLIENTDIR\_DO_NOT_PACKAGE\Assets\Binaries\$f" -Force
           }
 
       - name: Copy binaries to patch directory
         run: |
-          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll") {
-            Copy-Item -Path "bin\Win\$f" -Destination "$env:PATCHDIR\$f" -Force
+          foreach ($f in "HoTClient64.exe", "discord_game_sdk_64.dll", "XvidDecoder.dll") {
+            Copy-Item -Path "source\bin\Win\$f" -Destination "$env:PATCHDIR\$f" -Force
           }
 
       - name: Run manifest tool
@@ -54,7 +87,7 @@ jobs:
       - name: Commit and push
         run: |
           Push-Location "$env:CLIENTDIR"
-          git add _DO_NOT_PACKAGE\Assets\Binaries\HoTClient64.exe _DO_NOT_PACKAGE\Assets\Binaries\discord_game_sdk_64.dll
+          git add _DO_NOT_PACKAGE\Assets\Binaries\HoTClient64.exe _DO_NOT_PACKAGE\Assets\Binaries\discord_game_sdk_64.dll _DO_NOT_PACKAGE\Assets\Binaries\XvidDecoder.dll
           git commit -m "Update HoTClient64.exe"
           git push
           Pop-Location
