@@ -5,6 +5,7 @@
 #include "Engine/Source/Tempest/C3Vector.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "HoT/Core/Modules.h"
+#include "HoT/Editor/CreatureEditor.h"
 #include "HoT/Editor/FreeCam.h"
 #include "HoT/Editor/GobEditor.h"
 #include "HoT/Editor/Map/BrushDecal.h"
@@ -49,6 +50,7 @@ void BeforeWorldRender(CGWorldFrame* frame, C3Vector& decalPosition, float& deca
 
 void AfterWorldRender(CGWorldFrame* frame) {
     GobEditor::OnWorldRender(frame);
+    CreatureEditor::OnWorldRender(frame);
     MapEditor::Runtime::AfterWorldRender(frame);
 }
 
@@ -87,6 +89,7 @@ class EditorModule : public Module {
 
     void OnInitializeGlobal() override {
         GobEditor::Apply();
+        CreatureEditor::Apply();
         MapEditor::Runtime::Apply();
         FreeCam::RegisterScripts();
         MouseFunctions::RegisterScripts();
@@ -101,6 +104,7 @@ class EditorModule : public Module {
 
     void OnDestroyGame() override {
         GobEditor::OnGameDestroy();
+        CreatureEditor::OnGameDestroy();
         MapEditor::Runtime::OnGameClientDestroy();
         FreeCam::OnGameDestroy();
     }

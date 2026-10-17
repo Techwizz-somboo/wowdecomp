@@ -56,6 +56,7 @@ std::vector<Module*>& Modules() {
         Items::GetModule(),
         ItemLevel::GetModule(),
         LootWindow::GetModule(),
+        Minigame::GetModule(),
         MovementForce::GetModule(),
         PlayerSettings::GetModule(),
         QuestLog::GetModule(),

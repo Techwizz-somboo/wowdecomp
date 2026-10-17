@@ -77,6 +77,10 @@ static const char* s_events[] = {
     "HOT_TOWERDEFENCE_SCORE",
     "HOT_TOWERDEFENCE_GAME_END",
     "HOT_TOWERDEFENCE_TOWERS",
+    "HOT_CREATURE_EDITOR_DATA",
+    "HOT_CREATURE_EDITOR_RESULT",
+    "HOT_MINIGAME_VALUE",
+    "HOT_MINIGAME_TEXT",
 };
 
 void RegisterEvents() {

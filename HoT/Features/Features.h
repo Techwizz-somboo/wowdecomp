@@ -76,6 +76,10 @@ Module* GetModule();
 
 }
 
+namespace HoT::Minigame {
+Module* GetModule();
+}
+
 namespace HoT::MovementForce {
 Module* GetModule();
 }
