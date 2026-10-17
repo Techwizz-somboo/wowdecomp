@@ -13903,12 +13903,11 @@ int32_t CGUnit_C::InitializeExtendedDisplay(CGPlayer_C* player, int32_t hasDispl
 
             const char* bakeName = this->m_displayInfoExtra->m_bakeName;
 
-            if (!bakeName || !*bakeName) {
-                return 0;
+            // HoT: without a bake name the sheet is composited from the customization options.
+            if (bakeName && *bakeName) {
+                data.m_flags |= 0x1;
+                SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
             }
-
-            data.m_flags |= 0x1;
-            SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
         }
     }
 
@@ -23871,11 +23870,6 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
 
         this->m_characterComponent = CCharacterComponent::AllocComponent();
         const char* bakeName = this->GetDisplayBakeName();
-
-        if (!bakeName || !*bakeName) {
-            return;
-        }
-
         CreatureDisplayInfoExtraRec* extra = this->m_displayInfoExtra;
         data.m_preferences.m_raceID = extra->m_displayRaceID;
         data.m_preferences.m_sexID = extra->m_displaySexID;
@@ -23884,9 +23878,16 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
         data.m_preferences.m_faceId = extra->m_faceID;
         data.m_preferences.m_hairStyleId = extra->m_hairStyleID;
         data.m_preferences.m_hairColorId = extra->m_hairColorID;
-        data.m_flags |= 0x1;
         data.m_preferences.m_facialHairId = extra->m_facialHairID;
-        SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
+
+        // HoT: without a bake name the sheet is composited from the customization options.
+        if (bakeName && *bakeName) {
+            data.m_flags |= 0x1;
+            SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
+        } else {
+            CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_2);
+        }
+
         data.m_model = this->m_worldModel;
         data.m_model->m_refCount++;
         // HoT: an HD model swaps the baked NPC texture for the HD bake or composites the sheet.

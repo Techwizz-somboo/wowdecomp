@@ -610,24 +610,26 @@ void CGDressUpModelFrame::SetModel(CM2Model* model) {
     }
 
     const char* bakeName = extra->m_bakeName;
-
-    if (!bakeName || !*bakeName) {
-        return;
-    }
-
     this->m_component = CCharacterComponent::AllocComponent();
     ComponentData data;
     data.m_preferences.m_sexID = extra->m_displaySexID;
     data.m_preferences.m_faceId = extra->m_faceID;
     data.m_preferences.m_hairColorId = extra->m_hairColorID;
     data.m_preferences.m_raceID = extra->m_displayRaceID;
-    data.m_flags |= 0x1;
     data.m_preferences.m_skinID = extra->m_skinID;
     data.m_preferences.m_classId = 1;
     data.m_preferences.m_hairStyleId = extra->m_hairStyleID;
     data.m_preferences.m_facialHairId = extra->m_facialHairID;
     data.m_model = model;
-    SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
+
+    // HoT: without a bake name the sheet is composited from the customization options.
+    if (bakeName && *bakeName) {
+        data.m_flags |= 0x1;
+        SStrPrintf(data.m_npcSkinTexture, sizeof(data.m_npcSkinTexture), "%s%s", "Textures\\BakedNpcTextures\\", bakeName);
+    } else {
+        CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_2);
+    }
+
     data.m_model->m_refCount++;
     // HoT: an HD model drops the stock baked NPC texture so the sheet is composited.
     HoT::HD::ApplyNpcBake(nullptr, &data);

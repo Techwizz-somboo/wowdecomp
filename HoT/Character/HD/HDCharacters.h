@@ -35,6 +35,9 @@ void RefreshPatch();
 void InvalidateArt();
 
 bool FileExists(const char* path);
+
+// Checks the .blp a texture path loads as before the path itself, like TextureCreate does.
+bool TextureExists(const char* path);
 const char* RaceFolder(int32_t raceId);
 const char* SexFolder(int32_t sexId);
 const char* ModelStem(const CM2Model* model);

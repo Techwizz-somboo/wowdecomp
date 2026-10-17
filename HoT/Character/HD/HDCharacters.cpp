@@ -397,6 +397,23 @@ bool FileExists(const char* path) {
     return exists;
 }
 
+bool TextureExists(const char* path) {
+    if (!path || !*path) {
+        return false;
+    }
+
+    std::string blp = path;
+    size_t dot = blp.find_last_of('.');
+    size_t slash = blp.find_last_of('\\');
+
+    if (dot != std::string::npos && (slash == std::string::npos || dot > slash)) {
+        blp.erase(dot);
+    }
+
+    blp += ".blp";
+    return FileExists(blp.c_str()) || FileExists(path);
+}
+
 const char* RaceFolder(int32_t raceId) {
     if (raceId < 0 || raceId >= RACE_COUNT) {
         return nullptr;

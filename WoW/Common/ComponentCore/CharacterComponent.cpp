@@ -5434,6 +5434,12 @@ bool CCharacterComponent::SkinNpc(const char* debug) {
 
     CStatus status;
     strcpy(s_pathEnd, this->m_data.m_npcSkinTexture);
+
+    // HoT: a missing bake composites the sheet from the customization options instead of loading the placeholder.
+    if (!HoT::HD::TextureExists(s_path)) {
+        return false;
+    }
+
     CGxTexFlags flags(GxTex_LinearMipNearest, 0, 0, 0, 0, 0, 1);
     CTexture* texture = TextureCreate(s_path, flags, &status, 0);
 
