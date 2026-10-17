@@ -9,6 +9,8 @@
 #include "Engine/Source/Tempest/CAaBox.h"
 #include "Engine/Source/Tempest/CRange.h"
 
+[[noreturn]] void M2ArrayOffsetOverflow(const void* array, const void* data);
+
 template <class T>
 class M2Array {
     public:
@@ -405,7 +407,14 @@ inline void M2Array<T>::Relocate(const void* base) {
 
 template <class T>
 inline void M2Array<T>::Set(const T* data) {
-    this->m_offset = data ? static_cast<uint32_t>(reinterpret_cast<uintptr_t>(data) - reinterpret_cast<uintptr_t>(this)) : 0;
+    intptr_t delta = data ? reinterpret_cast<intptr_t>(data) - reinterpret_cast<intptr_t>(this) : 0;
+
+    // HoT: a target out of 32-bit reach would silently point Data() at unrelated memory.
+    if (delta != static_cast<int32_t>(delta)) {
+        M2ArrayOffsetOverflow(this, data);
+    }
+
+    this->m_offset = static_cast<uint32_t>(delta);
 }
 
 // A skin past 65535 vertex slots keeps its vertices in slot order and its triangle values hold only the low 16 bits.

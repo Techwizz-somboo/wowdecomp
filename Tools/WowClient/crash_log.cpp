@@ -10,7 +10,7 @@ static char s_logPath[MAX_PATH];
 static HANDLE s_console = INVALID_HANDLE_VALUE;
 static HANDLE s_logFile = INVALID_HANDLE_VALUE;
 
-static void LogLine(const char* text) {
+void CrashLogLine(const char* text) {
     fputs(text, stderr);
     fflush(stderr);
 
@@ -38,7 +38,7 @@ static void ModuleOffset(void* address, char* out, size_t size) {
     }
 }
 
-static void LogStack(CONTEXT* context) {
+void CrashLogStack(CONTEXT* context) {
 #if defined(_M_X64)
     HANDLE process = GetCurrentProcess();
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
@@ -72,7 +72,7 @@ static void LogStack(CONTEXT* context) {
             _snprintf_s(line, sizeof(line), _TRUNCATE, "  #%02d %s\n", depth, where);
         }
 
-        LogLine(line);
+        CrashLogLine(line);
 
         DWORD64 imageBase = 0;
         PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(frame.Rip, &imageBase, nullptr);
@@ -100,13 +100,13 @@ static LONG CALLBACK FirstChanceHandler(EXCEPTION_POINTERS* info) {
         char line[1024];
 
         if (code == EXCEPTION_ACCESS_VIOLATION && info->ExceptionRecord->NumberParameters >= 2) {
-            _snprintf_s(line, sizeof(line), _TRUNCATE, "CRASH 0x%08lX at %s (%s 0x%llX)\n", code, where, info->ExceptionRecord->ExceptionInformation[0] ? "write" : "read", static_cast<unsigned long long>(info->ExceptionRecord->ExceptionInformation[1]));
+            _snprintf_s(line, sizeof(line), _TRUNCATE, "CRASH 0x%08lX at %s (%s 0x%llX)\n", code, where, info->ExceptionRecord->ExceptionInformation[0] == 8 ? "execute" : info->ExceptionRecord->ExceptionInformation[0] ? "write" : "read", static_cast<unsigned long long>(info->ExceptionRecord->ExceptionInformation[1]));
         } else {
             _snprintf_s(line, sizeof(line), _TRUNCATE, "CRASH 0x%08lX at %s\n", code, where);
         }
 
-        LogLine(line);
-        LogStack(info->ContextRecord);
+        CrashLogLine(line);
+        CrashLogStack(info->ContextRecord);
     }
 
     return EXCEPTION_CONTINUE_SEARCH;
@@ -115,12 +115,12 @@ static LONG CALLBACK FirstChanceHandler(EXCEPTION_POINTERS* info) {
 static int CrtReportHook(int type, char* message, int* returnValue) {
     char line[4096];
     _snprintf_s(line, sizeof(line), _TRUNCATE, "CRTREPORT %s: %s%s", type == _CRT_ASSERT ? "assert" : type == _CRT_ERROR ? "error" : "warning", message ? message : "", message && strchr(message, '\n') ? "" : "\n");
-    LogLine(line);
+    CrashLogLine(line);
 
     if (type != _CRT_WARN) {
         CONTEXT context;
         RtlCaptureContext(&context);
-        LogStack(&context);
+        CrashLogStack(&context);
         ExitProcess(0x5718);
     }
 

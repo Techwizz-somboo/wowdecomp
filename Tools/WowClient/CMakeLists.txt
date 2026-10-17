@@ -15,9 +15,13 @@ endif ()
 
 option(WOWCLIENT_CRASH_LOG "Crash logger with console window and WowClient_crash.log (re/tools/build release mode turns it off)" ON)
 option(WOWCLIENT_CONSOLE "Crash logger also opens a console window" OFF)
+option(WOWCLIENT_FREEZE_DETECTOR "Force a crash on the main thread when it stops pumping messages for WOWCLIENT_FREEZE_SECONDS (default 10, 0 disables)" ON)
 set(CLIENT_TOOL_SOURCES "")
 if (WOWCLIENT_CRASH_LOG)
     list(APPEND CLIENT_TOOL_SOURCES crash_log.cpp)
+endif ()
+if (WOWCLIENT_FREEZE_DETECTOR)
+    list(APPEND CLIENT_TOOL_SOURCES freeze_detector.cpp)
 endif ()
 
 add_executable(WowClient WIN32 ${CLIENT_SOURCES} ${CLIENT_PLATFORM_SOURCES} ${CLIENT_TOOL_SOURCES})
@@ -41,6 +45,10 @@ target_link_options(WowClient PRIVATE "/INCREMENTAL:NO" "/ENTRY:start")
 
 if (WOWCLIENT_CONSOLE)
     target_compile_definitions(WowClient PRIVATE WOWCLIENT_CONSOLE)
+endif ()
+
+if (WOWCLIENT_CRASH_LOG)
+    target_compile_definitions(WowClient PRIVATE WOWCLIENT_CRASH_LOG)
 endif ()
 
 target_link_libraries(WowClient

@@ -80,6 +80,7 @@ logger off in `WowClient` with `-DWOWCLIENT_CRASH_LOG=OFF`.
 |---|---|---|
 | `WOWDECOMP_DISABLE_SIGNATURE_CHECKS` | `OFF` | Skip the MPQ file and `.toc.sig` signature checks, so modified game data and interface files load |
 | `WOWCLIENT_CRASH_LOG` | `ON` | Build `WowClient` with the crash logger |
+| `WOWCLIENT_FREEZE_DETECTOR` | `ON` | 64-bit `WowClient` force-crashes on the main thread when it hangs, so the dump shows where it was stuck. The `WOWCLIENT_FREEZE_SECONDS` env var changes the 10 second limit, 0 turns it off |
 | `WOWCLIENT_OUTPUT_OVERRIDE` | empty | Name the `WowClient` executable something other than `WowClient64` / `WowClient32` |
 
 ## Running

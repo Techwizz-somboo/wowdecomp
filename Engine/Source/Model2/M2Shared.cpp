@@ -44,12 +44,24 @@ static uint8_t* s_sequenceData;
 // STATIC: 0x00D4125C
 static uint32_t s_sequenceSize;
 
+// HoT: model data lives in the near model region on x64 and falls back to the A16 heap when it is full.
+static void FreeModelBuffer(void* buffer) {
+#if defined(WOWDECOMP_ARCH_64)
+    if (OsIsNear(buffer)) {
+        OsFreeNear(buffer);
+        return;
+    }
+#endif
+
+    SIMD::FreeA16(buffer);
+}
+
 // VERIFY: eb5cb8e9 auto
 // OFFSET: 0x00835950
 static void AsyncFileReadFreeA16(CAsyncObject* object) {
     void* buffer = object->m_buffer;
     AsyncFileReadDestroyObject(object);
-    SIMD::FreeA16(buffer);
+    FreeModelBuffer(buffer);
 }
 
 #if defined(WOWDECOMP_ARCH_64)
@@ -1895,7 +1907,15 @@ CM2SequenceLoad::~CM2SequenceLoad() {
 int32_t CM2Shared::Load(SFileImpl* file, int32_t flags, CAaBox* boundingBox) {
     this->m_flags = (this->m_flags & ~4u) | (flags ? 4 : 0);
     this->m_fileSize = SFileGetFileSize(file, nullptr);
+#if defined(WOWDECOMP_ARCH_64)
+    this->m_data = static_cast<M2Data*>(OsAllocModel(this->m_fileSize));
+
+    if (!this->m_data) {
+        this->m_data = static_cast<M2Data*>(SIMD::AllocA16(this->m_fileSize, __FILE__, __LINE__));
+    }
+#else
     this->m_data = static_cast<M2Data*>(SIMD::AllocA16(this->m_fileSize, __FILE__, __LINE__));
+#endif
 
     if (!this->m_data) {
         return 0;
@@ -2033,7 +2053,7 @@ CM2Shared::~CM2Shared() {
     this->m_modern = nullptr;
 
     if (!pending) {
-        SIMD::FreeA16(this->m_data);
+        FreeModelBuffer(this->m_data);
     }
 }
 

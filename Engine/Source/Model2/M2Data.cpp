@@ -1,4 +1,12 @@
 #include "Engine/Source/Model2/M2Data.h"
+#include <cstdio>
+#include "Engine/Source/Storm/H/storm.h"
+
+void M2ArrayOffsetOverflow(const void* array, const void* data) {
+    char message[128];
+    snprintf(message, sizeof(message), "M2Array at %p cannot reach %p with a 32-bit offset", array, data);
+    SErrDisplayAppFatalMessage(message, __FILE__, __LINE__);
+}
 
 // VERIFY: f762ece4 auto
 // OFFSET: 0x0081CE60
