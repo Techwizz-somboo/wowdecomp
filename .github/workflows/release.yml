@@ -23,7 +23,7 @@ jobs:
           submodules: recursive
 
       - name: Configure
-        run: cmake -S . -B build/x64 -A x64 -DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64
+        run: cmake -S . -B build/x64 -A x64 -DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64 -DWOWDECOMP_DISABLE_SIGNATURE_CHECKS=1 -DWOWCLIENT_FREEZE_DETECTOR=1 -DWOWCLIENT_CRASH_LOG=1
 
       - name: Build
         run: cmake --build build/x64 --config Release --target WowClient --parallel
