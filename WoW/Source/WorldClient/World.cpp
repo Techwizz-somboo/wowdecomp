@@ -1,5 +1,6 @@
 #include "World.h"
 #include "HoT/Editor/Map/WorldHooks.h"
+#include "HoT/Profiler/Profiler.h"
 #include <cstdlib>
 #include <new>
 #include <algorithm>
@@ -3008,6 +3009,7 @@ void CWorldScene::RenderMapObjDefGroups() {
     while (group) {
         CMapObjDefGroup* next = CWorldScene::sortTable.m_mapObjDefGroup.Next(group);
         group->m_sortTableLink.Unlink();
+        HoT::Profiler::Count(HoT::Profiler::Counter::MapObjGroups);
 
         CMapObjDef* mapObjDef = static_cast<CMapObjDef*>(group->m_parentLinkList.Head()->m_ref);
         CMapObj* mapObj = mapObjDef->m_owner;
@@ -3554,6 +3556,7 @@ void CWorldScene::RenderDetailDoodads() {
         next = CWorldScene::sortTable.m_detailDoodadInstList.Next(inst);
         CMapChunk* chunk = inst->m_chunk;
         inst->m_age = 0;
+        HoT::Profiler::Count(HoT::Profiler::Counter::DetailDoodads);
 
         CM2Lighting lighting(chunk->m_sphere);
         World::s_m2Scene->SelectLights(&lighting);

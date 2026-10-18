@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <new>
 #include "Engine/Source/Gx/CGxDeviceD3d9Ex/CGxDeviceD3d9Ex.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Gx/Blit.h"
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxPool.h"
@@ -2626,6 +2627,8 @@ int32_t CGxDeviceD3d9Ex::ICreateD3dDevice(const CGxFormat& format) {
 // VERIFY: 22679807 manual
 // OFFSET: 0x006A1CE0
 void CGxDeviceD3d9Ex::IReleaseD3dResources(int32_t freeTextures) {
+    // HoT: the profiler timestamp queries go away with the other device resources.
+    HoT::Profiler::OnDeviceLost();
     this->ITexForceRecreation(freeTextures);
     this->IReleaseD3dShaders(freeTextures);
     this->IReleaseD3dPools(freeTextures);
@@ -3061,11 +3064,22 @@ void CGxDeviceD3d9Ex::ScenePresent() {
             this->DeviceScreenShot();
         }
 
-        this->WaitForFPSCap();
+        HoT::Profiler::OnPresentBegin();
 
-        if (FAILED(this->m_d3dDevice->Present(nullptr, nullptr, nullptr, nullptr))) {
-            this->m_context = 0;
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::FpsCap);
+            this->WaitForFPSCap();
         }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Swap);
+
+            if (FAILED(this->m_d3dDevice->Present(nullptr, nullptr, nullptr, nullptr))) {
+                this->m_context = 0;
+            }
+        }
+
+        HoT::Profiler::OnPresentEnd();
 
         if (this->m_d3dStereoHandle && this->m_d3dStereoDirty) {
             this->m_d3dStereoDirty = 0;
@@ -3088,7 +3102,16 @@ void CGxDeviceD3d9Ex::Draw(CGxBatch* batch, int32_t count) {
         return;
     }
 
-    this->IStateSync();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::StateSync);
+        HoT::Profiler::Count(HoT::Profiler::Counter::StateSyncs);
+        this->IStateSync();
+    }
+
+    if (HoT::Profiler::g_enabled) {
+        uint32_t verts = count ? batch->m_maxIndex - batch->m_minIndex + 1 : batch->m_count;
+        HoT::Profiler::OnDraw(this->PrimCalcCount(batch->m_primType, batch->m_count), verts, count != 0, static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_VertexShader].m_data.p), static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_PixelShader].m_data.p));
+    }
 
     uint32_t baseVertexIndex = 0;
 

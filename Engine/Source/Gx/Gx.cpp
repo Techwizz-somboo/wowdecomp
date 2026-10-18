@@ -1,6 +1,7 @@
 #include <cstdarg>
 #include <cstdint>
 #include <cstdlib>
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Gx/Buffer.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxPool.h"
@@ -1095,8 +1096,14 @@ void GxuFlushDrawList(EGxuDrawListCategory category, const C3Vector& viewPos) {
 // VERIFY: 456ff928 auto
 // OFFSET: 0x00682A00
 void GxScenePresent() {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Present);
     C3Vector viewPos(0.0f, 0.0f, 0.0f);
-    GxuFlushDrawList(GxuCat_2, viewPos);
+
+    {
+        HoT::Profiler::Scope flushScope(HoT::Profiler::Zone::PresentFlush);
+        GxuFlushDrawList(GxuCat_2, viewPos);
+    }
+
     g_theGxDevicePtr->ScenePresent();
 }
 

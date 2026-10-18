@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
+#include "HoT/Profiler/Profiler.h"
 #include <cstring>
 #include <emmintrin.h>
 #include <new>
@@ -5278,6 +5279,7 @@ void CCharacterComponent::DestroyComponentFreeLists() {
 // VERIFY: 0f866952 manual
 // OFFSET: 0x004F18F0
 int32_t CCharacterComponent::Update(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::CharComponents);
     int32_t hasContext = g_theGxDevicePtr ? g_theGxDevicePtr->CapsHasContext(-1) : 0;
 
     for (CCharacterComponent* component = CCharacterComponent::s_queue.Head(); component;) {

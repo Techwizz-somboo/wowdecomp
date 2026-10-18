@@ -1,5 +1,6 @@
 #include "Spell_C.h"
 #include "HoT/DB/Custom.h"
+#include "HoT/Profiler/Profiler.h"
 #include "HoT/Features/Features.h"
 #include "WoW/Source/Magic/Types.h"
 #include "Engine/Source/Base/CDataStore.h"
@@ -7424,6 +7425,7 @@ void Spell_C_CancelPlayerSpells() {
 // VERIFY: b8318ed4 manual
 // OFFSET: 0x0080DDD0
 static int32_t Spell_C_Idle(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::SpellIdle);
     for (PeriodicClientTrigger* trigger = s_periodicClientTriggers.Head(); trigger; trigger = s_periodicClientTriggers.Next(trigger)) {
         if (static_cast<int32_t>(OsGetAsyncTimeMs() - trigger->m_nextTime) < 0) {
             continue;

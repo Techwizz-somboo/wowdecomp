@@ -1,5 +1,6 @@
 #include "GameUI.h"
 #include "HoT/HoT.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Controller/Controller.h"
 #include "HoT/Game/Session.h"
 #include "HoT/Runtime/SharedXML.h"
@@ -2003,6 +2004,7 @@ void CGGameUI::InitializeGame() {
 // VERIFY: fa2430a7 manual
 // OFFSET: 0x0052AF40
 int32_t CGGameUI::Idle(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::GameUiIdle);
     if (g_theGxDevicePtr->StereoEnabled()) {
         float convergence = g_theGxDevicePtr->StereoGetConvergence();
 

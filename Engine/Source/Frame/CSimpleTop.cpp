@@ -27,6 +27,7 @@
 #include "Engine/Source/Tempest/CRect.h"
 #include "HoT/Runtime/Layout.h"
 #include "HoT/Runtime/LuaRuntime.h"
+#include "HoT/Profiler/Profiler.h"
 
 // STATIC: 0x00B499A8
 CSimpleTop* CSimpleTop::s_instance;
@@ -689,6 +690,7 @@ void CFrameStrata::CheckOcclusion() {
 // OFFSET: 0x00494EE0
 int32_t CFrameStrata::BuildBatches(int32_t noMouseCapture) {
     HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Build);
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::UiBuild);
 
     if (this->m_levelsDirty) {
         this->CheckOcclusion();
@@ -714,6 +716,7 @@ int32_t CFrameStrata::BuildBatches(int32_t noMouseCapture) {
 // OFFSET: 0x00494F30
 void CFrameStrata::RenderBatches() {
     HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Draw);
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::UiDraw);
 
     for (uint32_t level = 0; level < this->m_topLevel; level++) {
         CFrameStrataNode* node = this->m_levels[level];
@@ -882,6 +885,7 @@ int32_t CSimpleTop::StartMoveOrResizeFrame(const CMouseEvent& evt, MOVERESIZE_RE
 // OFFSET: 0x00495320
 void CSimpleTop::OnLayerUpdate(float elapsedSec) {
     HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::Update);
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::UiUpdate);
     CSimpleFrame* frame;
 
     while ((frame = this->m_destroyed.Head()) != nullptr) {

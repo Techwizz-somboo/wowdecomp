@@ -1,6 +1,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
+#include "HoT/Profiler/Profiler.h"
 #include <cstring>
 #include <limits>
 #include "Engine/Source/SoundEngine/SoundEngine.h"
@@ -2685,6 +2686,7 @@ static void ProcessGoGoGoList() {
 // VERIFY: 1311c084 auto
 // OFFSET: 0x0087C4B0
 int32_t SE2::HeartBeat(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Sound);
     if (!s_initialized) {
         s_system->update();
         return 1;

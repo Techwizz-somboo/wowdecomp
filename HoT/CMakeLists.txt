@@ -38,6 +38,18 @@ add_custom_command(
 )
 target_sources(HoT PRIVATE "${HOT_EDITOR_UI_SOURCE}")
 
+# The graphics profiler window is embedded the same way and served as Interface\GraphicsProfiler\...
+file(GLOB_RECURSE HOT_PROFILER_UI_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Profiler/Interface/*")
+set(HOT_PROFILER_UI_SOURCE "${HOT_VERSION_DIR}/HoT/ProfilerResources.cpp")
+add_custom_command(
+    OUTPUT "${HOT_PROFILER_UI_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}/Profiler/Interface" "-DOUTPUT=${HOT_PROFILER_UI_SOURCE}" "-DSYMBOL=g_profilerFiles" "-DCOUNT=g_profilerFileCount" -P "${CMAKE_CURRENT_SOURCE_DIR}/Editor/EmbedResources.cmake"
+    DEPENDS ${HOT_PROFILER_UI_FILES} "${CMAKE_CURRENT_SOURCE_DIR}/Editor/EmbedResources.cmake"
+    COMMENT "Embedding the graphics profiler UI"
+    VERBATIM
+)
+target_sources(HoT PRIVATE "${HOT_PROFILER_UI_SOURCE}")
+
 target_include_directories(HoT
     PUBLIC
         ${CMAKE_SOURCE_DIR}

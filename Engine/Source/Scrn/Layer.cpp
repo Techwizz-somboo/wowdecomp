@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <new>
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Event/Event.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
@@ -209,7 +210,11 @@ static int32_t OnPaint(const void* data, void* param) {
         }
 
         GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
-        GxuFontUpdate();
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::FontUpdate);
+            GxuFontUpdate();
+        }
 
         if (!s_noPresent) {
             if (s_screenshotCallback) {

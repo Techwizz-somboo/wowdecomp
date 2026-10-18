@@ -6,6 +6,7 @@
 #include <cstring>
 #include <new>
 #include <xmmintrin.h>
+#include "HoT/Profiler/Profiler.h"
 #if defined(_MSC_VER)
 #include <malloc.h>
 #else
@@ -2492,6 +2493,9 @@ void CM2Model::AnimateST() {
     }
 
     M2Data* data = this->m_shared->m_data;
+    HoT::Profiler::Count(HoT::Profiler::Counter::M2Animated);
+    HoT::Profiler::Count(HoT::Profiler::Counter::ParticleEmitters, data->m_particles.m_count);
+    HoT::Profiler::Count(HoT::Profiler::Counter::Ribbons, data->m_ribbons.m_count);
     CM2Model* parent = this->m_attachParent;
 
     if (!parent || (this->m_fFlags ^= (this->m_fFlags ^ parent->m_fFlags) & 0x8000, parent->m_flags & 1)) {
@@ -2587,13 +2591,18 @@ void CM2Model::AnimateST() {
         emitter->SetDataEnabled(ribbon->m_visibilityTrack.m_currentValue != 0);
 
         if (this->m_fFlags & 0x8000) {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::RibbonUpdate);
             emitter->SetPos(transform, C3Vector(0.0f, 0.0f, 0.0f), static_cast<const C44Matrix*>(this->m_frameOfReference));
             emitter->Update(deltaTime, ribbon->m_visibilityTrack.m_currentValue == 0);
         }
     }
 
-    for (uint32_t i = 0; i < data->m_particles.m_count; i++) {
-        this->AnimateParticleST(deltaTime, i);
+    if (data->m_particles.m_count) {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ParticleUpdate);
+
+        for (uint32_t i = 0; i < data->m_particles.m_count; i++) {
+            this->AnimateParticleST(deltaTime, i);
+        }
     }
 
     if (this->m_fFlags & 8) {

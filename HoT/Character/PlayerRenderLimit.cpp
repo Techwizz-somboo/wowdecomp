@@ -4,8 +4,11 @@
 #include <vector>
 #include "HoT/Character/PlayerRenderLimit.h"
 #include "HoT/Core/CVars.h"
+#include "HoT/Core/Chat.h"
+#include "HoT/Core/Hotkeys.h"
 #include "HoT/Core/Log.h"
 #include "HoT/Core/Modules.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
@@ -63,6 +66,7 @@ struct Scan {
 };
 
 static int32_t s_limit = 0;
+static bool s_unlimited = false;
 static uint32_t s_nextEvaluateMs = 0;
 static std::unordered_map<uint64_t, Relation> s_relations;
 static std::unordered_map<uint64_t, HiddenState> s_hidden;
@@ -273,7 +277,7 @@ static void Evaluate(uint32_t now) {
 
     s_nextHidden.clear();
 
-    if (s_candidates.size() > static_cast<size_t>(s_limit)) {
+    if (!s_unlimited && s_candidates.size() > static_cast<size_t>(s_limit)) {
         std::sort(s_candidates.begin(), s_candidates.end(), [](const Candidate& a, const Candidate& b) {
             if (a.m_relation != b.m_relation) {
                 return a.m_relation < b.m_relation;
@@ -305,10 +309,27 @@ static void Evaluate(uint32_t now) {
     ReleaseStale(now);
 }
 
+// F10 lifts the limit for this session, hidden players come back on their next update.
+static void ToggleUnlimited() {
+    s_unlimited = !s_unlimited;
+    s_hidden.clear();
+    s_nextHidden.clear();
+    s_nextEvaluateMs = 0;
+
+    if (s_unlimited) {
+        Chat::Print("Player render limit off, every player is drawn.");
+    } else {
+        Chat::Print("Player render limit on, at most %d other players are drawn.", s_limit);
+    }
+}
+
 static void Tick() {
     if (!s_limit) {
         return;
     }
+
+    Profiler::Count(Profiler::Counter::PlayersHidden, static_cast<uint32_t>(s_hidden.size()));
+    Profiler::Count(Profiler::Counter::PlayersVisible, static_cast<uint32_t>(s_candidates.size() - (std::min)(s_candidates.size(), s_hidden.size())));
 
     uint32_t now = OsGetAsyncTimeMs();
 
@@ -328,6 +349,7 @@ class PlayerRenderLimitModule : public Module {
 
     void OnInitializeGlobal() override {
         CVars::Register("playerRenderLimit", "Most other players drawn at once. Party, raid, friends and guild members are kept first, then the nearest. Clamped to 20 through 100.", "100", OnLimitChanged);
+        Hotkeys::Register("playerRenderLimitToggleKey", "Key that turns the player render limit off and back on for this session, NONE turns it off", "F10", ToggleUnlimited);
     }
 
     void OnEnterWorld() override {

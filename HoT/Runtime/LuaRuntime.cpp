@@ -12,6 +12,7 @@
 #include "HoT/Core/Log.h"
 #include "HoT/Core/Modules.h"
 #include "HoT/Lua/Script.h"
+#include "HoT/Profiler/Profiler.h"
 #include "HoT/Runtime/LuaPool.h"
 #include <windows.h>
 #include "Engine/Source/lua-5.1/src/lgc.h"
@@ -470,7 +471,10 @@ void EndPaint() {
         return;
     }
 
-    PaceGc(L);
+    {
+        Profiler::Scope profilerScope(Profiler::Zone::LuaGc);
+        PaceGc(L);
+    }
 
     if (g_statsEnabled) {
         RollFrame(L);

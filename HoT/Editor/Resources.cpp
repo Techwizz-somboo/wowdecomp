@@ -10,8 +10,19 @@ namespace HoT::Editor::Resources {
 
 extern const EmbeddedFile g_embeddedFiles[];
 extern const size_t g_embeddedFileCount;
+extern const EmbeddedFile g_profilerFiles[];
+extern const size_t g_profilerFileCount;
 
-static const char kPrefix[] = "Interface\\GameEditor\\";
+struct EmbeddedTable {
+    const char* prefix;
+    const EmbeddedFile* files;
+    const size_t* count;
+};
+
+static const EmbeddedTable s_tables[] = {
+    { "Interface\\GameEditor\\", g_embeddedFiles, &g_embeddedFileCount },
+    { "Interface\\GraphicsProfiler\\", g_profilerFiles, &g_profilerFileCount },
+};
 
 // Segoe UI ships with Windows, so the editor reads it from there instead of embedding it.
 struct SystemFont {
@@ -45,14 +56,10 @@ static bool SamePath(const char* a, const char* b) {
     return *a == *b;
 }
 
-static bool HasPrefix(const char* name) {
-    if (!name) {
-        return false;
-    }
-
-    for (size_t i = 0; i < sizeof(kPrefix) - 1; i++) {
+static bool StartsWith(const char* name, const char* prefix) {
+    for (size_t i = 0; prefix[i]; i++) {
         char c = name[i] == '/' ? '\\' : name[i];
-        char p = kPrefix[i];
+        char p = prefix[i];
 
         if (c >= 'A' && c <= 'Z') {
             c = static_cast<char>(c - 'A' + 'a');
@@ -70,10 +77,34 @@ static bool HasPrefix(const char* name) {
     return true;
 }
 
+static const EmbeddedTable* TableFor(const char* name) {
+    if (!name) {
+        return nullptr;
+    }
+
+    for (const EmbeddedTable& table : s_tables) {
+        if (StartsWith(name, table.prefix)) {
+            return &table;
+        }
+    }
+
+    return nullptr;
+}
+
+static bool HasPrefix(const char* name) {
+    return TableFor(name) != nullptr;
+}
+
 static const EmbeddedFile* FindEmbedded(const char* name) {
-    for (size_t i = 0; i < g_embeddedFileCount; i++) {
-        if (SamePath(g_embeddedFiles[i].path, name)) {
-            return &g_embeddedFiles[i];
+    const EmbeddedTable* table = TableFor(name);
+
+    if (!table) {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < *table->count; i++) {
+        if (SamePath(table->files[i].path, name)) {
+            return &table->files[i];
         }
     }
 

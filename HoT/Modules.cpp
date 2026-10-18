@@ -14,6 +14,7 @@
 #include "HoT/Lua/Builtins.h"
 #include "HoT/MSDF/MSDF.h"
 #include "HoT/Models/ModernM2.h"
+#include "HoT/Profiler/Profiler.h"
 #include "HoT/Runtime/Cvars.h"
 #include "HoT/Runtime/LauncherSettings.h"
 #include "HoT/Runtime/LinkWatchdog.h"
@@ -44,6 +45,7 @@ std::vector<Module*>& Modules() {
         Models::GetModule(),
         Builtins::GetModule(),
         Dev::GetModule(),
+        Profiler::GetModule(),
         Feature::GetModule(),
         AuraValues::GetModule(),
         CooldownRate::GetModule(),

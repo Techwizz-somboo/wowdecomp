@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include "HoT/Profiler/Profiler.h"
 #include <new>
 #include "Engine/Source/Model2/M2Cache.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
@@ -230,6 +231,8 @@ void CM2Cache::Destroy() {
 // VERIFY: ac4bc72b manual
 // OFFSET: 0x0081C390
 CM2Shared* CM2Cache::CreateShared(const char* name, uint32_t flags) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ModelCreate);
+    HoT::Profiler::Count(HoT::Profiler::Counter::ModelCreates);
     char path[260];
     SStrCopy(path, name, sizeof(path));
     SStrLower(path);

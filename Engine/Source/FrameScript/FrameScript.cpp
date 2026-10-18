@@ -14,6 +14,7 @@
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "Engine/Source/lua-5.1/src/lualib.h"
 #include "HoT/Runtime/LuaRuntime.h"
+#include "HoT/Profiler/Profiler.h"
 
 // STATIC: 0x00D3F780
 double s_scriptTimeDivisor;
@@ -1219,6 +1220,8 @@ const char* FrameScript_GetText(const char* token, int32_t count, FRAMESCRIPT_GE
 // OFFSET: 0x00819EA0
 void FrameScript_Execute(int32_t function, FrameScript_Object* object, int32_t argCount, const char* taint, FrameScript_EventObject* event) {
     HoT::LuaRuntime::HandlerTimer handlerTimer;
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::LuaHandlers);
+    HoT::Profiler::Count(HoT::Profiler::Counter::LuaCalls);
     lua_State* L = s_context;
     int64_t start = 0;
 

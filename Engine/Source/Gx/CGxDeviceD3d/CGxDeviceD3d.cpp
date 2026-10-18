@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include "HoT/Runtime/LuaRuntime.h"
+#include "HoT/Profiler/Profiler.h"
 #include <malloc.h>
 #include "Engine/Source/Gx/CGxDeviceD3d/CGxDeviceD3d.h"
 #include "Engine/Source/Gx/Blit.h"
@@ -131,6 +132,8 @@ int32_t CGxDeviceD3d::BufUnlock(CGxBuf* buf, uint32_t size) {
 // VERIFY: e175e4e3 manual
 // OFFSET: 0x0068FB10
 char* CGxDeviceD3d::IBufLock(CGxBuf* buf) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::BufLocks);
+    HoT::Profiler::Count(HoT::Profiler::Counter::BufLockBytes, buf->m_size);
     CGxPool* pool = buf->m_pool;
 
     if (!this->m_context) {
@@ -144,6 +147,7 @@ char* CGxDeviceD3d::IBufLock(CGxBuf* buf) {
 
         if (index + buf->m_size > static_cast<uint32_t>(pool->m_size)) {
             flags = D3DLOCK_DISCARD;
+            HoT::Profiler::Count(HoT::Profiler::Counter::BufDiscards);
             pool->Discard();
             buf->m_index = 0;
             pool->m_offset = buf->m_size;
@@ -206,6 +210,7 @@ char* CGxDeviceD3d::IBufLock(CGxBuf* buf) {
 // VERIFY: 14c57719 auto
 // OFFSET: 0x0068FCE0
 char* CGxDeviceD3d::BufLock(CGxBuf* buf) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::BufLock);
     CGxDevice::BufLock(buf);
 
     return this->IBufLock(buf);
@@ -621,6 +626,7 @@ void CGxDeviceD3d::DeviceOverride(EGxOverride override, uint32_t value) {
 // VERIFY: 46e713d8 auto
 // OFFSET: 0x0069FF80
 void CGxDeviceD3d::PoolSizeSet(CGxPool* pool, uint32_t size) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::PoolResizes);
     this->IReleaseD3dPool(pool);
     pool->m_size = size;
 
@@ -808,6 +814,8 @@ void CGxDeviceD3d::XformSetView(const C44Matrix& matrix) {
 // VERIFY: 4be0f29d auto
 // OFFSET: 0x006AA070
 void CGxDeviceD3d::IShaderCreatePixel(CGxShader* shader) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ShaderCreate);
+    HoT::Profiler::Count(HoT::Profiler::Counter::ShaderCreates);
     shader->m_valid = 0;
 
     if (!this->m_context) {
@@ -827,6 +835,8 @@ void CGxDeviceD3d::IShaderCreatePixel(CGxShader* shader) {
 // VERIFY: 42b1d4b6 auto
 // OFFSET: 0x006AA0D0
 void CGxDeviceD3d::IShaderCreateVertex(CGxShader* shader) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ShaderCreate);
+    HoT::Profiler::Count(HoT::Profiler::Counter::ShaderCreates);
     shader->m_valid = 0;
 
     if (!this->m_context) {
@@ -1534,6 +1544,7 @@ void CGxDeviceD3d::ISetTexture(uint32_t tmu, CGxTex* texId) {
     }
 
     if (texId) {
+        HoT::Profiler::Count(HoT::Profiler::Counter::TexBinds);
         this->ITexMarkAsUpdated(texId);
         this->m_d3dDevice->SetTexture(tmu, static_cast<IDirect3DBaseTexture9*>(texId->m_apiSpecificData));
 
@@ -1616,6 +1627,7 @@ void CGxDeviceD3d::ISetTexGen(uint32_t tmu, int32_t texGen) {
 // VERIFY: 1b818712 manual
 // OFFSET: 0x006A4C30
 void CGxDeviceD3d::IRsSendToHw(EGxRenderState which) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::RenderStates);
     CGxStateBom& value = this->m_appRenderStates[which].m_value;
 
     switch (which) {
@@ -2110,6 +2122,7 @@ void CGxDeviceD3d::IXformSetTex(uint32_t tmu) {
 // VERIFY: e6b411da manual
 // OFFSET: 0x006A5C70
 void CGxDeviceD3d::IBindPixelShader(CGxShader* shader) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::PixelShaderBinds);
     if (shader) {
         if (!shader->m_loaded) {
             this->IShaderCreatePixel(shader);
@@ -2159,6 +2172,7 @@ void CGxDeviceD3d::IXformSetViewport() {
 // VERIFY: 2f91f397 manual
 // OFFSET: 0x006A9FE0
 void CGxDeviceD3d::IShaderConstantsFlush() {
+    HoT::Profiler::Count(HoT::Profiler::Counter::ConstantFlushes);
     ShadowConstants& vs = CGxDevice::s_shadowConstants[1];
 
     if (vs.dirtyMin <= vs.dirtyMax) {
@@ -2181,6 +2195,7 @@ void CGxDeviceD3d::IShaderConstantsFlush() {
 // VERIFY: 8d590c92 manual
 // OFFSET: 0x006AA2F0
 void CGxDeviceD3d::IBindVertexShader(CGxShader* shader) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::VertexShaderBinds);
     if (shader) {
         if (!shader->m_loaded) {
             this->IShaderCreateVertex(shader);
@@ -2657,6 +2672,8 @@ int32_t CGxDeviceD3d::ICreateD3dDevice(const CGxFormat& format) {
 // VERIFY: 7e7b165d manual
 // OFFSET: 0x00690150
 void CGxDeviceD3d::IReleaseD3dResources(int32_t freeTextures) {
+    // HoT: the profiler timestamp queries go away with the other device resources.
+    HoT::Profiler::OnDeviceLost();
     this->ITexForceRecreation(freeTextures);
     this->IReleaseD3dShaders(freeTextures);
     this->IReleaseD3dPools(freeTextures);
@@ -2993,6 +3010,7 @@ void CGxDeviceD3d::ITexForceRecreation(int32_t all) {
 // VERIFY: d8c0bcf5 auto
 // OFFSET: 0x006A2BB0
 void CGxDeviceD3d::TexDestroy(CGxTex* texId) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::TexDestroys);
     if (!texId->m_needsCreation && (texId->m_apiSpecificData || texId->m_apiSpecificData2)) {
         static_cast<IDirect3DBaseTexture9*>(texId->m_apiSpecificData)->Release();
         texId->m_apiSpecificData = nullptr;
@@ -3004,6 +3022,8 @@ void CGxDeviceD3d::TexDestroy(CGxTex* texId) {
 // VERIFY: 571fccbe manual
 // OFFSET: 0x006A2C00
 void CGxDeviceD3d::ITexCreate(CGxTex* texId) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::TexCreate);
+    HoT::Profiler::Count(HoT::Profiler::Counter::TexCreates);
     uint32_t width;
     uint32_t height;
     uint32_t baseMip;
@@ -3065,6 +3085,13 @@ void CGxDeviceD3d::ITexCreate(CGxTex* texId) {
 // OFFSET: 0x006A2D80
 void CGxDeviceD3d::ITexUpload(CGxTex* texId) {
     HoT::LuaRuntime::Timer timer(HoT::LuaRuntime::Phase::TexUpload);
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::TexUpload);
+    HoT::Profiler::Count(HoT::Profiler::Counter::TexUploads);
+
+    if (HoT::Profiler::g_enabled) {
+        HoT::Profiler::Count(HoT::Profiler::Counter::TexUploadBytes, this->ITexBitsSize(texId, 0xFFFFFFFF, 0xFFFFFFFF));
+    }
+
     uint32_t texelStrideInBytes;
     const void* texels = nullptr;
     texId->m_userFunc(GxTex_Lock, texId->m_width, texId->m_height, 0, 0, texId->m_userArg, texelStrideInBytes, texels);
@@ -3234,6 +3261,8 @@ void CGxDeviceD3d::ScenePresent() {
         this->ICursorDraw();
 
         if (this->m_format.m_fixLag) {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::GpuSync);
+
             if (this->m_eventQuery) {
                 this->m_eventQuery->Issue(D3DISSUE_END);
 
@@ -3262,11 +3291,22 @@ void CGxDeviceD3d::ScenePresent() {
             this->DeviceScreenShot();
         }
 
-        this->WaitForFPSCap();
+        HoT::Profiler::OnPresentBegin();
 
-        if (FAILED(this->m_d3dDevice->Present(nullptr, nullptr, nullptr, nullptr))) {
-            this->m_context = 0;
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::FpsCap);
+            this->WaitForFPSCap();
         }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Swap);
+
+            if (FAILED(this->m_d3dDevice->Present(nullptr, nullptr, nullptr, nullptr))) {
+                this->m_context = 0;
+            }
+        }
+
+        HoT::Profiler::OnPresentEnd();
 
         if (this->m_d3dStereoHandle && this->m_d3dStereoDirty) {
             this->m_d3dStereoDirty = 0;
@@ -3289,12 +3329,21 @@ void CGxDeviceD3d::Draw(CGxBatch* batch, int32_t count) {
         return;
     }
 
-    this->IStateSync();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::StateSync);
+        HoT::Profiler::Count(HoT::Profiler::Counter::StateSyncs);
+        this->IStateSync();
+    }
 
     uint32_t baseVertexIndex = 0;
 
     if (!this->m_caps.m_streamOffset) {
         baseVertexIndex = this->m_primVertexFormatBuf[0]->m_index / this->m_primVertexFormatBuf[0]->m_itemSize;
+    }
+
+    if (HoT::Profiler::g_enabled) {
+        uint32_t verts = count ? batch->m_maxIndex - batch->m_minIndex + 1 : batch->m_count;
+        HoT::Profiler::OnDraw(this->PrimCalcCount(batch->m_primType, batch->m_count), verts, count != 0, static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_VertexShader].m_data.p), static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_PixelShader].m_data.p));
     }
 
     if (count) {
@@ -3397,6 +3446,8 @@ void CGxDeviceD3d::SceneClear(uint32_t mask, CImVector color) {
     if (!this->m_context) {
         return;
     }
+
+    HoT::Profiler::Count(HoT::Profiler::Counter::Clears);
 
     DWORD flags = (mask & GxBufferBit_Color) != 0;
 
@@ -3697,6 +3748,7 @@ void CGxDeviceD3d::DeviceSetRenderTarget(EGxBuffer buffer, CGxTex* texture, uint
         return;
     }
 
+    HoT::Profiler::Count(HoT::Profiler::Counter::RenderTargets);
     CGxDevice::DeviceSetRenderTarget(buffer, texture, plane);
 
     if (target.m_apiSpecific) {

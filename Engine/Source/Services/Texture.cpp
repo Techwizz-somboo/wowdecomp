@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/BLPFile/blp.h"
 #include "Engine/Source/Event/Event.h"
@@ -1464,6 +1465,7 @@ void TextureFreeGxTex(CGxTex* gxTex, const char* name) {
 // VERIFY: c22c0284 auto
 // OFFSET: 0x004B7200
 int32_t TextureUpdate(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::TexturePoll);
     s_currentTime = OsGetAsyncTimeMs();
     TextureCacheUpdate();
 

@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include "Engine/Source/Model2/CM2SceneRender.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
@@ -699,6 +700,7 @@ void CM2SceneRender::DrawBatchDoodad(M2Element* elements, uint32_t* indices) {
 // VERIFY: 96d74aec manual
 // OFFSET: 0x00820F40
 void CM2SceneRender::DrawRibbon() {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Ribbons);
     DebugLog("Ribbon: model=%s index=%d", this->m_curModel->m_shared->m_fileNameWithoutPath, this->m_curElement->m_index);
 
     this->m_curMaterial = &this->m_data->m_materials[this->m_data->m_ribbons[this->m_curElement->m_index].m_materialIndices[0]];
@@ -733,6 +735,7 @@ void CM2SceneRender::RenderBatchedParticle(CParticleEmitter2* emitter, CGxBuf* b
 // VERIFY: 1504273d manual
 // OFFSET: 0x00821100
 uint32_t CM2SceneRender::DrawBatchedParticle(uint32_t index, M2Element* elements, uint32_t* indices, uint32_t count) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Particles);
     uint32_t* first = &indices[index];
     M2Element* element = &elements[*first];
     CParticleEmitter2* emitter = element->m_emitter;
@@ -847,6 +850,7 @@ uint32_t CM2SceneRender::DrawBatchedParticle(uint32_t index, M2Element* elements
 // VERIFY: 8d8a4c2d manual
 // OFFSET: 0x008214E0
 uint32_t CM2SceneRender::DrawParticle(uint32_t index, M2Element* elements, uint32_t* indices, uint32_t count) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Particles);
     CParticleEmitter2* emitter = this->m_curElement->m_emitter;
     uint32_t flags = emitter->m_params.m_materialFlags;
     M2Material material;
@@ -968,6 +972,7 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
     }
 
     this->m_pass = pass;
+    HoT::Profiler::Count(HoT::Profiler::Counter::M2Elements, count);
 
     for (uint32_t i = 0; i < count; i++) {
         M2Element* element = &elements[indices[i]];
@@ -988,6 +993,7 @@ void CM2SceneRender::Draw(M2PASS pass, M2Element* elements, uint32_t* indices, u
         this->m_curMaterial = &this->m_defaultMaterial;
         this->m_data = this->m_curShared->m_data;
         this->m_cache->LinkToSharedUpdateList(this->m_curShared);
+        HoT::Profiler::ModelScope modelScope(this->m_curModel);
 
         switch (this->m_curElement->m_type) {
             case 0:

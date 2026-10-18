@@ -1,6 +1,7 @@
 #include <cstddef>
 #include <cstdint>
 #include "Engine/Source/Services/AsyncFile.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Base/Prop.h"
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/Event/Event.h"
@@ -123,6 +124,7 @@ void AsyncFileReadUnloadPostList() {
 // VERIFY: acd49bbd manual
 // OFFSET: 0x004B9B20
 int32_t AsyncFileReadPollHandler(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::AsyncFile);
     uint32_t start = OsGetAsyncTimeMs();
 
     while (true) {
@@ -274,6 +276,9 @@ int32_t NetQueuePromoteLocalFiles(const void* data, void* param) {
 void AsyncFileReadWait(CAsyncObject* object) {
     // STATIC: 0x00B4A26C
     static int32_t s_waiting;
+
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::LoadWait);
+    HoT::Profiler::Count(HoT::Profiler::Counter::LoadWaits);
 
     if (s_waiting) {
         SErrDisplayAppFatal("AsyncFileReadWait(): s_waiting != FALSE");

@@ -13,6 +13,7 @@
 #include "Engine/Source/Os/System.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/Profiler/Profiler.h"
 
 namespace Event {
     // STATIC: 0x00AC0DC0
@@ -564,6 +565,8 @@ int32_t SchedulerThreadProcProcess(uint32_t hThread, int32_t* watchdogStarted) {
         return 1;
     }
 
+    HoT::Profiler::OnSchedulerTick();
+
     EvtContext* context = GetNextContext(hThread);
     int32_t timeout = -1;
 
@@ -585,6 +588,7 @@ int32_t SchedulerThreadProcProcess(uint32_t hThread, int32_t* watchdogStarted) {
         OsNetPump(timeout);
         result = 258;
     } else {
+        HoT::Profiler::Scope waitScope(HoT::Profiler::Zone::Wait);
         result = Event::s_threadSlots[hThread]->m_wakeEvent.Wait(timeout);
     }
 
@@ -606,12 +610,19 @@ int32_t SchedulerThreadProcProcess(uint32_t hThread, int32_t* watchdogStarted) {
         float elapsedSec = static_cast<float>(static_cast<int32_t>(currTime - context->m_schedLastIdle)) * 0.001f;
         context->m_schedLastIdle = currTime;
 
-        IEvtDispatchUpdate(context, currTime, elapsedSec);
-        IEvtTimerDispatch(context);
+        {
+            HoT::Profiler::Scope updateScope(HoT::Profiler::Zone::Update);
+            IEvtDispatchUpdate(context, currTime, elapsedSec);
+            IEvtTimerDispatch(context);
+        }
 
         if (context->m_schedFlags & 2) {
             int32_t shutdown = 0;
-            IEvtInputProcess(context, &shutdown);
+
+            {
+                HoT::Profiler::Scope inputScope(HoT::Profiler::Zone::Input);
+                IEvtInputProcess(context, &shutdown);
+            }
 
             if (shutdown) {
                 CloseContext(context);
@@ -619,10 +630,25 @@ int32_t SchedulerThreadProcProcess(uint32_t hThread, int32_t* watchdogStarted) {
             }
         }
 
-        SynthesizePoll(context);
-        IEvtQueueDispatchAll(context);
-        SynthesizeIdle(context, currTime, elapsedSec);
-        SynthesizePaint(context);
+        {
+            HoT::Profiler::Scope pollScope(HoT::Profiler::Zone::Poll);
+            SynthesizePoll(context);
+        }
+
+        {
+            HoT::Profiler::Scope queueScope(HoT::Profiler::Zone::Queue);
+            IEvtQueueDispatchAll(context);
+        }
+
+        {
+            HoT::Profiler::Scope idleScope(HoT::Profiler::Zone::Idle);
+            SynthesizeIdle(context, currTime, elapsedSec);
+        }
+
+        {
+            HoT::Profiler::Scope paintScope(HoT::Profiler::Zone::Paint);
+            SynthesizePaint(context);
+        }
     }
 
     if (hThread == Event::s_mainThread) {

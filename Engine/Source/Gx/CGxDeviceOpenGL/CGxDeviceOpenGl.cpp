@@ -1,6 +1,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include "HoT/Profiler/Profiler.h"
 #include <cstring>
 #include <malloc.h>
 #include <new>
@@ -3900,14 +3901,24 @@ void CGxDeviceOpenGl::ScenePresent() {
     }
 
     this->ICursorDraw();
+    HoT::Profiler::OnPresentBegin();
 
-    if (this->m_hwMasterEnables & 0x40) {
-        wglSwapLayerBuffers(this->m_hdc, WGL_SWAP_MAIN_PLANE);
-    } else {
-        glFinish();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Swap);
+
+        if (this->m_hwMasterEnables & 0x40) {
+            wglSwapLayerBuffers(this->m_hdc, WGL_SWAP_MAIN_PLANE);
+        } else {
+            glFinish();
+        }
     }
 
-    this->WaitForFPSCap();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::FpsCap);
+        this->WaitForFPSCap();
+    }
+
+    HoT::Profiler::OnPresentEnd();
     this->IShaderConstantsClear();
 }
 
@@ -3974,7 +3985,16 @@ void CGxDeviceOpenGl::Draw(CGxBatch* batch, int32_t count) {
         return;
     }
 
-    this->IStateSync();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::StateSync);
+        HoT::Profiler::Count(HoT::Profiler::Counter::StateSyncs);
+        this->IStateSync();
+    }
+
+    if (HoT::Profiler::g_enabled) {
+        uint32_t verts = count ? batch->m_maxIndex - batch->m_minIndex + 1 : batch->m_count;
+        HoT::Profiler::OnDraw(this->PrimCalcCount(batch->m_primType, batch->m_count), verts, count != 0, static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_VertexShader].m_data.p), static_cast<CGxShader*>(this->m_hwRenderStates[GxRs_PixelShader].m_data.p));
+    }
 
     if (count) {
         // HoT: a 4 byte index buffer draws with 32-bit indices.

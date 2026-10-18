@@ -1,5 +1,6 @@
 #include "Map.h"
 #include "HoT/Core/Log.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #if defined(_MSC_VER)
 #include <malloc.h>
@@ -2295,6 +2296,8 @@ void CMap::PrepareMapObjDefs(bool addToScene) {
 // VERIFY: 6908aa4f manual
 // OFFSET: 0x007B6B00
 void CMap::PrepareUpdate(bool addToScene) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::MapPrepare);
+
     if (CWorld::status.m_chunksChanged) {
         CMap::PurgeMaps();
     }

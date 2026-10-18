@@ -1,4 +1,5 @@
 #include "Movement_C.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
@@ -191,6 +192,7 @@ int32_t MovementGetLastUpdateTime(uint32_t* time) {
 // VERIFY: a4045d99 manual
 // OFFSET: 0x006F1490
 int32_t MovementIdleMoveUnits(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Movement);
     uint32_t now = OsGetAsyncTimeMs();
     CMovementGlobals* globals = MovementGetGlobals();
     int32_t elapsed = now - globals->m_lastUpdateTime;

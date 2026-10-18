@@ -1,4 +1,9 @@
-# Writes a C++ source holding every file under ROOT as a byte array, paths become Interface\GameEditor\...
+# Writes a C++ source holding every file under ROOT as a byte array, paths become Interface\<folder>\...
+if (NOT SYMBOL)
+    set(SYMBOL "g_embeddedFiles")
+    set(COUNT "g_embeddedFileCount")
+endif ()
+
 file(GLOB_RECURSE files RELATIVE "${ROOT}" "${ROOT}/*")
 list(SORT files)
 
@@ -23,7 +28,7 @@ foreach (relative ${files})
     math(EXPR index "${index} + 1")
 endforeach ()
 
-string(APPEND body "extern const EmbeddedFile g_embeddedFiles[] = {\n${table}};\n\n")
-string(APPEND body "extern const size_t g_embeddedFileCount = ${index};\n\n}\n")
+string(APPEND body "extern const EmbeddedFile ${SYMBOL}[] = {\n${table}};\n\n")
+string(APPEND body "extern const size_t ${COUNT} = ${index};\n\n}\n")
 
 file(WRITE "${OUTPUT}" "${body}")

@@ -1,6 +1,8 @@
 #include "HoT/HoT.h"
 #include "Engine/Source/Event/Event.h"
+#include "HoT/Core/Hotkeys.h"
 #include "HoT/Core/Log.h"
+#include "HoT/Profiler/Profiler.h"
 #include "HoT/Core/Modules.h"
 #include "HoT/DB/Custom.h"
 #include "HoT/Features/Features.h"
@@ -24,6 +26,8 @@
 namespace HoT {
 
 static int32_t Idle(const void* data, void* param) {
+    Profiler::Scope scope(Profiler::Zone::HoTModules);
+
     for (Module* module : Modules()) {
         module->OnIdle();
     }
@@ -55,6 +59,7 @@ void OnInitializeClient() {
     }
 
     EventRegisterEx(EVENT_ID_IDLE, Idle, nullptr, 0.0f);
+    Hotkeys::Install();
 }
 
 void OnRealmConnectionCreated(NetClient* connection) {

@@ -4,6 +4,7 @@
 #include "HoT/Editor/Editor.h"
 #include "HoT/Editor/Mode.h"
 #include "HoT/Editor/Selection.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include <cstring>
 #include <typeinfo>
@@ -1534,6 +1535,7 @@ static int32_t ObjectCollisionProc(WOWGUID* guid, uintptr_t param, World::Object
 // VERIFY: bed13d63 manual
 // OFFSET: 0x004F6970
 static int32_t UnitUpdateProc(WOWGUID guid, void* param) {
+    HoT::Profiler::Count(HoT::Profiler::Counter::UnitsUpdated);
     CGObject_C* object = ClntObjMgrObjectPtr(guid, TYPEMASK_OBJECT, __FILE__, __LINE__);
 
     if (!object) {
@@ -1687,6 +1689,8 @@ void CGWorldFrame::UpdateDayNight(float deltaSec) {
 // VERIFY: 1381402d manual
 // OFFSET: 0x004F8D10
 void CGWorldFrame::UpdateObject(CGObject_C* object, uint32_t flags) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ObjectAnimate);
+
     // HoT: players over the render limit skip the whole update.
     if (HoT::PlayerRenderLimit::SuppressUpdate(object)) {
         return;
@@ -1744,6 +1748,8 @@ void CGWorldFrame::UpdateObject(CGObject_C* object, uint32_t flags) {
 // VERIFY: 2ea40d3b manual
 // OFFSET: 0x004F8EA0
 void CGWorldFrame::OnWorldRender() {
+    HoT::Profiler::Scope worldScope(HoT::Profiler::Zone::WorldRender);
+
     // HoT: map editor points the spell cursor decal at its brush.
     HoT::Editor::BeforeWorldRender(this, s_spellShadowPos, s_spellShadowSize, s_spellShadowStyle);
 
@@ -1814,15 +1820,19 @@ void CGWorldFrame::OnWorldRender() {
     CShaderEffect::UpdateProjMatrix();
     CWorld::Render(this->m_camera->m_position, this->m_elapsedSec);
     CMap::RenderFootprints();
-    ClntObjMgrEnumVisibleObjects(UnitPostAnimateProc, this);
-    CGUnit_C::NamePlateSetResortAll(false);
-    CGUnit_C::NamePlateUpdateLevels(false);
-    CGUnit_C::NamePlateUpdateColor(false);
 
-    if (this->m_namePlateFlags & 0x1) {
-        SmartScreenRectClearGrid(0);
-        CGUnit_C::UnitNameplatesReposition(this);
-        this->m_namePlateFlags &= ~0x1;
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Nameplates);
+        ClntObjMgrEnumVisibleObjects(UnitPostAnimateProc, this);
+        CGUnit_C::NamePlateSetResortAll(false);
+        CGUnit_C::NamePlateUpdateLevels(false);
+        CGUnit_C::NamePlateUpdateColor(false);
+
+        if (this->m_namePlateFlags & 0x1) {
+            SmartScreenRectClearGrid(0);
+            CGUnit_C::UnitNameplatesReposition(this);
+            this->m_namePlateFlags &= ~0x1;
+        }
     }
 
     CM2Scene* scene = World::s_m2Scene;
@@ -1833,7 +1843,11 @@ void CGWorldFrame::OnWorldRender() {
 
     scene->SetFloat18(-CWorld::s_unk_CD7758);
     scene->m_passMask = CWorld::m_M2PassMask;
-    scene->Draw(M2PASS_0);
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Opaque);
+        scene->Draw(M2PASS_0);
+    }
 
     if (s_spellShadowStyle < 2) {
         DrawSpellCursorShadow(0x200122);
@@ -1841,34 +1855,81 @@ void CGWorldFrame::OnWorldRender() {
 
     GxuSortDrawList(GxuCat_0, GxuSort_VtxStream, *World::GetCamPos());
     GxuFlushDrawList(GxuCat_0, *World::GetCamPos());
-    CWorldScene::RenderDetailDoodads();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::DetailDoodads);
+        CWorldScene::RenderDetailDoodads();
+    }
 
     if (World::SceneCamLiquidStatus(nullptr)) {
-        CWorldScene::RenderBarriers(this->m_elapsedSec);
-        scene->Draw(M2PASS_1);
-        CWorldScene::RenderWeather();
-        CWorldScene::RenderLiquidPass();
-        scene->Draw(M2PASS_2);
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Weather);
+            CWorldScene::RenderBarriers(this->m_elapsedSec);
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Transparent);
+            scene->Draw(M2PASS_1);
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Weather);
+            CWorldScene::RenderWeather();
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Liquids);
+            CWorldScene::RenderLiquidPass();
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Transparent);
+            scene->Draw(M2PASS_2);
+        }
     } else {
-        scene->Draw(M2PASS_2);
-        CWorldScene::RenderLiquidPass();
-        CWorldScene::RenderWeather();
-        CWorldScene::RenderBarriers(this->m_elapsedSec);
-        scene->Draw(M2PASS_1);
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Transparent);
+            scene->Draw(M2PASS_2);
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Liquids);
+            CWorldScene::RenderLiquidPass();
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Weather);
+            CWorldScene::RenderWeather();
+            CWorldScene::RenderBarriers(this->m_elapsedSec);
+        }
+
+        {
+            HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Transparent);
+            scene->Draw(M2PASS_1);
+        }
     }
 
     if (s_spellShadowStyle < 2) {
         DrawSpellCursorShadow(0x20000);
     }
 
-    SpellVisualsTick();
-    SpellVisualsRender();
-    CGUnit_C::RenderMissileTrajectoryTargetingTexture();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::SpellVisuals);
+        SpellVisualsTick();
+        SpellVisualsRender();
+        CGUnit_C::RenderMissileTrajectoryTargetingTexture();
+    }
+
     this->ClearTrackedObjects();
-    CWorldScene::RenderParticulate();
-    GxuSortDrawList(GxuCat_1, GxuSort_B2F, *World::GetCamPos());
-    GxuFlushDrawList(GxuCat_1, *World::GetCamPos());
-    DayNight::RenderGlares();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::PostEffects);
+        CWorldScene::RenderParticulate();
+        GxuSortDrawList(GxuCat_1, GxuSort_B2F, *World::GetCamPos());
+        GxuFlushDrawList(GxuCat_1, *World::GetCamPos());
+        DayNight::RenderGlares();
+    }
+
     PlayerNameUpdateLate();
 
     if (CWorld::enables & 0x20000000) {
@@ -1879,7 +1940,12 @@ void CGWorldFrame::OnWorldRender() {
     SmartScreenRectClearGrid(1);
     CGChatBubbleFrame::OnWorldRender(this);
     GxXformSetViewport(minX, maxX, minY, maxY, minZ, maxZ);
-    FFX::Finish();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::PostEffects);
+        FFX::Finish();
+    }
+
     CVehiclePassenger_C::PostRenderUpdateAll();
     // HoT: editors draw their gizmos once the world is done.
     HoT::Editor::AfterWorldRender(this);
@@ -2144,11 +2210,19 @@ void CGWorldFrame::OnWorldUpdate() {
         SI2::SetListenerAttributes(&camPos, &cameraForward, &up, nullptr);
     }
 
-    CGObject_C::UpdateAllObjectEffectManagers();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::ObjectEffects);
+        CGObject_C::UpdateAllObjectEffectManagers();
+    }
+
     UpdatePendingPortraits();
     this->MoveToFreeList(&this->m_modelList);
     this->MoveToFreeList(&this->m_hitModelList);
-    ClntObjMgrEnumVisibleObjects(UnitUpdateProc, nullptr);
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::UnitUpdate);
+        ClntObjMgrEnumVisibleObjects(UnitUpdateProc, nullptr);
+    }
     World::SetObjectCollisionCallback(ObjectCollisionProc);
     CEffect::CleanUpStaticLists();
     CMissile::UpdateStaticLists();
@@ -2156,7 +2230,11 @@ void CGWorldFrame::OnWorldUpdate() {
     Spell_C_UpdateInTransitList();
 
     C3Vector position = (this->m_camera->m_model || !target) ? camPos : target->GetPosition();
-    CWorld::Update(&camPos, &camTarget, &position);
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::WorldSceneUpdate);
+        CWorld::Update(&camPos, &camTarget, &position);
+    }
 
     C44Matrix viewProjection;
     GxXformViewProj(viewProjection);
@@ -2189,10 +2267,22 @@ void CGWorldFrame::RenderWorld(void* param) {
     projection = g_theGxDevicePtr->m_projection;
     GxXformView(view);
 
-    worldFrame->OnWorldUpdate();
-    PlayerNameUpdateWorldText();
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::WorldUpdate);
+        worldFrame->OnWorldUpdate();
+    }
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::WorldText);
+        PlayerNameUpdateWorldText();
+    }
+
     worldFrame->OnWorldRender();
-    WorldTextRenderBatch();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::WorldText);
+        WorldTextRenderBatch();
+    }
 
     g_theGxDevicePtr->XformSetProjection(projection);
     g_theGxDevicePtr->XformSetView(view);

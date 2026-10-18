@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include "HoT/Profiler/Profiler.h"
 #include <cstring>
 #include "Client.h"
 #include "Engine/Source/Base/Base.h"
@@ -446,6 +447,7 @@ static void MovementInit() {
 // VERIFY: abdc92c0 auto
 // OFFSET: 0x00401FD0
 static int32_t PollNet(const void* data, void* param) {
+    HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Net);
     RealmConnection::PollNet(nullptr, nullptr);
     WardenClient_Process();
     return 1;

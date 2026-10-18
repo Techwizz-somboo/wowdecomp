@@ -1,4 +1,5 @@
 #include "NetClient.h"
+#include "HoT/Profiler/Profiler.h"
 #include <cstdlib>
 #include <cstring>
 #include <new>
@@ -280,7 +281,14 @@ int32_t NetClient::ProcessMessage(uint32_t timeReceived, CDataStore* msg, int32_
     HoT::OnNetMessage(msgId, msg);
 
     if (msgId < HoT::Net::NUM_HANDLER_SLOTS && this->m_handlers[msgId]) {
-        return this->m_handlers[msgId](this->m_handlerParams[msgId], static_cast<NETMESSAGE>(msgId), timeReceived, msg);
+        int64_t profilerStart = HoT::Profiler::g_enabled ? HoT::Profiler::EnterMessage() : 0;
+        int32_t result = this->m_handlers[msgId](this->m_handlerParams[msgId], static_cast<NETMESSAGE>(msgId), timeReceived, msg);
+
+        if (profilerStart) {
+            HoT::Profiler::LeaveMessage(msgId, msg->m_size, profilerStart);
+        }
+
+        return result;
     }
 
     msg->Reset();

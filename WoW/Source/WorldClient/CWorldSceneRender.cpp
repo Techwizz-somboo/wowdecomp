@@ -1,5 +1,6 @@
 #include <cfloat>
 #include "CWorldSceneRender.h"
+#include "HoT/Profiler/Profiler.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WorldClient/World.h"
 #include "Engine/Source/Gx/Gx.h"
@@ -88,69 +89,72 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CGCamera* camera = CGWorldFrame::GetActiveCamera();
     CWorldScene::s_fogFovPadding = CWorld::farFog / cosf(camera->FOV() * 0.5f) - CWorld::farFog;
 
-    World::UpdateObjectFadeouts();
-    CMapRenderChunk::UpdatePools();
-    CMapObj::UpdatePools();
-    CDetailDoodad::UpdatePools();
-    memset(CWorldScene::s_clipBufferMask, 0, sizeof(CWorldScene::s_clipBufferMask));
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::SceneCull);
+        World::UpdateObjectFadeouts();
+        CMapRenderChunk::UpdatePools();
+        CMapObj::UpdatePools();
+        CDetailDoodad::UpdatePools();
+        memset(CWorldScene::s_clipBufferMask, 0, sizeof(CWorldScene::s_clipBufferMask));
 
-    for (uint32_t i = 0; i < sizeof(CWorldScene::s_clipBuffer) / sizeof(CWorldScene::s_clipBuffer[0]); i++) {
-        CWorldScene::s_clipBuffer[i] = -1000000.0f;
-    }
-
-    CWorldOcclusion::ClearVolumes();
-    CWorldScene::AddWorldOccluders();
-
-    if (CWorldScene::s_viewerMapObjDef) {
-        CWorldScene::s_cullPassStamp++;
-
-        if (CWorldScene::s_viewerMovedMapObjDef) {
-            CWorldScene::s_viewerMovedMapObjDef->RenderWithCallback(&CWorldScene::s_viewerMovedMapObjGroups);
-            CWorldScene::s_unk_ADF570.m_rect.minX = FLT_MAX;
-            CWorldScene::s_unk_ADF570.m_rect.minY = FLT_MAX;
-            CWorldScene::s_unk_ADF570.m_verts = nullptr;
-            CWorldScene::s_unk_ADF570.m_rect.maxX = -FLT_MAX;
-            CWorldScene::s_unk_ADF570.m_vertCount = 0;
-            CWorldScene::s_unk_ADF570.m_rect.maxY = -FLT_MAX;
-            CWorldScene::frustumPortalView.m_verts = nullptr;
-            CWorldScene::frustumPortalView.m_vertCount = 0;
-            CWorldScene::s_unk_ADF570.m_maxViewDepth = -1.0f;
-            CWorldScene::frustumPortalView.m_rect.minX = FLT_MAX;
-            CWorldScene::frustumPortalView.m_rect.minY = FLT_MAX;
-            CWorldScene::frustumPortalView.m_rect.maxX = -FLT_MAX;
-            CWorldScene::frustumPortalView.m_rect.maxY = -FLT_MAX;
-            CWorldScene::frustumPortalView.m_maxViewDepth = -1.0f;
-            CWorldScene::s_exteriorPortalViews.SetCount(0);
-            CWorldScene::s_portalViews.SetCount(0);
+        for (uint32_t i = 0; i < sizeof(CWorldScene::s_clipBuffer) / sizeof(CWorldScene::s_clipBuffer[0]); i++) {
+            CWorldScene::s_clipBuffer[i] = -1000000.0f;
         }
 
-        CWorldScene::s_viewerMapObjDef->RenderWithCallback(&CWorldScene::s_viewerMapObjGroups);
+        CWorldOcclusion::ClearVolumes();
+        CWorldScene::AddWorldOccluders();
 
-        if (CWorldScene::frustumPortalView.m_maxViewDepth < 0.0f) {
-            CWorldScene::sortTable.Clear();
+        if (CWorldScene::s_viewerMapObjDef) {
+            CWorldScene::s_cullPassStamp++;
+
+            if (CWorldScene::s_viewerMovedMapObjDef) {
+                CWorldScene::s_viewerMovedMapObjDef->RenderWithCallback(&CWorldScene::s_viewerMovedMapObjGroups);
+                CWorldScene::s_unk_ADF570.m_rect.minX = FLT_MAX;
+                CWorldScene::s_unk_ADF570.m_rect.minY = FLT_MAX;
+                CWorldScene::s_unk_ADF570.m_verts = nullptr;
+                CWorldScene::s_unk_ADF570.m_rect.maxX = -FLT_MAX;
+                CWorldScene::s_unk_ADF570.m_vertCount = 0;
+                CWorldScene::s_unk_ADF570.m_rect.maxY = -FLT_MAX;
+                CWorldScene::frustumPortalView.m_verts = nullptr;
+                CWorldScene::frustumPortalView.m_vertCount = 0;
+                CWorldScene::s_unk_ADF570.m_maxViewDepth = -1.0f;
+                CWorldScene::frustumPortalView.m_rect.minX = FLT_MAX;
+                CWorldScene::frustumPortalView.m_rect.minY = FLT_MAX;
+                CWorldScene::frustumPortalView.m_rect.maxX = -FLT_MAX;
+                CWorldScene::frustumPortalView.m_rect.maxY = -FLT_MAX;
+                CWorldScene::frustumPortalView.m_maxViewDepth = -1.0f;
+                CWorldScene::s_exteriorPortalViews.SetCount(0);
+                CWorldScene::s_portalViews.SetCount(0);
+            }
+
+            CWorldScene::s_viewerMapObjDef->RenderWithCallback(&CWorldScene::s_viewerMapObjGroups);
+
+            if (CWorldScene::frustumPortalView.m_maxViewDepth < 0.0f) {
+                CWorldScene::sortTable.Clear();
+            } else {
+                CWorldScene::s_occlusionNearDepth = CWorldScene::frustumPortalView.m_maxViewDepth + 33.333332f;
+                CWorldScene::CullSortTable(&CWorldScene::frustumPortalView.m_rect);
+            }
+
+            CRect fullRect = { 0.0f, 0.0f, 1.0f, 1.0f };
+            CWorldScene::CullThroughPortal(&fullRect);
         } else {
-            CWorldScene::s_occlusionNearDepth = CWorldScene::frustumPortalView.m_maxViewDepth + 33.333332f;
+            CWorldScene::s_cullPassStamp++;
+            CRect fullRect = { 0.0f, 0.0f, 1.0f, 1.0f };
+            CWorldScene::s_unk_ADF570.m_rect = fullRect;
+            CWorldScene::s_unk_ADF570.m_maxViewDepth = 0.0f;
+            CWorldScene::s_unk_ADF570.m_vertCount = 0;
+            CWorldScene::frustumPortalView.m_rect = fullRect;
+            CWorldScene::frustumPortalView.m_maxViewDepth = 0.0f;
+            CWorldScene::s_occlusionNearDepth = -10000.0f;
+            CWorldScene::frustumPortalView.m_vertCount = 0;
             CWorldScene::CullSortTable(&CWorldScene::frustumPortalView.m_rect);
         }
 
-        CRect fullRect = { 0.0f, 0.0f, 1.0f, 1.0f };
-        CWorldScene::CullThroughPortal(&fullRect);
-    } else {
-        CWorldScene::s_cullPassStamp++;
-        CRect fullRect = { 0.0f, 0.0f, 1.0f, 1.0f };
-        CWorldScene::s_unk_ADF570.m_rect = fullRect;
-        CWorldScene::s_unk_ADF570.m_maxViewDepth = 0.0f;
-        CWorldScene::s_unk_ADF570.m_vertCount = 0;
-        CWorldScene::frustumPortalView.m_rect = fullRect;
-        CWorldScene::frustumPortalView.m_maxViewDepth = 0.0f;
-        CWorldScene::s_occlusionNearDepth = -10000.0f;
-        CWorldScene::frustumPortalView.m_vertCount = 0;
-        CWorldScene::CullSortTable(&CWorldScene::frustumPortalView.m_rect);
+        CWorldScene::CullMapObjDefGroup();
+        CWorldScene::UpdateSortedModels();
+        CWorldScene::sortTable.m_pendingExteriorGroupList.UnlinkAll();
     }
-
-    CWorldScene::CullMapObjDefGroup();
-    CWorldScene::UpdateSortedModels();
-    CWorldScene::sortTable.m_pendingExteriorGroupList.UnlinkAll();
 
     DayNight::DNInfo* info = DayNight::GetInfo();
     CImVector clearColor;
@@ -184,6 +188,7 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     CM2Scene* scene = World::s_m2Scene;
 
     if (scene) {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::M2Animate);
         scene->m_flags |= 0x1;
         scene->AdvanceTime(static_cast<uint32_t>(CMath::fint_(time * 1000.0f)));
         scene->Animate(cameraPos);
@@ -191,14 +196,33 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
     }
 
     CGUnit_C::UpdateMissileTrajectoryTargeting();
-    CShadowQuery::Update();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Shadows);
+        CShadowQuery::Update();
+    }
+
     CShaderEffect::UpdateProjMatrix();
     CWorldScene::ApplyFogState();
-    CWorldScene::RenderChunks();
-    CWorldScene::RenderMapObjDefGroups();
-    CWorldScene::RenderHorizon();
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Terrain);
+        CWorldScene::RenderChunks();
+    }
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::MapObjects);
+        CWorldScene::RenderMapObjDefGroups();
+    }
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Horizon);
+        CWorldScene::RenderHorizon();
+    }
 
     if (CWorldScene::s_unk_ADF570.m_maxViewDepth >= 0.0f) {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Sky);
+
         if (CWorldScene::s_exteriorPortalViews.Count()) {
             CWorldScene::CreateInversePortalList();
             CWorldScene::RenderPortalList(&CWorldScene::s_exteriorPortalViews, 1);
@@ -218,13 +242,24 @@ void CWorldScene::Render(const C3Vector& cameraPos, float time) {
         }
     }
 
-    CWorldScene::RenderEntitys();
-    Liquid::UpdateProceduralTextures();
-    CWorldScene::PrepareLiquidInstances();
-
-    if ((CWorld::enables & 0x1000000) && CWorldScene::s_liquidRenderer) {
-        CWorldScene::s_liquidRenderer->Flush(CWorldScene::s_activeWorldView, 0);
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Entities);
+        CWorldScene::RenderEntitys();
     }
+
+    {
+        HoT::Profiler::Scope profilerScope(HoT::Profiler::Zone::Liquids);
+        Liquid::UpdateProceduralTextures();
+        CWorldScene::PrepareLiquidInstances();
+
+        if ((CWorld::enables & 0x1000000) && CWorldScene::s_liquidRenderer) {
+            HoT::Profiler::Count(HoT::Profiler::Counter::LiquidInstances, CWorldScene::s_liquidRenderer->m_instances[0].Count() + CWorldScene::s_liquidRenderer->m_instances[1].Count());
+            CWorldScene::s_liquidRenderer->Flush(CWorldScene::s_activeWorldView, 0);
+        }
+    }
+
+    HoT::Profiler::Count(HoT::Profiler::Counter::MapChunks, CWorldScene::s_chunksRendered);
+    HoT::Profiler::Count(HoT::Profiler::Counter::Doodads, CWorldScene::nDoodadsRendered);
 
     CAaBox weatherBounds;
     weatherBounds.b = C3Vector(0.0f, 0.0f, 0.0f);

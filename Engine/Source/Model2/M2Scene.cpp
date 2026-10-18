@@ -5,6 +5,7 @@
 #include <new>
 #include <xmmintrin.h>
 #include "Engine/Source/Model2/M2Scene.h"
+#include "HoT/Profiler/Profiler.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Model2/M2Cache.h"
@@ -1780,6 +1781,7 @@ int32_t CM2Scene::Animate(const C3Vector& cameraPos) {
             continue;
         }
 
+        HoT::Profiler::Count(HoT::Profiler::Counter::M2Drawn);
         CM2Lighting* lighting = model->m_currentLighting;
         M2Data* data = model->m_shared->m_data;
         int32_t above = lighting->m_flags & 0x20;
