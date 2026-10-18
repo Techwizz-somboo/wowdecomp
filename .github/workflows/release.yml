@@ -40,9 +40,11 @@ jobs:
 
       - name: Configure
         run: |
+          $sourceDir = "$env:PERSIST_DIR\source"
+          $buildDir = "$env:PERSIST_DIR\build"
           $cmakeArgs = @(
-            '-S', 'source',
-            '-B', "$env:PERSIST_DIR\build",
+            '-S', $sourceDir,
+            '-B', $buildDir,
             '-G', 'Visual Studio 18 2026',
             '-A', 'x64',
             '-DWOWCLIENT_OUTPUT_OVERRIDE=HoTClient64',
@@ -50,7 +52,14 @@ jobs:
             '-DWOWCLIENT_FREEZE_DETECTOR=1',
             '-DWOWCLIENT_CRASH_LOG=1'
           )
-          if ('${{ github.event.inputs.fresh }}' -eq 'true') { $cmakeArgs += '--fresh' }
+          $fresh = '${{ github.event.inputs.fresh }}' -eq 'true'
+          $cache = "$buildDir\CMakeCache.txt"
+          if (-Not $fresh -and (Test-Path $cache)) {
+              $cached = Select-String -Path $cache -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$' | Select-Object -First 1
+              $wanted = (Resolve-Path $sourceDir).Path.Replace('\', '/').TrimEnd('/')
+              if ($cached -and $cached.Matches[0].Groups[1].Value.TrimEnd('/') -ne $wanted) { $fresh = $true }
+          }
+          if ($fresh) { $cmakeArgs += '--fresh' }
           & cmake @cmakeArgs
           if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
 
