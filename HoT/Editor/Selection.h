@@ -32,6 +32,17 @@ void Clear();
 // The server replaced the object (respawn after a save), keep the selection on the new guid.
 void Replace(uint64_t oldGuid, uint64_t newGuid);
 
+// Moves stay on this client until saved, legacy setters that write the object directly bracket the write with these.
+void BeginLocalMove(uint64_t guid);
+void EndLocalMove(uint64_t guid);
+
+// Editor traces skip the collision of the object being moved, M2 gameobject hits carry no guid to skip by.
+bool IgnoresCollision(uint64_t guid);
+
+// Sends or throws away the unsaved move of one object, false when it has none.
+bool SaveMove(uint64_t guid);
+bool RevertMove(uint64_t guid);
+
 // The editors call these when a snapshot arrives, a pending spawn becomes the selection.
 void OnCreatureSnapshot(uint64_t guid);
 void OnGameObjectSnapshot(uint64_t guid);

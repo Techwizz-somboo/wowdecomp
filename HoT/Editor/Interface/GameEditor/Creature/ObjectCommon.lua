@@ -654,6 +654,59 @@ function Common.CreateHeader(parent)
 	return header;
 end
 
+-- Moves only exist on this client until Save move sends them.
+function Common.HasUnsavedMove()
+	return GameEditor_HasUnsavedMove and GameEditor_HasUnsavedMove() and true or false;
+end
+
+function Common.UnsavedMoveCount()
+	return GameEditor_GetUnsavedMoveCount and GameEditor_GetUnsavedMoveCount() or 0;
+end
+
+function Common.SaveAllMoves()
+	return GameEditor_SaveAllMoves and GameEditor_SaveAllMoves() or 0;
+end
+
+function Common.AddMoveButtons(header, onChange)
+	header.saveMove = Common.Button(header, "Save move", 76, function() GameEditor_SaveMove(); end,
+		"Send the new position to the server, until then the move only exists on your client (Ctrl+S)");
+	header.saveMove:SetHeight(18);
+	header.saveMove:SetPoint("TOPRIGHT", header, "TOPRIGHT", -6, -57);
+
+	header.revertMove = Common.Button(header, "Revert move", 84, function() GameEditor_RevertMove(); end,
+		"Put it back where it stood before you moved it");
+	header.revertMove:SetHeight(18);
+	header.revertMove:SetPoint("RIGHT", header.saveMove, "LEFT", -4, 0);
+
+	header.UpdateMove = function(self)
+		self.unsaved:ClearAllPoints();
+		self.unsaved:SetPoint("TOPLEFT", self, "TOPLEFT", 8, -60);
+
+		if ( Common.HasUnsavedMove() ) then
+			self.saveMove:Show();
+			self.revertMove:Show();
+			self.unsaved:SetPoint("TOPRIGHT", self.revertMove, "TOPLEFT", -6, -3);
+		else
+			self.saveMove:Hide();
+			self.revertMove:Hide();
+			self.unsaved:SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, -60);
+		end
+	end;
+
+	local events = CreateFrame("Frame", nil, header);
+	events:RegisterEvent("GAME_EDITOR_MOVES_CHANGED");
+	events:RegisterEvent("GAME_EDITOR_SELECTION_CHANGED");
+	events:SetScript("OnEvent", function()
+		header:UpdateMove();
+
+		if ( onChange ) then
+			onChange();
+		end
+	end);
+
+	header:UpdateMove();
+end
+
 -- Tab strip with a dot on tabs that hold unsaved changes.
 function Common.CreateTabs(parent, names, onSelect)
 	local strip = { current = 1 };
@@ -805,7 +858,7 @@ function Common.CreateGridPage(parent, options)
 	return page;
 end
 
--- Live X, Y, Z and facing of the selection, changes nudge it and save shortly after.
+-- Live X, Y, Z and facing of the selection, changes nudge it locally until Save move.
 function Common.CreateTransformBox(parent)
 	local box = CreateFrame("Frame", NoggitUI_NewName("GameEditorTransformBox"), parent);
 	box:SetHeight(40);
@@ -947,7 +1000,18 @@ local watcher = CreateFrame("Frame", "GameEditorObjectWatcher");
 watcher:RegisterEvent("GAME_EDITOR_SELECTION_CHANGED");
 watcher:RegisterEvent("CHAT_MSG_SYSTEM");
 watcher:RegisterEvent("EDITOR_TEMPLATE_RESULTS");
+watcher:RegisterEvent("GAME_EDITOR_MODE_CHANGED");
 watcher:SetScript("OnEvent", function(_, event, kind, ...)
+	if ( event == "GAME_EDITOR_MODE_CHANGED" ) then
+		local count = tonumber(kind) == 0 and Common.UnsavedMoveCount() or 0;
+
+		if ( count > 0 and DEFAULT_CHAT_FRAME ) then
+			DEFAULT_CHAT_FRAME:AddMessage(format("|cffffd100Game editor:|r %d move%s not saved yet, open the editor and press Save move or Ctrl+S.", count, count == 1 and " is" or "s are"));
+		end
+
+		return;
+	end
+
 	if ( event == "CHAT_MSG_SYSTEM" ) then
 		OnSystemMessage(kind);
 		return;

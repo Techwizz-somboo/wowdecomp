@@ -12,8 +12,6 @@ local TEMPLATE, SPAWN, TEMPLATE_ADDON, SPAWN_ADDON = 1, 2, 3, 4;
 
 local SCOPE_TEMPLATE, SCOPE_SPAWN, SCOPE_TEMPLATE_ADDON, SCOPE_SPAWN_ADDON = 0, 1, 2, 3;
 
-local ROTATION_COMMIT_DELAY = 0.4;
-
 local frame, body, empty, header, tabs;
 local pages = {};
 local shownEntry, shownSpawn;
@@ -21,10 +19,11 @@ local updateElapsed = 0;
 
 GameObject.HELP = table.concat({
 	"- Left click a gameobject in the world to select it.",
-	"- Drag it to move it along the ground. Shift+drag moves it up and down, Alt+drag keeps its height.",
-	"- Ctrl+click shows the move gizmo, Ctrl+click it again for rotate, then off. The rotate tool always shows the rings.",
+	"- The move gizmo shows on the selection, drag an arrow to move it.",
+	"- With the gizmo off, drag it along the ground. Shift+drag moves it up and down, Alt+drag keeps its height.",
+	"- Ctrl+click the selection to switch between the move gizmo, the rotate gizmo and no gizmo. The rotate tool always shows the rings.",
 	"- Ctrl+wheel turns it, arrow keys and Page Up/Down nudge it, [ and ] turn it, G drops it to the ground.",
-	"- Every move and turn is saved to the server as soon as you let go.",
+	"- Moves and turns only happen on your client until you press Save move or Ctrl+S, Revert move puts it back.",
 	"- Escape cancels a drag, hides the gizmo, then clears the selection.",
 }, "\n");
 
@@ -73,26 +72,6 @@ local function SafeValues(values, rowExists)
 	return safe;
 end
 
-local commitTimer = CreateFrame("Frame", "GameEditorGameObjectCommitTimer");
-commitTimer:Hide();
-commitTimer:SetScript("OnUpdate", function(self, elapsed)
-	self.remaining = (self.remaining or 0) - elapsed;
-
-	if ( self.remaining <= 0 ) then
-		self:Hide();
-
-		if ( self.guid ) then
-			GobEditor_Commit(self.guid);
-		end
-	end
-end);
-
-local function ScheduleCommit(guid)
-	commitTimer.guid = guid;
-	commitTimer.remaining = ROTATION_COMMIT_DELAY;
-	commitTimer:Show();
-end
-
 local function UpdateDirty()
 	if ( not frame ) then
 		return;
@@ -108,6 +87,10 @@ local function UpdateDirty()
 		if ( dirty ) then
 			table.insert(names, TAB_NAMES[index]);
 		end
+	end
+
+	if ( Common.HasUnsavedMove() ) then
+		table.insert(names, 1, "Position");
 	end
 
 	if ( #names > 0 ) then
@@ -134,17 +117,10 @@ local function CreateRotationBox(parent)
 	box.pause = 0;
 
 	local function Apply()
-		local _, guid = GameEditor_GetSelection();
-
-		if ( not guid ) then
-			return;
-		end
-
 		local x, y, z, w = ToQuaternion(box.spins.yaw.value, box.spins.pitch.value, box.spins.roll.value);
 
-		if ( SetGobRotationByGUID(guid, x, y, z, w) ) then
+		if ( GameEditor_SetSelectionRotation(x, y, z, w) ) then
 			box.pause = 1;
-			ScheduleCommit(guid);
 		end
 	end
 
@@ -230,7 +206,7 @@ local function BuildSpawnPage(container)
 		GobEditor_SetFields(SCOPE_SPAWN, { respawn = 1 });
 	end, "Despawn and load the spawn again from the database (Ctrl+R)");
 	respawn:SetPoint("LEFT", goTo, "RIGHT", 4, 0);
-	local commit = Common.Button(actions, "Save live", 70, function() GobEditor_Commit(); end, "Save the position and rotation you see right now");
+	local commit = Common.Button(actions, "Save live", 70, function() GobEditor_Commit(); end, "Send the position and rotation you see right now to the server");
 	commit:SetPoint("LEFT", respawn, "RIGHT", 4, 0);
 
 	page.stored = Common.Label(page, "", nil, NOGGIT_COLOR_DISABLED);
@@ -305,6 +281,8 @@ local function Build(parent)
 	header = Common.CreateHeader(body);
 	header:AddButton("Delete", 56, function() Common.ConfirmDelete("gameobject"); end, "Delete this spawn from the world and the database (Del)");
 	header:AddButton("Reload", 56, function() GameObject.Request(); end, "Ask the server for a fresh snapshot (F5)");
+	header:AddButton("To ground", 70, function() GameEditor_SnapToGround(); end, "Drop the gameobject onto the ground below it (G)");
+	Common.AddMoveButtons(header, UpdateDirty);
 
 	local container = CreateFrame("Frame", "GameEditorGameObjectInspectorPages", body);
 	container:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -30);
@@ -354,7 +332,7 @@ function Inspector.HasChanges()
 end
 
 function Inspector.SaveAll()
-	local saved = 0;
+	local saved = Common.SaveAllMoves();
 
 	for index = 1, #TAB_NAMES do
 		local page = pages[index];

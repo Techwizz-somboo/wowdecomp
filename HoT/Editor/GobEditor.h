@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <string>
+#include "Engine/Source/Tempest/C3Vector.h"
+#include "HoT/Editor/Quat.h"
 
 class CGGameObject_C;
 
@@ -32,6 +34,7 @@ void Forget();
 
 // Sends the live client position and rotation of the object to the server.
 void Commit(uint64_t guid);
+void CommitTransform(uint64_t guid, const C3Vector& position, const Quat& rotation);
 
 // The older Lua helpers select through the shared editor selection.
 bool SelectGameObject(uint64_t guid);

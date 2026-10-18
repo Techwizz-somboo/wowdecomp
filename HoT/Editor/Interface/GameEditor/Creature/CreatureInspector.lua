@@ -17,11 +17,12 @@ local updateElapsed = 0;
 
 Creature.HELP = table.concat({
 	"- Left click a creature in the world to select it.",
-	"- Drag it to move it along the ground. Shift+drag moves it up and down, Alt+drag keeps its height.",
+	"- The move gizmo shows on the selection, drag an arrow to move it and the blue ring to turn it.",
+	"- With the gizmo off, drag it along the ground. Shift+drag moves it up and down, Alt+drag keeps its height.",
 	"- Mouse wheel while dragging raises or lowers it, hold Ctrl for small steps.",
-	"- Ctrl+click shows the move gizmo, Ctrl+click it again for rotate, then off.",
+	"- Ctrl+click the selection to switch between the move gizmo, the rotate gizmo and no gizmo.",
 	"- Ctrl+wheel turns it, arrow keys and Page Up/Down nudge it, [ and ] turn it, G drops it to the ground.",
-	"- Every move is saved to the server as soon as you let go.",
+	"- Moves only happen on your client until you press Save move or Ctrl+S, Revert move puts it back.",
 	"- Escape cancels a drag, hides the gizmo, then clears the selection.",
 }, "\n");
 
@@ -40,6 +41,10 @@ local function UpdateDirty()
 		if ( dirty ) then
 			table.insert(names, TAB_NAMES[index]);
 		end
+	end
+
+	if ( Common.HasUnsavedMove() ) then
+		table.insert(names, 1, "Position");
 	end
 
 	if ( #names > 0 ) then
@@ -211,6 +216,8 @@ local function Build(parent)
 	header = Common.CreateHeader(body);
 	header:AddButton("Delete", 56, function() Common.ConfirmDelete("creature"); end, "Delete this spawn from the world and the database (Del)");
 	header:AddButton("Reload", 56, function() Creature.Request(); end, "Ask the server for a fresh snapshot (F5)");
+	header:AddButton("To ground", 70, function() GameEditor_SnapToGround(); end, "Drop the creature onto the ground below it (G)");
+	Common.AddMoveButtons(header, UpdateDirty);
 
 	local container = CreateFrame("Frame", "GameEditorCreatureInspectorPages", body);
 	container:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -30);
@@ -262,7 +269,7 @@ function Inspector.HasChanges()
 end
 
 function Inspector.SaveAll()
-	local saved = 0;
+	local saved = Common.SaveAllMoves();
 
 	for index = 1, #TAB_NAMES do
 		local page = pages[index];

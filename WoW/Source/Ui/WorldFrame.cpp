@@ -3,6 +3,7 @@
 #include "HoT/Spells/Targeting.h"
 #include "HoT/Editor/Editor.h"
 #include "HoT/Editor/Mode.h"
+#include "HoT/Editor/Selection.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include <cstring>
 #include <typeinfo>
@@ -1508,6 +1509,11 @@ static int32_t ObjectCollisionProc(WOWGUID* guid, uintptr_t param, World::Object
     CGObject_C* object = ClntObjMgrObjectPtr(*guid, TYPEMASK_OBJECT, __FILE__, __LINE__);
 
     if (!object || !object->IsCollidable(flags) || !(object->m_obj->m_type & TYPEMASK_GAMEOBJECT)) {
+        return 0;
+    }
+
+    // HoT: editor traces look through the gameobject being moved.
+    if (HoT::Editor::Selection::IgnoresCollision(guid->m_guid)) {
         return 0;
     }
 

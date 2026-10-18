@@ -195,10 +195,13 @@ static int32_t Script_SetGobPositionByGUID(lua_State* L) {
         return 1;
     }
 
+    uint64_t guid = gameObject->m_obj->m_guid.m_guid;
+    Selection::BeginLocalMove(guid);
     gameObject->m_passenger.m_position.x = static_cast<float>(lua_tonumber(L, 2));
     gameObject->m_passenger.m_position.y = static_cast<float>(lua_tonumber(L, 3));
     gameObject->m_passenger.m_position.z = static_cast<float>(lua_tonumber(L, 4));
     gameObject->UpdateWorldObject(0);
+    Selection::EndLocalMove(guid);
 
     lua_pushboolean(L, true);
 
@@ -223,8 +226,11 @@ static int32_t Script_SetGobRotationByGUID(lua_State* L) {
     float z = static_cast<float>(lua_tonumber(L, 4));
     float w = static_cast<float>(lua_tonumber(L, 5));
 
+    uint64_t guid = gameObject->m_obj->m_guid.m_guid;
+    Selection::BeginLocalMove(guid);
     GobEditor::PackedRotation(gameObject) = PackQuat({ w, x, y, z });
     gameObject->UpdateWorldObject(0);
+    Selection::EndLocalMove(guid);
 
     lua_pushboolean(L, true);
 
@@ -243,6 +249,11 @@ static int32_t Script_CommitEditorGobToServer(lua_State* L) {
     }
 
     uint64_t guid = GobEditor::CurrentSelectedGobGUID();
+
+    if (Selection::SaveMove(guid)) {
+        return 0;
+    }
+
     const C3Vector& position = gameObject->m_passenger.m_position;
     Quat q = UnpackQuat(GobEditor::PackedRotation(gameObject));
 

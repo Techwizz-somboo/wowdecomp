@@ -114,9 +114,7 @@ local function ResetRotation()
 	local yaw = GameObject.ToEuler(qx, qy, qz, qw);
 	local x, y, z, w = GameObject.ToQuaternion(yaw, 0, 0);
 
-	if ( SetGobRotationByGUID(guid, x, y, z, w) ) then
-		GobEditor_Commit(guid);
-	end
+	return GameEditor_SetSelectionRotation(x, y, z, w);
 end
 
 local separator = { separator = true };
@@ -193,9 +191,9 @@ local function BuildStatus()
 	local cells = { format("%s (%d)", name or "?", entry or 0), "Gizmo: "..(GameEditor_GetGizmo() or "off") };
 
 	if ( GameEditor_IsDragging() ) then
-		table.insert(cells, "Dragging, release to save, Escape cancels");
+		table.insert(cells, "Dragging, Escape cancels, Save move sends it");
 	else
-		table.insert(cells, "Drag to move, Shift+drag height, Ctrl+click gizmo, Ctrl+wheel turns");
+		table.insert(cells, "Drag the arrows to move, Ctrl+click gizmo, Ctrl+wheel turns, G ground");
 	end
 
 	if ( Inspector.HasChanges() ) then

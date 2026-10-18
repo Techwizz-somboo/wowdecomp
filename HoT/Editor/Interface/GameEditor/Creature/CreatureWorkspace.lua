@@ -211,12 +211,12 @@ local function BuildStatus()
 	local cells = { format("%s (%d)", name or "?", entry or 0), "Gizmo: "..(GIZMO_NAMES[GameEditor_GetGizmo()] or "off") };
 
 	if ( GameEditor_IsDragging() ) then
-		table.insert(cells, "Dragging, release to save, Escape cancels");
+		table.insert(cells, "Dragging, Escape cancels, Save move sends it");
 	elseif ( activeTool == "waypoint" ) then
 		table.insert(cells, Waypoints.StatusText() or "Loading");
 		table.insert(cells, "Shift+click adds a node, drag moves one");
 	else
-		table.insert(cells, "Drag to move, Shift+drag height, Ctrl+click gizmo, G ground");
+		table.insert(cells, "Drag the arrows to move, the ring turns it, Ctrl+click gizmo, G ground");
 	end
 
 	if ( Inspector.HasChanges() ) then

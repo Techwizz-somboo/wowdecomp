@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Storm/H/storm.h"
@@ -35,8 +36,8 @@ using namespace VectorMath;
 
 static constexpr float kPi = 3.14159265358979323846f;
 static constexpr float kDragThreshold = 0.004f;
-static constexpr float kCommitDelay = 0.4f;
 static constexpr float kGizmoScreenScale = 0.12f;
+static constexpr float kYawRingScale = 1.3f;
 
 enum class Gizmo : uint8_t {
     Off = 0,
@@ -83,6 +84,12 @@ struct DragState {
     float m_anchorAngle = 0.0f;
 };
 
+struct PendingMove {
+    Kind m_kind = Kind::None;
+    Transform m_original;
+    Transform m_target;
+};
+
 struct SelectionState {
     Kind m_kind = Kind::None;
     uint64_t m_guid = 0;
@@ -93,8 +100,7 @@ struct SelectionState {
 
     DragState m_drag;
 
-    bool m_pendingCommit = false;
-    float m_commitTimer = 0.0f;
+    std::unordered_map<uint64_t, PendingMove> m_moves;
 
     Kind m_spawnPending = Kind::None;
 };
@@ -194,11 +200,10 @@ static void WriteTransform(CGObject_C* object, const Transform& transform) {
                 return;
             }
 
-            movement->m_position = transform.m_position;
-            movement->m_anchorPos = transform.m_position;
-            movement->m_facing = transform.m_facing;
-            movement->m_anchorFacing = transform.m_facing;
+            // Teleport drops the server spline and the move flags, a plain position write gets pulled back by them every frame.
+            movement->CMovementShared::Teleport(transform.m_position, transform.m_facing, 1);
             movement->m_interpolation = 0;
+            object->UpdateWorldObject(0);
             break;
         }
         case Kind::GameObject: {
@@ -214,7 +219,22 @@ static void WriteTransform(CGObject_C* object, const Transform& transform) {
 }
 
 // World geometry along the segment, skipping hits on the ignored object so a dragged gameobject never lands on itself.
+static uint64_t s_traceIgnore = 0;
+
+bool IgnoresCollision(uint64_t guid) {
+    return s_traceIgnore && guid == s_traceIgnore;
+}
+
+static bool TraceWorldOnce(const C3Vector& start, const C3Vector& end, uint64_t ignore, C3Vector& hit);
+
 static bool TraceWorld(const C3Vector& start, const C3Vector& end, uint64_t ignore, C3Vector& hit) {
+    s_traceIgnore = ignore;
+    bool found = TraceWorldOnce(start, end, ignore, hit);
+    s_traceIgnore = 0;
+    return found;
+}
+
+static bool TraceWorldOnce(const C3Vector& start, const C3Vector& end, uint64_t ignore, C3Vector& hit) {
     CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
 
     if (!frame) {
@@ -314,31 +334,45 @@ static void SetGizmo(Gizmo gizmo) {
     Lua::SignalEvent("GAME_EDITOR_GIZMO_CHANGED", "%s", s_names[static_cast<uint8_t>(gizmo)]);
 }
 
-static void CommitSelection() {
-    s_state.m_pendingCommit = false;
-    CGObject_C* object = SelectedObject();
-    Transform transform;
+static void SignalMoves() {
+    Lua::SignalEvent("GAME_EDITOR_MOVES_CHANGED", "%d", static_cast<int32_t>(s_state.m_moves.size()));
+}
 
-    if (!object || !ReadTransform(object, transform)) {
+// Every move is a local preview, the first one remembers where the object stood so Revert can put it back.
+static void PreviewTransform(uint64_t guid, CGObject_C* object, const Transform& transform) {
+    Kind kind = KindOf(object);
+
+    if (!guid || kind == Kind::None) {
         return;
     }
 
-    if (s_state.m_kind == Kind::Creature) {
-        CreatureEditor::Move(s_state.m_guid, transform.m_position, transform.m_facing);
-    } else if (s_state.m_kind == Kind::GameObject) {
-        GobEditor::Commit(s_state.m_guid);
+    auto it = s_state.m_moves.find(guid);
+    bool added = false;
+
+    if (it == s_state.m_moves.end()) {
+        PendingMove move;
+        move.m_kind = kind;
+
+        if (!ReadTransform(object, move.m_original)) {
+            return;
+        }
+
+        it = s_state.m_moves.emplace(guid, move).first;
+        added = true;
+    }
+
+    WriteTransform(object, transform);
+    it->second.m_target = transform;
+
+    if (added) {
+        SignalMoves();
     }
 }
 
-static void FlushPendingCommit() {
-    if (s_state.m_pendingCommit) {
-        CommitSelection();
-    }
-}
+static bool IsDraggingObject(uint64_t guid) {
+    const DragState& drag = s_state.m_drag;
 
-static void ScheduleCommit() {
-    s_state.m_pendingCommit = true;
-    s_state.m_commitTimer = kCommitDelay;
+    return guid == s_state.m_guid && !drag.m_node && drag.m_type != Drag::None && drag.m_type != Drag::Pending;
 }
 
 static void CancelDrag(bool restore) {
@@ -348,11 +382,112 @@ static void CancelDrag(bool restore) {
         if (drag.m_node) {
             CreatureEditor::PreviewNode(drag.m_point, drag.m_start.m_position);
         } else if (CGObject_C* object = SelectedObject()) {
-            WriteTransform(object, drag.m_start);
+            PreviewTransform(s_state.m_guid, object, drag.m_start);
         }
     }
 
     drag = DragState();
+}
+
+static void SendMove(uint64_t guid, const PendingMove& move) {
+    if (move.m_kind == Kind::Creature) {
+        CreatureEditor::Move(guid, move.m_target.m_position, move.m_target.m_facing);
+    } else if (move.m_kind == Kind::GameObject) {
+        GobEditor::CommitTransform(guid, move.m_target.m_position, move.m_target.m_rotation);
+    }
+}
+
+bool SaveMove(uint64_t guid) {
+    if (IsDraggingObject(guid)) {
+        CancelDrag(false);
+    }
+
+    auto it = s_state.m_moves.find(guid);
+
+    if (it == s_state.m_moves.end()) {
+        return false;
+    }
+
+    PendingMove move = it->second;
+    s_state.m_moves.erase(it);
+    SendMove(guid, move);
+    SignalMoves();
+    return true;
+}
+
+bool RevertMove(uint64_t guid) {
+    if (IsDraggingObject(guid)) {
+        CancelDrag(false);
+    }
+
+    auto it = s_state.m_moves.find(guid);
+
+    if (it == s_state.m_moves.end()) {
+        return false;
+    }
+
+    if (CGObject_C* object = ObjectByGuid(guid); object && KindOf(object) == it->second.m_kind) {
+        WriteTransform(object, it->second.m_original);
+    }
+
+    s_state.m_moves.erase(it);
+    SignalMoves();
+    return true;
+}
+
+// Server splines and updates keep arriving for a moved creature, the preview wins until it is saved or reverted.
+static void HoldPendingMoves() {
+    for (auto& [guid, move] : s_state.m_moves) {
+        if (IsDraggingObject(guid)) {
+            continue;
+        }
+
+        CGObject_C* object = ObjectByGuid(guid);
+        Transform current;
+
+        if (!object || KindOf(object) != move.m_kind || !ReadTransform(object, current)) {
+            continue;
+        }
+
+        C3Vector offset = Subtract(current.m_position, move.m_target.m_position);
+        bool drifted = Dot(offset, offset) > 0.0004f;
+
+        if (move.m_kind == Kind::Creature) {
+            drifted = drifted || fabsf(NormalizeSignedAngleDelta(current.m_facing - move.m_target.m_facing)) > 0.01f;
+            drifted = drifted || static_cast<CGUnit_C*>(object)->m_movement->IsOnSpline();
+        }
+
+        if (drifted) {
+            WriteTransform(object, move.m_target);
+        }
+    }
+}
+
+void BeginLocalMove(uint64_t guid) {
+    CGObject_C* object = ObjectByGuid(guid);
+    Kind kind = KindOf(object);
+
+    if (kind == Kind::None || s_state.m_moves.count(guid)) {
+        return;
+    }
+
+    PendingMove move;
+    move.m_kind = kind;
+
+    if (ReadTransform(object, move.m_original)) {
+        move.m_target = move.m_original;
+        s_state.m_moves.emplace(guid, move);
+        SignalMoves();
+    }
+}
+
+void EndLocalMove(uint64_t guid) {
+    auto it = s_state.m_moves.find(guid);
+    CGObject_C* object = ObjectByGuid(guid);
+
+    if (it != s_state.m_moves.end() && object) {
+        ReadTransform(object, it->second.m_target);
+    }
 }
 
 static bool SelectInternal(uint64_t guid, bool request) {
@@ -367,12 +502,15 @@ static bool SelectInternal(uint64_t guid, bool request) {
         return true;
     }
 
-    FlushPendingCommit();
     CancelDrag(true);
 
     s_state.m_kind = kind;
     s_state.m_guid = guid;
     CreatureEditor::SetSelectedPoint(0);
+
+    if (Mode::ToolIs("select") || Mode::ToolIs("move") || Mode::ToolIs("rotate")) {
+        SetGizmo(Mode::ToolIs("rotate") ? Gizmo::Rotate : Gizmo::Move);
+    }
 
     if (request) {
         if (kind == Kind::Creature) {
@@ -395,7 +533,6 @@ void Clear() {
         return;
     }
 
-    FlushPendingCommit();
     CancelDrag(true);
 
     s_state.m_kind = Kind::None;
@@ -408,12 +545,21 @@ void Clear() {
 }
 
 void Replace(uint64_t oldGuid, uint64_t newGuid) {
-    if (!oldGuid || oldGuid != s_state.m_guid || oldGuid == newGuid) {
+    if (!oldGuid || oldGuid == newGuid) {
+        return;
+    }
+
+    if (auto it = s_state.m_moves.find(oldGuid); it != s_state.m_moves.end()) {
+        PendingMove move = it->second;
+        s_state.m_moves.erase(it);
+        s_state.m_moves[newGuid] = move;
+    }
+
+    if (oldGuid != s_state.m_guid) {
         return;
     }
 
     CancelDrag(false);
-    s_state.m_pendingCommit = false;
     s_state.m_guid = newGuid;
 
     SignalSelection();
@@ -425,6 +571,75 @@ static void OnSnapshot(Kind kind, uint64_t guid) {
         s_state.m_spawnPending = Kind::None;
         SelectInternal(guid, false);
     }
+}
+
+struct RayScan {
+    C3Vector m_start;
+    C3Vector m_direction;
+    float m_maxAlong = 0.0f;
+    float m_bestAngle = 0.0f;
+    uint64_t m_best = 0;
+};
+
+static int32_t CollectClosestToRay(WOWGUID guid, void* param) {
+    RayScan* scan = static_cast<RayScan*>(param);
+    CGObject_C* object = ObjectByGuid(guid.m_guid);
+    Kind kind = KindOf(object);
+    Transform transform;
+
+    if (kind == Kind::None || !ReadTransform(object, transform)) {
+        return 1;
+    }
+
+    float scale = object->GetScale();
+    float height = (kind == Kind::Creature ? 2.0f : 1.0f) * (scale > 0.1f ? scale : 1.0f);
+
+    for (float lift : { 0.0f, 0.5f, 1.0f }) {
+        C3Vector point = { transform.m_position.x, transform.m_position.y, transform.m_position.z + height * lift };
+        C3Vector toPoint = Subtract(point, scan->m_start);
+        float along = Dot(toPoint, scan->m_direction);
+
+        if (along <= 0.5f || along > scan->m_maxAlong) {
+            continue;
+        }
+
+        float miss = Length(Subtract(toPoint, Scale(scan->m_direction, along)));
+        float angle = (miss - height * 0.5f) / along;
+
+        if (angle < scan->m_bestAngle) {
+            scan->m_bestAngle = angle;
+            scan->m_best = guid.m_guid;
+        }
+    }
+
+    return 1;
+}
+
+// Nothing under the cursor hit exactly, the creature or gameobject nearest the click ray wins when it is close enough.
+static uint64_t PickClosestToRay(const C3Vector& start, const C3Vector& end) {
+    RayScan scan;
+    scan.m_start = start;
+    scan.m_direction = Normalize(Subtract(end, start));
+    scan.m_maxAlong = Length(Subtract(end, start));
+    scan.m_bestAngle = 0.05f;
+
+    if (scan.m_maxAlong > 200.0f) {
+        scan.m_maxAlong = 200.0f;
+    }
+
+    C3Vector hit{};
+
+    if (TraceWorld(start, end, 0, hit)) {
+        float blocked = Length(Subtract(hit, start)) + 4.0f;
+
+        if (blocked < scan.m_maxAlong) {
+            scan.m_maxAlong = blocked;
+        }
+    }
+
+    ClntObjMgrEnumVisibleObjects(CollectClosestToRay, &scan);
+
+    return scan.m_best;
 }
 
 static uint64_t PickObject(float x, float y) {
@@ -441,7 +656,6 @@ static uint64_t PickObject(float x, float y) {
         return guid;
     }
 
-    // Gameobjects drawn as WMOs only show up through world collision.
     C3Vector start{};
     C3Vector end{};
 
@@ -449,13 +663,14 @@ static uint64_t PickObject(float x, float y) {
         return 0;
     }
 
+    // Gameobjects drawn as WMOs only show up through world collision.
     HITTESTRESULT result{};
 
     if (frame->HitTest(start, end, 0x3, &result) == 3 && KindOf(ObjectByGuid(result.m_guid.m_guid)) == Kind::GameObject) {
         return result.m_guid.m_guid;
     }
 
-    return 0;
+    return PickClosestToRay(start, end);
 }
 
 bool ClickSelect(float x, float y) {
@@ -552,24 +767,44 @@ static void AnchorFreeDrag() {
         return;
     }
 
+    Drag previous = drag.m_type;
     drag.m_type = KeyHeld(VK_MENU) ? Drag::Plane : Drag::Ground;
     drag.m_planeZ = position.z;
     drag.m_offset = {};
 
     if (MouseRay(start, end)) {
         C3Vector hit{};
+        bool found = false;
 
-        if (RayPlane(start, end, position, { 0.0f, 0.0f, 1.0f }, hit)) {
+        if (drag.m_type == Drag::Ground && TraceWorld(start, end, DragIgnore(), hit)) {
+            drag.m_planeZ = hit.z;
+            found = true;
+        } else {
+            found = RayPlane(start, end, position, { 0.0f, 0.0f, 1.0f }, hit);
+        }
+
+        if (found) {
             drag.m_offset = { position.x - hit.x, position.y - hit.y, 0.0f };
         }
     }
 
+    // A ground drag hugs the ground, only a height the developer set during this drag with Shift, Alt or the wheel is kept.
     float groundZ = 0.0f;
-    drag.m_height = GroundBelow(position, 2.0f, DragIgnore(), groundZ) ? position.z - groundZ : 0.0f;
+    bool keepHeight = previous == Drag::Vertical || previous == Drag::Plane;
+    drag.m_height = keepHeight && GroundBelow(position, 2.0f, DragIgnore(), groundZ) ? position.z - groundZ : 0.0f;
 
-    if (drag.m_height < 0.05f && drag.m_height > -0.5f) {
+    if (drag.m_height < 0.05f) {
         drag.m_height = 0.0f;
     }
+}
+
+// The surface under the cursor, never the dragged object itself, falls back to the anchor plane when the ray hits nothing.
+static bool GroundCursor(const C3Vector& start, const C3Vector& end, C3Vector& cursor) {
+    if (TraceWorld(start, end, DragIgnore(), cursor)) {
+        return true;
+    }
+
+    return RayPlane(start, end, { 0.0f, 0.0f, s_state.m_drag.m_planeZ }, { 0.0f, 0.0f, 1.0f }, cursor);
 }
 
 static Drag WantedFreeMode() {
@@ -589,7 +824,7 @@ static void ApplyDragPreview() {
     }
 
     if (CGObject_C* object = SelectedObject()) {
-        WriteTransform(object, drag.m_current);
+        PreviewTransform(s_state.m_guid, object, drag.m_current);
     } else {
         CancelDrag(false);
     }
@@ -621,14 +856,17 @@ static void UpdateFreeDrag() {
         return;
     }
 
-    float planeZ = drag.m_type == Drag::Plane ? drag.m_planeZ : position.z;
     C3Vector hit{};
 
-    if (!RayPlane(start, end, { position.x, position.y, planeZ }, { 0.0f, 0.0f, 1.0f }, hit)) {
+    if (drag.m_type == Drag::Ground) {
+        if (!GroundCursor(start, end, hit)) {
+            return;
+        }
+    } else if (!RayPlane(start, end, { position.x, position.y, drag.m_planeZ }, { 0.0f, 0.0f, 1.0f }, hit)) {
         return;
     }
 
-    C3Vector target = { hit.x + drag.m_offset.x, hit.y + drag.m_offset.y, planeZ };
+    C3Vector target = { hit.x + drag.m_offset.x, hit.y + drag.m_offset.y, drag.m_type == Drag::Plane ? drag.m_planeZ : hit.z };
 
     // Far off hits mean the ray is almost flat, the object would fly away.
     if (Length(Subtract(target, CameraPosition())) > 1500.0f) {
@@ -638,9 +876,11 @@ static void UpdateFreeDrag() {
     if (drag.m_type == Drag::Ground) {
         float groundZ = 0.0f;
 
-        if (GroundBelow(target, 4.0f + drag.m_height, DragIgnore(), groundZ)) {
-            target.z = groundZ + drag.m_height;
+        if (GroundBelow(target, 4.0f, DragIgnore(), groundZ)) {
+            target.z = groundZ;
         }
+
+        target.z += drag.m_height;
     }
 
     position = target;
@@ -746,8 +986,6 @@ static void FinishDrag() {
 
     if (drag.m_node) {
         CreatureEditor::MoveNode(drag.m_point, drag.m_current.m_position);
-    } else {
-        CommitSelection();
     }
 
     drag = DragState();
@@ -774,6 +1012,13 @@ static void UpdateHover() {
 
     if (s_state.m_gizmo == Gizmo::Move) {
         s_state.m_hoverMove = PickTranslationGizmo(start, end, transform.m_position, scale);
+
+        if (s_state.m_hoverMove == Axis::None && s_state.m_kind == Kind::Creature) {
+            float ringScale = scale * kYawRingScale;
+            PickResult ring = PickRing(start, end, transform.m_position, { 0.0f, 0.0f, 1.0f }, ringScale, 0.10f * ringScale);
+            s_state.m_hoverRing = ring.m_hit ? Axis::Z : Axis::None;
+        }
+
         return;
     }
 
@@ -794,15 +1039,31 @@ static void Nudge(const C3Vector& move, float yaw) {
         return;
     }
 
-    transform.m_position = Add(transform.m_position, move);
+    C3Vector before = transform.m_position;
+    transform.m_position = Add(before, move);
+
+    // Sideways nudges follow the ground and keep the height above it, only an up or down nudge changes that height.
+    float oldGround = 0.0f;
+    float newGround = 0.0f;
+
+    if (move.z == 0.0f && (move.x != 0.0f || move.y != 0.0f) && GroundBelow(before, 2.0f, s_state.m_guid, oldGround)) {
+        float height = before.z - oldGround;
+
+        if (height < 0.05f) {
+            height = 0.0f;
+        }
+
+        if (GroundBelow(transform.m_position, 4.0f + height, s_state.m_guid, newGround)) {
+            transform.m_position.z = newGround + height;
+        }
+    }
 
     if (yaw != 0.0f) {
         transform.m_facing += yaw;
         transform.m_rotation = NormalizeQuat(MultiplyQuat(AxisAngleToQuat(0.0f, 0.0f, 1.0f, yaw), transform.m_rotation));
     }
 
-    WriteTransform(object, transform);
-    ScheduleCommit();
+    PreviewTransform(s_state.m_guid, object, transform);
 }
 
 static void SnapToGround() {
@@ -815,8 +1076,7 @@ static void SnapToGround() {
     }
 
     transform.m_position.z = groundZ;
-    WriteTransform(object, transform);
-    ScheduleCommit();
+    PreviewTransform(s_state.m_guid, object, transform);
 }
 
 static void CameraBasis(C3Vector& forward, C3Vector& right) {
@@ -897,7 +1157,7 @@ class SelectionHandler : public Mode::Handler {
             return true;
         }
 
-        if (!Select(picked)) {
+        if (!Select(picked) || s_state.m_gizmo != Gizmo::Off) {
             return true;
         }
 
@@ -1051,13 +1311,7 @@ class SelectionHandler : public Mode::Handler {
             CancelDrag(false);
         }
 
-        if (s_state.m_pendingCommit) {
-            s_state.m_commitTimer -= seconds;
-
-            if (s_state.m_commitTimer <= 0.0f) {
-                CommitSelection();
-            }
-        }
+        HoldPendingMoves();
 
         DragState& drag = s_state.m_drag;
 
@@ -1135,6 +1389,11 @@ class SelectionHandler : public Mode::Handler {
         if (s_state.m_gizmo == Gizmo::Move || s_state.m_drag.m_type == Drag::Axis) {
             Axis axis = s_state.m_drag.m_type == Drag::Axis ? s_state.m_drag.m_axis : s_state.m_hoverMove;
             GizmoDraw::DrawTranslationGizmo(origin, scale, axis);
+
+            if (s_state.m_kind == Kind::Creature && !s_state.m_drag.m_node && s_state.m_drag.m_type != Drag::Axis) {
+                Axis ring = s_state.m_drag.m_type == Drag::Ring ? Axis::Z : s_state.m_hoverRing;
+                GizmoDraw::DrawRotationGizmo(origin, scale * kYawRingScale, ring, true);
+            }
         } else if (s_state.m_gizmo == Gizmo::Rotate || s_state.m_drag.m_type == Drag::Ring) {
             Axis axis = s_state.m_drag.m_type == Drag::Ring ? s_state.m_drag.m_axis : s_state.m_hoverRing;
             GizmoDraw::DrawRotationGizmo(origin, scale, axis, s_state.m_kind == Kind::Creature);
@@ -1149,7 +1408,6 @@ class SelectionHandler : public Mode::Handler {
 
     void OnDeactivate() override {
         CancelDrag(true);
-        FlushPendingCommit();
         CreatureEditor::SetPathForced(false);
     }
 
@@ -1163,13 +1421,16 @@ class SelectionHandler : public Mode::Handler {
             SetGizmo(Gizmo::Rotate);
         } else if (!strcmp(tool, "waypoint")) {
             SetGizmo(Gizmo::Off);
+        } else if (!strcmp(tool, "select") && s_state.m_guid && s_state.m_gizmo == Gizmo::Off) {
+            SetGizmo(Gizmo::Move);
         }
     }
 
     void OnWorldUnloaded() override {
         CancelDrag(false);
-        s_state.m_pendingCommit = false;
         s_state.m_spawnPending = Kind::None;
+        s_state.m_moves.clear();
+        SignalMoves();
         Clear();
     }
 
@@ -1439,10 +1700,106 @@ static int32_t Script_SetSelectionTransform(lua_State* L) {
         transform.m_facing = yaw;
     }
 
-    WriteTransform(object, transform);
-    CommitSelection();
+    PreviewTransform(s_state.m_guid, object, transform);
 
     lua_pushboolean(L, 1);
+    return 1;
+}
+
+// GameEditor_SetSelectionRotation(x, y, z, w) turns the selected gameobject locally, Save sends it.
+static int32_t Script_SetSelectionRotation(lua_State* L) {
+    CGObject_C* object = SelectedObject();
+    Transform transform;
+
+    if (!object || s_state.m_kind != Kind::GameObject || !ReadTransform(object, transform)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Quat rotation = {
+        static_cast<float>(lua_tonumber(L, 4)),
+        static_cast<float>(lua_tonumber(L, 1)),
+        static_cast<float>(lua_tonumber(L, 2)),
+        static_cast<float>(lua_tonumber(L, 3)),
+    };
+
+    float roll = 0.0f;
+    float pitch = 0.0f;
+    transform.m_rotation = NormalizeQuat(rotation);
+    QuatToEuler(transform.m_rotation, roll, pitch, transform.m_facing);
+    PreviewTransform(s_state.m_guid, object, transform);
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+static uint64_t MoveGuidArgument(lua_State* L) {
+    uint64_t guid = GuidFromLua(L, 1);
+    return guid ? guid : s_state.m_guid;
+}
+
+// GameEditor_HasUnsavedMove([guid]) is true when that object, the selection by default, was moved and not saved.
+static int32_t Script_HasUnsavedMove(lua_State* L) {
+    lua_pushboolean(L, s_state.m_moves.count(MoveGuidArgument(L)) ? 1 : 0);
+    return 1;
+}
+
+static int32_t Script_GetUnsavedMoveCount(lua_State* L) {
+    lua_pushnumber(L, static_cast<double>(s_state.m_moves.size()));
+    return 1;
+}
+
+static int32_t Script_SaveMove(lua_State* L) {
+    lua_pushboolean(L, SaveMove(MoveGuidArgument(L)) ? 1 : 0);
+    return 1;
+}
+
+static int32_t Script_RevertMove(lua_State* L) {
+    lua_pushboolean(L, RevertMove(MoveGuidArgument(L)) ? 1 : 0);
+    return 1;
+}
+
+static int32_t Script_SaveAllMoves(lua_State* L) {
+    if (IsDraggingObject(s_state.m_guid)) {
+        CancelDrag(false);
+    }
+
+    size_t count = s_state.m_moves.size();
+
+    for (const auto& [guid, move] : s_state.m_moves) {
+        SendMove(guid, move);
+    }
+
+    s_state.m_moves.clear();
+
+    if (count) {
+        SignalMoves();
+    }
+
+    lua_pushnumber(L, static_cast<double>(count));
+    return 1;
+}
+
+static int32_t Script_RevertAllMoves(lua_State* L) {
+    if (IsDraggingObject(s_state.m_guid)) {
+        CancelDrag(false);
+    }
+
+    size_t count = s_state.m_moves.size();
+
+    for (const auto& [guid, move] : s_state.m_moves) {
+        if (CGObject_C* object = ObjectByGuid(guid); object && KindOf(object) == move.m_kind) {
+            WriteTransform(object, move.m_original);
+        }
+    }
+
+    s_state.m_moves.clear();
+
+    if (count) {
+        SignalMoves();
+    }
+
+    lua_pushnumber(L, static_cast<double>(count));
     return 1;
 }
 
@@ -1543,8 +1900,11 @@ static int32_t Script_DeleteSpawn(lua_State* L) {
         return 1;
     }
 
+    if (s_state.m_moves.erase(guid)) {
+        SignalMoves();
+    }
+
     if (guid == s_state.m_guid) {
-        s_state.m_pendingCommit = false;
         CancelDrag(false);
         Clear();
     }
@@ -1590,6 +1950,13 @@ void Apply() {
     Lua::RegisterFunction("GameEditor_IsDragging", Gated<Script_IsDragging>);
     Lua::RegisterFunction("GameEditor_NudgeSelection", Gated<Script_NudgeSelection>);
     Lua::RegisterFunction("GameEditor_SetSelectionTransform", Gated<Script_SetSelectionTransform>);
+    Lua::RegisterFunction("GameEditor_SetSelectionRotation", Gated<Script_SetSelectionRotation>);
+    Lua::RegisterFunction("GameEditor_HasUnsavedMove", Gated<Script_HasUnsavedMove>);
+    Lua::RegisterFunction("GameEditor_GetUnsavedMoveCount", Gated<Script_GetUnsavedMoveCount>);
+    Lua::RegisterFunction("GameEditor_SaveMove", Gated<Script_SaveMove>);
+    Lua::RegisterFunction("GameEditor_SaveAllMoves", Gated<Script_SaveAllMoves>);
+    Lua::RegisterFunction("GameEditor_RevertMove", Gated<Script_RevertMove>);
+    Lua::RegisterFunction("GameEditor_RevertAllMoves", Gated<Script_RevertAllMoves>);
     Lua::RegisterFunction("GameEditor_SnapToGround", Gated<Script_SnapToGround>);
     Lua::RegisterFunction("GameEditor_GetCursorWorldPosition", Gated<Script_GetCursorWorldPosition>);
     Lua::RegisterFunction("GameEditor_Spawn", Gated<Script_Spawn>);

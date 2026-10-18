@@ -437,7 +437,10 @@ static int32_t Script_Commit(lua_State* L) {
         return 1;
     }
 
-    Commit(guid);
+    if (!Selection::SaveMove(guid)) {
+        Commit(guid);
+    }
+
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -468,8 +471,13 @@ void Commit(uint64_t guid) {
         return;
     }
 
-    const C3Vector& position = object->m_passenger.m_position;
-    Quat q = UnpackQuat(PackedRotation(object));
+    CommitTransform(guid, object->m_passenger.m_position, UnpackQuat(PackedRotation(object)));
+}
+
+void CommitTransform(uint64_t guid, const C3Vector& position, const Quat& q) {
+    if (!guid || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
+    }
 
     Net::Packet(Net::CMSG_GOB_EDITOR_UPDATE)
         .PutInt64(static_cast<int64_t>(guid))
