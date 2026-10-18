@@ -26,6 +26,18 @@ add_library(HoT STATIC
 
 add_dependencies(HoT HoTBuildVersion)
 
+# The game editor UI is compiled into the exe, Resources.cpp serves it to SFile.
+file(GLOB_RECURSE HOT_EDITOR_UI_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Editor/Interface/*")
+set(HOT_EDITOR_UI_SOURCE "${HOT_VERSION_DIR}/HoT/EditorResources.cpp")
+add_custom_command(
+    OUTPUT "${HOT_EDITOR_UI_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}/Editor/Interface" "-DOUTPUT=${HOT_EDITOR_UI_SOURCE}" -P "${CMAKE_CURRENT_SOURCE_DIR}/Editor/EmbedResources.cmake"
+    DEPENDS ${HOT_EDITOR_UI_FILES} "${CMAKE_CURRENT_SOURCE_DIR}/Editor/EmbedResources.cmake"
+    COMMENT "Embedding the game editor UI"
+    VERBATIM
+)
+target_sources(HoT PRIVATE "${HOT_EDITOR_UI_SOURCE}")
+
 target_include_directories(HoT
     PUBLIC
         ${CMAKE_SOURCE_DIR}

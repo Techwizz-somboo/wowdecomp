@@ -1,0 +1,12 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\..\FrameXML\UI.xsd">
+	<Script file="SpellCore.lua"/>
+	<Script file="SpellText.lua"/>
+	<Script file="SpellWidgets.lua"/>
+	<Script file="SpellBrowser.lua"/>
+	<Script file="SpellSections.lua"/>
+	<Script file="SpellVisuals.lua"/>
+	<Script file="SpellServer.lua"/>
+	<Script file="SpellPreview.lua"/>
+	<Script file="SpellWorkspace.lua"/>
+</Ui>

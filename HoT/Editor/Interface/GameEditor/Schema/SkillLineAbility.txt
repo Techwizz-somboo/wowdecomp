@@ -1,0 +1,15 @@
+IGNORE_ORDER true
+uint id
+uint skillId
+uint spellId
+uint chrRaces
+uint chrClasses
+uint unk1
+uint unk2
+uint requiredSkillValue
+uint spellIdParent
+uint acquireMethod
+uint skillGreyLevel
+uint skillGreenLevel
+uint characterPoints1
+uint characterPoints2

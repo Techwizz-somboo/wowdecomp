@@ -381,7 +381,7 @@ static bool PlayerPosition(C3Vector& out) {
     return true;
 }
 
-static void Activate() {
+static void Activate(bool announce) {
     if (s_state.m_active) {
         return;
     }
@@ -398,10 +398,14 @@ static void Activate() {
     ClearKeys();
     s_state.m_active = true;
 
+    if (!announce) {
+        return;
+    }
+
     Chat::Print("FreeCam: on at %.0f yards a second. W A S D to fly, space and X for up and down, shift for fast, ctrl for slow, - and = for speed. Mouse look is unchanged.", s_state.m_speed);
 }
 
-static void Deactivate() {
+static void Deactivate(bool announce) {
     if (!s_state.m_active) {
         return;
     }
@@ -413,14 +417,45 @@ static void Deactivate() {
     ReleaseCharacter();
     ApplyCharacterVisibility();
 
-    Chat::Print("FreeCam: off");
+    if (announce) {
+        Chat::Print("FreeCam: off");
+    }
+}
+
+bool IsActive() {
+    return s_state.m_active;
+}
+
+void SetActive(bool active, bool announce) {
+    if (active) {
+        Activate(announce);
+    } else {
+        Deactivate(announce);
+    }
+}
+
+C3Vector GetPosition() {
+    return s_state.m_position;
+}
+
+void SetPosition(const C3Vector& position) {
+    s_state.m_position = position;
+    s_state.m_haveLastTick = false;
+}
+
+float GetSpeed() {
+    return s_state.m_speed;
+}
+
+void SetSpeed(float speed) {
+    SetSpeed(speed, false);
 }
 
 static int32_t Script_SetEnabled(lua_State* L) {
     if (lua_toboolean(L, 1)) {
-        Activate();
+        Activate(true);
     } else {
-        Deactivate();
+        Deactivate(true);
     }
 
     lua_pushboolean(L, s_state.m_active ? 1 : 0);
@@ -430,9 +465,9 @@ static int32_t Script_SetEnabled(lua_State* L) {
 
 static int32_t Script_Toggle(lua_State* L) {
     if (s_state.m_active) {
-        Deactivate();
+        Deactivate(true);
     } else {
-        Activate();
+        Activate(true);
     }
 
     lua_pushboolean(L, s_state.m_active ? 1 : 0);

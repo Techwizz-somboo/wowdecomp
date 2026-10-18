@@ -5,6 +5,7 @@
 #include "HoT/Core/Log.h"
 #include "HoT/Editor/GobEditor.h"
 #include "HoT/Editor/Quat.h"
+#include "HoT/Editor/Selection.h"
 #include "HoT/Game/Session.h"
 #include "HoT/Lua/Script.h"
 #include "HoT/Net/Opcodes.h"
@@ -260,11 +261,13 @@ static int32_t Script_CommitEditorGobToServer(lua_State* L) {
 }
 
 static int32_t Script_GobEditorSelectNearest(lua_State* L) {
-    if (!Session::HasClearance(3)) {
-        return 0;
-    }
+    uint64_t guid = Selection::SelectNearest(Selection::Kind::GameObject, 200.0f);
 
-    Net::Packet(Net::CMSG_GOB_EDITOR_SELECT_NEAREST).Send();
+    if (CGGameObject_C* object = guid ? GobEditor::GameObjectByGuid(guid) : nullptr) {
+        std::string text = GobEditor::GuidToString(guid);
+        const C3Vector& position = object->m_passenger.m_position;
+        Lua::SignalEvent("HOT_GOB_SELECTED", "%s%u%f%f%f", text.c_str(), 0u, position.x, position.y, position.z);
+    }
 
     return 0;
 }

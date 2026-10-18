@@ -5,8 +5,8 @@
 #include <string>
 
 class CGGameObject_C;
-class CGWorldFrame;
 
+// Client half of the in-game gameobject editor: the server snapshot for Lua, field edits and position commits.
 namespace HoT::Editor::GobEditor {
 
 struct DecodedGuid {
@@ -25,10 +25,15 @@ CGGameObject_C* GameObjectByGuid(uint64_t guid);
 uint64_t& PackedRotation(CGGameObject_C* object);
 
 void Apply();
-void OnGameInitialize();
 void OnGameDestroy();
-void OnWorldRender(CGWorldFrame* frame);
 
+void Request(uint64_t guid);
+void Forget();
+
+// Sends the live client position and rotation of the object to the server.
+void Commit(uint64_t guid);
+
+// The older Lua helpers select through the shared editor selection.
 bool SelectGameObject(uint64_t guid);
 void ClearSelection();
 CGGameObject_C* SelectedGameObject();

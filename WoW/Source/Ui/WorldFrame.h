@@ -98,6 +98,10 @@ struct HITTESTRESULT {
     /* 0024 */ C3Vector m_segEnd;
 };
 
+// HoT: the game editor picks any visible unit or gameobject model under the cursor, without the interact rules.
+class CGWorldFrame;
+uint64_t WorldFrame_PickEditorModel(CGWorldFrame* frame, float mouseX, float mouseY, uint32_t typeMask, uint64_t ignore, float* distance);
+
 // FIX: HoT reads whether the last terrain track was acceptable, 0 means it was.
 int32_t WorldFrame_GetSpellShadowStyle();
 

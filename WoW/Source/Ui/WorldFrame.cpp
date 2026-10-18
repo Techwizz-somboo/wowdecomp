@@ -2,6 +2,7 @@
 #include "HoT/Character/PlayerRenderLimit.h"
 #include "HoT/Spells/Targeting.h"
 #include "HoT/Editor/Editor.h"
+#include "HoT/Editor/Mode.h"
 #include "Engine/Source/Base/ConvertUTF.h"
 #include <cstring>
 #include <typeinfo>
@@ -1062,6 +1063,64 @@ uint64_t CGWorldFrame::FindClosestModel(const C3Vector& start, const C3Vector& e
     hit->m_distance = hitDistance;
     *distance = hitDistance;
     return hit->m_guid.m_guid;
+}
+
+// HoT: editor picking, every rendered model counts and the active player and the ignored guid never do.
+uint64_t WorldFrame_PickEditorModel(CGWorldFrame* frame, float mouseX, float mouseY, uint32_t typeMask, uint64_t ignore, float* distance) {
+    CGxDevice* device = g_theGxDevicePtr;
+
+    if (!device || !frame || !frame->m_camera || !World::s_m2Scene) {
+        return 0;
+    }
+
+    C44Matrix projection = device->m_projection;
+    CGxMatrixStack& stack = device->m_xforms[GxXform_View];
+    C44Matrix savedView = stack.m_mtx[stack.m_level];
+    frame->m_camera->SetupWorldProjection(frame->m_viewportDDC);
+
+    uint64_t picked = 0;
+    C3Vector start = { 0.0f, 0.0f, 0.0f };
+    C3Vector end = { 0.0f, 0.0f, 0.0f };
+
+    if (frame->GetLineSegment(mouseX, mouseY, &start, &end)) {
+        C44Matrix view = stack.m_mtx[stack.m_level];
+        C3Vector camera = frame->m_camera->m_position;
+        C3Vector viewStart = (start - camera) * view;
+        C3Vector viewEnd = (end - camera) * view;
+        WOWGUID player = ClntObjMgrGetActivePlayer();
+        World::s_m2Scene->BeginHitTest();
+
+        for (CModelRecord* record = frame->m_modelList.Head(); record; record = frame->m_modelList.Next(record)) {
+            if (!record->m_model || record->m_guid.m_guid == ignore || record->m_guid == player) {
+                continue;
+            }
+
+            CGObject_C* object = ClntObjMgrObjectPtr(record->m_guid, TYPEMASK_OBJECT, __FILE__, __LINE__);
+
+            if (!object || !(object->m_obj->m_type & typeMask) || (object->m_obj->m_type & TYPEMASK_PLAYER)) {
+                continue;
+            }
+
+            AddModelToHitTest(record->m_model, 0, record, 0);
+        }
+
+        float t = 1.0f;
+        void* hit = World::s_m2Scene->EndHitTest(viewStart, viewEnd, t, 0);
+
+        if (hit && hit != reinterpret_cast<void*>(-1)) {
+            picked = static_cast<CModelRecord*>(hit)->m_guid.m_guid;
+
+            if (distance) {
+                C3Vector delta = viewEnd - viewStart;
+                *distance = sqrt(delta.x * delta.x + delta.y * delta.y + delta.z * delta.z) * t;
+            }
+        }
+    }
+
+    device->XformSetProjection(projection);
+    device->XformSetView(savedView);
+
+    return picked;
 }
 
 // VERIFY: d0d131d0 manual
@@ -2393,6 +2452,12 @@ int32_t CGWorldFrame::OnLayerKeyDown(const CKeyEvent& evt) {
     }
 
     state.m_modifiers = evt.m_data.m_metaKeyState;
+
+    // HoT: the game editor toggle key and editor hotkeys.
+    if (HoT::Editor::Mode::OnWorldKey(state.m_keyString, state.m_modifiers, true)) {
+        return 1;
+    }
+
     return CGUIBindings::s_bindings->ExecKey(state.m_modifiers, state.m_keyString, 1, 1, static_cast<BINDING_MODE>(4));
 }
 
@@ -2424,6 +2489,13 @@ int32_t CGWorldFrame::OnLayerKeyUp(const CKeyEvent& evt) {
 
     if (state.m_keyString[0]) {
         state.m_modifiers |= evt.m_data.m_metaKeyState;
+
+        // HoT: keys the game editor took on the way down.
+        if (HoT::Editor::Mode::OnWorldKey(state.m_keyString, state.m_modifiers, false)) {
+            state.m_keyString[0] = 0;
+            return 1;
+        }
+
         result = CGUIBindings::s_bindings->ExecKey(state.m_modifiers, state.m_keyString, 0, 1, static_cast<BINDING_MODE>(4));
         state.m_keyString[0] = 0;
     }
@@ -2434,7 +2506,16 @@ int32_t CGWorldFrame::OnLayerKeyUp(const CKeyEvent& evt) {
 // VERIFY: 0965c168 auto
 // OFFSET: 0x004F6C10
 int32_t CGWorldFrame::OnLayerMouseDown(const CMouseEvent& evt, const char* btn) {
-    if (this->CSimpleFrame::OnLayerMouseDown(evt, btn) || CGGameUI::HandleMouseDown(evt)) {
+    if (this->CSimpleFrame::OnLayerMouseDown(evt, btn)) {
+        return 1;
+    }
+
+    // HoT: world clicks belong to the game editor while it is active.
+    if (HoT::Editor::Mode::OnWorldMouse(static_cast<MOUSEBUTTON>(evt.m_data.m_button), evt.m_data.m_metaKeyState, evt.m_data.m_mousePosition.x, evt.m_data.m_mousePosition.y, true)) {
+        return 1;
+    }
+
+    if (CGGameUI::HandleMouseDown(evt)) {
         return 1;
     }
 
@@ -2452,6 +2533,11 @@ int32_t CGWorldFrame::OnLayerMouseDown(const CMouseEvent& evt, const char* btn) 
 // OFFSET: 0x004F6C90
 int32_t CGWorldFrame::OnLayerMouseUp(const CMouseEvent& evt, const char* btn) {
     if (this->CSimpleFrame::OnLayerMouseUp(evt, btn)) {
+        return 1;
+    }
+
+    // HoT: see OnLayerMouseDown.
+    if (HoT::Editor::Mode::OnWorldMouse(static_cast<MOUSEBUTTON>(evt.m_data.m_button), evt.m_data.m_metaKeyState, evt.m_data.m_mousePosition.x, evt.m_data.m_mousePosition.y, false)) {
         return 1;
     }
 
@@ -2484,6 +2570,11 @@ int32_t CGWorldFrame::SetupDefaultAction() {
 // OFFSET: 0x004F5C80
 int32_t CGWorldFrame::OnLayerMouseWheel(const CMouseEvent& evt) {
     if (this->CSimpleFrame::OnLayerMouseWheel(evt) || !evt.m_data.m_wheelAmount) {
+        return 1;
+    }
+
+    // HoT: see OnLayerMouseDown.
+    if (HoT::Editor::Mode::OnWorldMouseWheel(static_cast<int32_t>(evt.m_data.m_wheelAmount) > 0 ? 1 : -1, evt.m_data.m_metaKeyState)) {
         return 1;
     }
 

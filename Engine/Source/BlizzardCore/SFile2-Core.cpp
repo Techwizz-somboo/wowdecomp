@@ -19,6 +19,7 @@
 #include "Engine/Source/BlizzardCore/Source/Packages/Util/Hash.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Storm/Source/MD5.h"
+#include "HoT/Editor/Resources.h"
 #include "HoT/Streaming/ArchiveRegistry.h"
 
 // STATIC: 0x00B32038
@@ -1015,6 +1016,14 @@ bool System_SFile2::FindFile(const char* name, char* path, uint32_t size, uint32
         return true;
     }
 
+    // HoT: the game editor UI is embedded in the exe, loose files and archives still win.
+    if (HoT::Editor::Resources::Exists(name)) {
+        Blizzard::String::Copy(path, name, size);
+        *type = SFILE_MEMORY;
+
+        return true;
+    }
+
     return false;
 }
 
@@ -1100,6 +1109,18 @@ int32_t STORMAPI SFile::OpenEx(SArchive* archive, const char* name, uint32_t fla
             (*result)->m_name = Blizzard::String::Duplicate(name);
             opened = 1;
             break;
+        }
+
+        // HoT: embedded game editor file.
+        case SFILE_MEMORY: {
+            if (!HoT::Editor::Resources::Load(path, (*result)->m_data, (*result)->m_size)) {
+                goto fail;
+            }
+
+            (*result)->m_name = Blizzard::String::Duplicate(path);
+            (*result)->m_position = 0;
+
+            return 1;
         }
 
         default: {

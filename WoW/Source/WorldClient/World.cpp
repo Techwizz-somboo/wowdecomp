@@ -1,4 +1,5 @@
 #include "World.h"
+#include "HoT/Editor/Map/WorldHooks.h"
 #include <cstdlib>
 #include <new>
 #include <algorithm>
@@ -1025,7 +1026,10 @@ void World::Preload(const C3Vector& position, int32_t showLoading) {
         LoadingScreenEnable(s_mapId, 1);
     }
 
+    // HoT: the map editor keeps edited ADTs alive through the purge.
+    HoT::Editor::Map::BeforePrepareUpdate(true);
     CMap::Preload();
+    HoT::Editor::Map::AfterPrepareUpdate();
 
     if (showLoading) {
         World::s_loadProgressCallback = nullptr;
@@ -1040,7 +1044,10 @@ void World::Preload(const C3Vector& position, int32_t showLoading) {
 void World::Update(const C3Vector& position) {
     CWorld::gbChunkRectOld = CWorld::gbChunkRect;
     World::PrepareAreaOfInterest(position);
+    // HoT: the map editor keeps edited ADTs alive outside the area of interest.
+    HoT::Editor::Map::BeforePrepareUpdate();
     CMap::PrepareUpdate(false);
+    HoT::Editor::Map::AfterPrepareUpdate();
 }
 
 // VERIFY: 6f30b112 auto
@@ -1470,6 +1477,8 @@ void CWorldScene::ClearObjectFadeoutList() {
 // VERIFY: ca15b88d auto
 // OFFSET: 0x00783180
 void World::UnloadMap() {
+    // HoT: the map editor drops its chunk pointers and buffers before the map goes away.
+    HoT::Editor::Map::OnWorldUnload();
     CWorldScene::ClearObjectFadeoutList();
 
     if (CMap::bActive) {
@@ -1543,7 +1552,10 @@ void CWorld::Update(C3Vector* camPos, C3Vector* camTarget, C3Vector* position) {
         CMap::bPreload = 1;
     }
 
+    // HoT: the map editor keeps edited ADTs alive outside the area of interest.
+    HoT::Editor::Map::BeforePrepareUpdate();
     CMap::PrepareUpdate(prepareAll);
+    HoT::Editor::Map::AfterPrepareUpdate();
 
     if (preload) {
         CMap::bPreload = 0;

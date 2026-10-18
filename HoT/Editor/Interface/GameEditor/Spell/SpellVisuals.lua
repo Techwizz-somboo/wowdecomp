@@ -1,0 +1,1314 @@
+-- Visuals (icons, SpellVisual, kits, missile), texts, items and the all fields grid.
+
+local SE = GameEditorSpell;
+local Data = GameEditorData or {};
+
+local KIT_LABELS = {
+	PrecastKit = "Precast", CastKit = "Cast", ImpactKit = "Impact", StateKit = "State", StateDoneKit = "State done",
+	ChannelKit = "Channel", CasterImpactKit = "Caster impact", TargetImpactKit = "Target impact",
+	MissileTargetingKit = "Missile target", InstantAreaKit = "Instant area", ImpactAreaKit = "Impact area",
+	PersistentAreaKit = "Persistent area",
+};
+
+local VISUAL_GROUPS = {
+	{ title = "Visual", columns = { "ID", "Flags", "AnimEventSoundId" } },
+	{ title = "Kits", columns = SE.VISUAL_KIT_COLUMNS },
+	{ title = "Missile", columns = { "HasMissile", "MissileModel", "MissilePathType", "MissileMotion", "MissileSound", "MissileAttachment",
+		"MissileDestinationAttachment", "MissileFollowGroundHeight", "MissileFollowDropSpeed", "MissileFollowApproach", "MissileFollowGroundFlags",
+		"MissileCastOffsetX", "MissileCastOffsetY", "MissileCastOffsetZ", "MissileImpactOffsetX", "MissileImpactOffsetY", "MissileImpactOffsetZ" } },
+};
+
+local KIT_GROUPS = {
+	{ title = "Kit", columns = { "ID", "Flags" } },
+	{ title = "Animation", columns = { "StartAnimId", "AnimationId" } },
+	{ title = "Effects", columns = { "HeadEffect", "ChestEffect", "BaseEffect", "LeftHandEffect", "RightHandEffect", "BreathEffect",
+		"LeftWeaponEffect", "RightWeaponEffect", "SpecialEffect1", "SpecialEffect2", "SpecialEffect3", "WorldEffect" } },
+	{ title = "Sound and camera", columns = { "SoundID", "ShakeID" } },
+	{ title = "Procedures", columns = { "CharProc1", "CharProc2", "CharProc3", "CharProc4",
+		"CharParamZero1", "CharParamZero2", "CharParamZero3", "CharParamZero4", "CharParamOne1", "CharParamOne2", "CharParamOne3", "CharParamOne4",
+		"CharParamTwo1", "CharParamTwo2", "CharParamTwo3", "CharParamTwo4", "CharParamThree1", "CharParamThree2", "CharParamThree3", "CharParamThree4" } },
+};
+
+local isKitColumn = {};
+
+for _, column in ipairs(SE.VISUAL_KIT_COLUMNS) do
+	isKitColumn[column] = true;
+end
+
+-- Kit and missile windows ------------------------------------------------------------------------------
+
+local kitWindow;
+local missileWindow;
+local visualEditor;
+
+local function CreateKitWindow()
+	kitWindow = GameEditor_CreateWindow("GameEditorSpellKitWindow", "Spell visual kit", 560, 640, true);
+	kitWindow:ClearAllPoints();
+	kitWindow:SetPoint("TOPRIGHT", EditorMainArea, "TOPRIGHT", -10, -40);
+	kitWindow.editor = SE.CreateDbcEditor(kitWindow.content, "SpellVisualKit", {
+		title = "Spell visual kit",
+		groups = KIT_GROUPS,
+		labelWidth = 190,
+		emptyText = "This kit slot of the visual is empty. Create a new kit to fill it.",
+		onCreated = function(_, id)
+			if ( visualEditor and kitWindow.column and (visualEditor.exists or visualEditor.isNew) ) then
+				visualEditor.values[kitWindow.column] = id;
+				visualEditor:Bind();
+				GameEditor_Notify(format("%s of visual %d now points to the new kit %d. Save both.", kitWindow.column, visualEditor.id, id), "info");
+			end
+		end,
+		onIdEntered = function(_, id)
+			if ( visualEditor and kitWindow.column and (visualEditor.exists or visualEditor.isNew) ) then
+				visualEditor.values[kitWindow.column] = id;
+				visualEditor:Bind();
+			end
+		end,
+	});
+	kitWindow.editor.frame:SetAllPoints(kitWindow.content);
+end
+
+function SE.OpenKit(column)
+	if ( not visualEditor or not (visualEditor.exists or visualEditor.isNew) ) then
+		GameEditor_Notify("Open or create a spell visual first.", "error");
+		return;
+	end
+
+	if ( not kitWindow ) then
+		CreateKitWindow();
+	end
+
+	kitWindow.column = column;
+	kitWindow:SetTitle(format("%s kit of spell visual %d", KIT_LABELS[column] or column, visualEditor.id));
+	kitWindow.editor:Load(SE.Number(visualEditor.values[column]));
+	GameEditor_ShowWindow(kitWindow);
+end
+
+local function CreateMissileWindow()
+	missileWindow = GameEditor_CreateWindow("GameEditorSpellMissileWindow", "Spell missile", 480, 460, true);
+	missileWindow:ClearAllPoints();
+	missileWindow:SetPoint("TOPRIGHT", EditorMainArea, "TOPRIGHT", -30, -60);
+	missileWindow.editor = SE.CreateDbcEditor(missileWindow.content, "SpellMissile", {
+		title = "Spell missile",
+		labelWidth = 170,
+		emptyText = "The spell has no SpellMissile row. Create one to tune the missile flight.",
+		onCreated = function(_, id)
+			SE.SetValue("SpellMissileID", id);
+		end,
+		onIdEntered = function(_, id)
+			SE.SetValue("SpellMissileID", id);
+		end,
+	});
+	missileWindow.editor.frame:SetAllPoints(missileWindow.content);
+end
+
+function SE.OpenMissile()
+	if ( not SE.cur ) then
+		return;
+	end
+
+	if ( not missileWindow ) then
+		CreateMissileWindow();
+	end
+
+	missileWindow.editor:Load(SE.Number(SE.GetValue("SpellMissileID")));
+	GameEditor_ShowWindow(missileWindow);
+end
+
+-- Visuals section -------------------------------------------------------------------------------------
+
+local function IconStrip(parent, column, label)
+	local holder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellIconStrip"), parent);
+	holder:SetHeight(48);
+
+	local frame = SE.Box(holder, "GameEditorSpellIconFrame", NOGGIT_COLOR_DARK, NOGGIT_COLOR_MID);
+	frame:SetWidth(46);
+	frame:SetHeight(46);
+	frame:SetPoint("LEFT", holder, "LEFT", 0, 0);
+	holder.icon = frame:CreateTexture(nil, "ARTWORK");
+	holder.icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3);
+	holder.icon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3);
+	holder.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93);
+
+	holder.title = SE.Label(holder, label, "NoggitFontBold");
+	holder.title:SetPoint("TOPLEFT", frame, "TOPRIGHT", 8, -4);
+	holder.detail = SE.Label(holder, "", nil, NOGGIT_COLOR_DISABLED);
+	holder.detail:SetPoint("TOPLEFT", frame, "TOPRIGHT", 8, -22);
+	holder.detail:SetPoint("RIGHT", holder, "RIGHT", -4, 0);
+
+	local browse = SE.Button(holder, "Browse", 64, function()
+		SE.ShowIconBrowser(label, SE.GetValue(column), function(id)
+			SE.SetValue(column, id);
+		end);
+	end);
+	browse:SetPoint("LEFT", holder.title, "RIGHT", 10, 0);
+	holder.browse = browse;
+
+	holder.Refresh = function(self)
+		local id = SE.Number(SE.GetValue(column));
+
+		if ( id == 0 ) then
+			self.icon:SetTexture(0.1, 0.1, 0.1, 1);
+			self.detail:SetText("none");
+		else
+			local path = SE.IconPath(id);
+			self.icon:SetTexture(path);
+			self.detail:SetText(format("%d  %s", id, SE.IconShortName(path)));
+		end
+	end;
+
+	return holder;
+end
+
+local function BuildVisuals(parent)
+	local frame = CreateFrame("Frame", "GameEditorSpellVisuals", parent);
+	local y = SE.SectionTitle(frame, "Visuals", "Icons, the SpellVisual rows with their kits, and the missile. Visual rows save on their own, the spell only stores the ids.", 0);
+
+	local grid = SE.CreateSpellGrid(frame, SE.GroupsByTitle({ "Visuals" }), { labelWidth = 180 });
+	grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	grid.frame:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
+	grid.frame:SetHeight(186);
+	y = y - 192;
+
+	frame.icon = IconStrip(frame, "SpellIconID", "Icon");
+	frame.icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	frame.icon:SetPoint("RIGHT", frame, "CENTER", -6, 0);
+	frame.activeIcon = IconStrip(frame, "ActiveIconID", "Active icon");
+	frame.activeIcon:SetPoint("TOPLEFT", frame, "TOP", 6, y);
+	frame.activeIcon:SetPoint("RIGHT", frame, "RIGHT", 0, 0);
+	y = y - 56;
+
+	local separator = NoggitSeparator_Create(frame);
+	separator:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	separator:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
+	y = y - 8;
+
+	frame.slot = 1;
+	local tabHolder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellVisualTabs"), frame);
+	tabHolder:SetHeight(24);
+	tabHolder:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	tabHolder:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
+	local tabs = NoggitTabs_Create(tabHolder, { "Spell visual 1", "Spell visual 2" }, 1, function(index)
+		frame.slot = index;
+		frame:LoadVisual();
+	end);
+	tabs[1]:SetPoint("LEFT", tabHolder, "LEFT", 0, 0);
+
+	local missile = SE.Button(tabHolder, "Missile", 70, function() SE.OpenMissile(); end, "Edit the SpellMissile row of this spell (missile speed, gravity, collision)");
+	missile:SetPoint("RIGHT", tabHolder, "RIGHT", 0, 0);
+	y = y - 30;
+
+	local kitHolder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellKitButtons"), frame);
+	kitHolder:SetHeight(52);
+	kitHolder:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	kitHolder:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
+	frame.kitButtons = {};
+
+	for _, column in ipairs(SE.VISUAL_KIT_COLUMNS) do
+		local button = SE.Button(kitHolder, KIT_LABELS[column], 80, function() SE.OpenKit(column); end);
+		button.column = column;
+		SE.Tooltip(button, function()
+			local id = visualEditor and SE.Number(visualEditor.values[column]) or 0;
+			return format("%s kit\n|cff8f8f8f%s|r\n\n%s", KIT_LABELS[column], column, id > 0 and ("Kit "..id..", click to edit it") or "Empty, click to create one");
+		end);
+		table.insert(frame.kitButtons, button);
+	end
+
+	local function LayoutKits()
+		local perRow = 6;
+		local width = floor(((kitHolder:GetWidth() or 480) - (perRow - 1) * 4) / perRow);
+
+		for index, button in ipairs(frame.kitButtons) do
+			local row = floor((index - 1) / perRow);
+			local column = mod(index - 1, perRow);
+			button:SetWidth(width);
+			button:ClearAllPoints();
+			button:SetPoint("TOPLEFT", kitHolder, "TOPLEFT", column * (width + 4), -row * 26);
+		end
+	end
+
+	kitHolder:SetScript("OnSizeChanged", LayoutKits);
+	y = y - 58;
+
+	visualEditor = SE.CreateDbcEditor(frame, "SpellVisual", {
+		title = "Spell visual",
+		groups = VISUAL_GROUPS,
+		labelWidth = 200,
+		emptyText = "This visual slot of the spell is empty. Create a visual, or type an existing id and press Enter.",
+		onRowContext = function(_, column)
+			if ( isKitColumn[column] ) then
+				SE.OpenKit(column);
+			end
+		end,
+		onCreated = function(_, id)
+			SE.SetValue("SpellVisual"..frame.slot, id);
+		end,
+		onIdEntered = function(_, id)
+			SE.SetValue("SpellVisual"..frame.slot, id);
+		end,
+		onStatus = function()
+			if ( frame.RefreshKits ) then
+				frame:RefreshKits();
+			end
+		end,
+	});
+	visualEditor.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	visualEditor.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+	frame.visualEditor = visualEditor;
+
+	frame.RefreshKits = function(self)
+		local valid = visualEditor.exists or visualEditor.isNew;
+
+		for _, button in ipairs(self.kitButtons) do
+			local id = valid and SE.Number(visualEditor.values[button.column]) or 0;
+			button:GetFontString():SetTextColor(unpack(id > 0 and NOGGIT_COLOR_TEXT or NOGGIT_COLOR_DISABLED));
+			SE.SetEnabled(button, valid);
+		end
+	end;
+
+	frame.LoadVisual = function(self, force)
+		visualEditor:Load(SE.Number(SE.GetValue("SpellVisual"..self.slot)), force);
+		self:RefreshKits();
+	end;
+
+	frame.Refresh = function(self)
+		SE.SyncGrid(grid);
+		self.icon:Refresh();
+		self.activeIcon:Refresh();
+	end;
+
+	frame:SetScript("OnShow", function(self)
+		LayoutKits();
+		self:Refresh();
+		self:LoadVisual();
+	end);
+
+	SE.On("SPELL_LOADED", function()
+		frame:LoadVisual(not visualEditor:IsDirty() or visualEditor.pending);
+
+		if ( frame:IsVisible() ) then
+			frame:Refresh();
+		end
+
+		if ( kitWindow and kitWindow:IsShown() and not kitWindow.editor:IsDirty() ) then
+			GameEditor_HideWindow(kitWindow);
+		end
+
+		if ( missileWindow and missileWindow:IsShown() ) then
+			missileWindow.editor:Load(SE.Number(SE.GetValue("SpellMissileID")));
+		end
+	end);
+
+	SE.On("VALUE_CHANGED", function(column)
+		if ( column == "SpellVisual"..frame.slot ) then
+			frame:LoadVisual();
+		end
+
+		if ( frame:IsVisible() and (column == "SpellIconID" or column == "ActiveIconID") ) then
+			frame.icon:Refresh();
+			frame.activeIcon:Refresh();
+		end
+	end);
+
+	frame:LoadVisual(true);
+	return frame;
+end
+
+SE.AddSection({
+	key = "visuals",
+	title = "Visuals",
+	group = "spell",
+	columns = SE.ColumnsOf(SE.GroupsByTitle({ "Visuals" })),
+	build = BuildVisuals,
+	badge = function()
+		if ( visualEditor and visualEditor:IsDirty() ) then
+			return "|cffffcc00visual|r";
+		end
+	end,
+});
+
+-- Description variables: the picker window and the $ popup ------------------------------------------
+
+-- Mirrors SE.TOKEN_HELP, the letters SE.ResolveText understands.
+local EFFECT_TOKENS = {
+	{ "s", "Effect %d value, a range when Die Sides is above 1" },
+	{ "m", "Effect %d minimum value" },
+	{ "M", "Effect %d maximum value" },
+	{ "o", "Effect %d total over the duration, value times ticks" },
+	{ "t", "Effect %d tick period in seconds" },
+	{ "a", "Effect %d radius in yards" },
+	{ "x", "Effect %d chain targets" },
+	{ "q", "Effect %d misc value" },
+	{ "e", "Effect %d value multiplier" },
+	{ "b", "Effect %d points per combo point" },
+	{ "f", "Effect %d chain damage multiplier" },
+};
+
+local SPELL_TOKENS = {
+	{ "d", "Duration" },
+	{ "r", "Range in yards" },
+	{ "h", "Proc chance" },
+	{ "n", "Proc charges" },
+	{ "u", "Maximum stacks" },
+	{ "i", "Maximum targets" },
+	{ "v", "Maximum target level" },
+	{ "c", "Power cost" },
+	{ "p", "Power per second" },
+	{ "z", "Hearthstone location" },
+};
+
+local STAT_TOKENS = {
+	{ "ap", "Attack power of your character" },
+	{ "rap", "Ranged attack power" },
+	{ "sp", "Spell power" },
+	{ "sph", "Healing spell power" },
+	{ "spd", "Spell damage" },
+	{ "spfi", "Fire spell power" },
+	{ "spn", "Nature spell power" },
+	{ "spfr", "Frost spell power" },
+	{ "sps", "Shadow spell power" },
+	{ "spa", "Arcane spell power" },
+	{ "pl", "Your level" },
+	{ "mws", "Main hand weapon speed" },
+};
+
+local SYNTAX_TOKENS = {
+	{ key = "{", token = "${}", label = "${...}", back = 1, text = "Math, for example ${$m1*2}, add .1 after the } for one decimal" },
+	{ key = "/", token = "$/10;s1", label = "$/10;s1", text = "Divides the next value, here effect 1 by 10" },
+	{ key = "*", token = "$*3;s1", label = "$*3;s1", text = "Multiplies the next value" },
+	{ key = "l", token = "$lpoint:points;", label = "$lone:many;", text = "Singular or plural from the last number" },
+	{ key = "g", token = "$gmale:female;", label = "$gmale:female;", text = "Text by the player's gender" },
+	{ key = "?", token = "$?s12345[known][not known]", label = "$?s12345[a][b]", text = "Text that depends on a known spell" },
+	{ key = "<", token = "$<>", label = "$<name>", back = 1, text = "Variable from the Description Variables row" },
+};
+
+local OTHER_SPELL_LETTERS = { "s1", "s2", "s3", "m1", "M1", "o1", "o2", "o3", "t1", "a1", "d", "r", "h", "n", "u" };
+
+-- Without highlight the resolver hands an unknown token back unchanged.
+local function Resolve(token, values)
+	local ok, text = pcall(SE.ResolveText, token, values or {});
+
+	if ( not ok or not text or text == "" or text == token ) then
+		return "|cffff5050?|r";
+	end
+
+	return text;
+end
+
+local function DescriptionVariables(values)
+	local names = {};
+	local id = SE.Number(values.SpellDescriptionVariableID);
+	local row = id > 0 and SE.GetRow("SpellDescriptionVariables", id);
+
+	if ( row and row.Formula ) then
+		for name in string.gmatch(tostring(row.Formula), "%$([%w_]+)=") do
+			table.insert(names, name);
+		end
+	end
+
+	return names, id;
+end
+
+-- Every token with its description and its value for the open spell.
+local function BuildTokens(values)
+	values = values or {};
+	local items = {};
+
+	local function Add(key, description, resolve, extra)
+		local item = extra or {};
+		item.key = key;
+		item.token = item.token or ("$"..key);
+		item.label = item.label or item.token;
+		item.text = description;
+
+		if ( resolve ) then
+			item.value = Resolve(item.token, values);
+		end
+
+		table.insert(items, item);
+		return item;
+	end
+
+	for _, definition in ipairs(EFFECT_TOKENS) do
+		for index = 1, 3 do
+			local item = Add(definition[1]..index, format(definition[2], index), true);
+
+			if ( SE.Number(values["Effect"..index]) == 0 ) then
+				item.text = item.text.."  |cff7f7f7f(effect "..index.." is empty)|r";
+				item.dim = true;
+			end
+		end
+	end
+
+	for _, definition in ipairs(SPELL_TOKENS) do
+		Add(definition[1], definition[2], true);
+	end
+
+	local names, variableId = DescriptionVariables(values);
+
+	for _, name in ipairs(names) do
+		Add("<"..name..">", format("Description variable of row %d", variableId), true, { token = "$<"..name..">" });
+	end
+
+	for _, definition in ipairs(STAT_TOKENS) do
+		Add(definition[1], definition[2], true);
+	end
+
+	for _, definition in ipairs(SYNTAX_TOKENS) do
+		Add(definition.key, definition.text, false, { token = definition.token, label = definition.label, back = definition.back });
+	end
+
+	Add("#", "Value of another spell, pick the spell, or type $ and its id", false, { token = "$12345s1", label = "$<spellid>s1", pickSpell = true });
+	return items;
+end
+
+-- Tokens of another spell, $12345s1 style.
+local function OtherSpellTokens(id, values)
+	local items = {};
+	local name = SE.SpellName(id);
+	local exists = name ~= nil or SE.RowExists(SE.TABLE, id);
+	local title = exists and format("Spell %d %s", id, name or "") or format("|cffff6060Spell %d does not exist|r", id);
+
+	for _, letter in ipairs(OTHER_SPELL_LETTERS) do
+		local token = "$"..id..letter;
+		table.insert(items, { key = id..letter, token = token, label = token, text = title, value = exists and Resolve(token, values) or nil });
+	end
+
+	return items;
+end
+
+-- Popup filter: tokens that start with what was typed after the $, exact case first.
+local function FilterPrefix(tokens, prefix, values)
+	local _, _, id = string.find(prefix, "^(%d+)");
+
+	if ( id ) then
+		local result = {};
+
+		for _, item in ipairs(OtherSpellTokens(tonumber(id), values)) do
+			if ( string.sub(item.key, 1, #prefix) == prefix ) then
+				table.insert(result, item);
+			end
+		end
+
+		return result;
+	end
+
+	local exact, loose = {}, {};
+	local lower = string.lower(prefix);
+
+	for _, item in ipairs(tokens) do
+		if ( item.key ~= "#" ) then
+			if ( string.sub(item.key, 1, #prefix) == prefix ) then
+				table.insert(exact, item);
+			elseif ( string.sub(string.lower(item.key), 1, #lower) == lower ) then
+				table.insert(loose, item);
+			end
+		end
+	end
+
+	if ( prefix == "" ) then
+		for _, item in ipairs(tokens) do
+			if ( item.key == "#" ) then
+				table.insert(exact, item);
+			end
+		end
+	end
+
+	for _, item in ipairs(loose) do
+		table.insert(exact, item);
+	end
+
+	return exact;
+end
+
+-- Window filter: any part of the token or the description.
+local function FilterText(tokens, text, values)
+	text = SE.Lower(strtrim(text or ""));
+
+	if ( text == "" ) then
+		return tokens;
+	end
+
+	local plain = string.gsub(text, "^%$", "");
+	local _, _, id = string.find(plain, "^(%d+)");
+
+	if ( id ) then
+		return FilterPrefix(tokens, plain, values);
+	end
+
+	local result = {};
+
+	for _, item in ipairs(tokens) do
+		if ( string.find(SE.Lower(item.label), plain, 1, true) or string.find(SE.Lower(item.text), plain, 1, true) ) then
+			table.insert(result, item);
+		end
+	end
+
+	return result;
+end
+
+-- A short list with keyboard selection, shared by the popup and the window.
+local function CreateTokenList(parent, prefix, rowCount, rowHeight, onPick)
+	local list = { rows = {}, items = {}, offset = 0, selected = 1, rowCount = rowCount };
+
+	local function RefreshRows()
+		for index, row in ipairs(list.rows) do
+			local itemIndex = list.offset + index;
+			local item = list.items[itemIndex];
+			row.itemIndex = itemIndex;
+
+			if ( item ) then
+				row.token:SetText("|cffffcc00"..item.label.."|r");
+				row.text:SetText(item.text or "");
+				row.value:SetText(item.value and item.value ~= "" and item.value or "");
+				NoggitText_SetColor(row.text, item.dim and NOGGIT_COLOR_DISABLED or NOGGIT_COLOR_TEXT);
+
+				if ( itemIndex == list.selected ) then
+					row.bg:SetTexture(NOGGIT_COLOR_ACCENT[1], NOGGIT_COLOR_ACCENT[2], NOGGIT_COLOR_ACCENT[3], 0.55);
+				elseif ( row.hover ) then
+					row.bg:SetTexture(NOGGIT_COLOR_HOVER[1], NOGGIT_COLOR_HOVER[2], NOGGIT_COLOR_HOVER[3], 1);
+				else
+					row.bg:SetTexture(0, 0, 0, 0);
+				end
+
+				row:Show();
+			else
+				row:Hide();
+			end
+		end
+	end
+
+	for index = 1, rowCount do
+		local row = CreateFrame("Button", prefix.."Row"..index, parent);
+		row:SetHeight(rowHeight);
+		row.bg = row:CreateTexture(nil, "BACKGROUND");
+		row.bg:SetAllPoints(row);
+		row.token = SE.Label(row, "", "NoggitFontBold");
+		row.token:SetPoint("LEFT", row, "LEFT", 6, 0);
+		row.token:SetWidth(118);
+		row.token:SetHeight(rowHeight);
+		row.value = SE.Label(row, "", nil, NOGGIT_COLOR_WHITE, "RIGHT");
+		row.value:SetPoint("RIGHT", row, "RIGHT", -6, 0);
+		row.value:SetWidth(110);
+		row.value:SetHeight(rowHeight);
+		row.text = SE.Label(row, "");
+		row.text:SetPoint("LEFT", row.token, "RIGHT", 4, 0);
+		row.text:SetPoint("RIGHT", row.value, "LEFT", -6, 0);
+		row.text:SetHeight(rowHeight);
+		row:SetScript("OnEnter", function(self) self.hover = true; RefreshRows(); end);
+		row:SetScript("OnLeave", function(self) self.hover = false; RefreshRows(); end);
+		row:SetScript("OnClick", function(self)
+			local item = list.items[self.itemIndex];
+
+			if ( item ) then
+				onPick(item);
+			end
+		end);
+		row:EnableMouseWheel(true);
+		row:SetScript("OnMouseWheel", function(_, delta) list:Scroll(-delta); end);
+		list.rows[index] = row;
+	end
+
+	function list:SetItems(items)
+		self.items = items or {};
+		self.offset = 0;
+		self.selected = #self.items > 0 and 1 or nil;
+		RefreshRows();
+	end
+
+	function list:Scroll(delta)
+		self.offset = max(0, min(max(0, #self.items - self.rowCount), self.offset + delta));
+		RefreshRows();
+	end
+
+	function list:Move(delta)
+		if ( #self.items == 0 ) then
+			return;
+		end
+
+		self.selected = max(1, min(#self.items, (self.selected or 0) + delta));
+
+		if ( self.selected <= self.offset ) then
+			self.offset = self.selected - 1;
+		elseif ( self.selected > self.offset + self.rowCount ) then
+			self.offset = self.selected - self.rowCount;
+		end
+
+		RefreshRows();
+	end
+
+	function list:Selected()
+		return self.selected and self.items[self.selected];
+	end
+
+	function list:Layout(left, top, right)
+		for index, row in ipairs(self.rows) do
+			row:ClearAllPoints();
+			row:SetPoint("TOPLEFT", parent, "TOPLEFT", left, top - (index - 1) * rowHeight);
+			row:SetPoint("TOPRIGHT", parent, "TOPRIGHT", right, top - (index - 1) * rowHeight);
+		end
+	end
+
+	return list;
+end
+
+local function CurrentValues()
+	return SE.cur and SE.cur.values or {};
+end
+
+-- Puts text at a byte position of an edit box as if it was typed, so the field commits it like an edit.
+local function InsertAt(edit, position, text, back, replaceTo)
+	edit:SetFocus();
+
+	if ( replaceTo ) then
+		edit:HighlightText(position, replaceTo);
+		edit:SetCursorPosition(position);
+	else
+		edit:SetCursorPosition(position);
+	end
+
+	edit:Insert(text);
+
+	if ( back ) then
+		edit:SetCursorPosition(max(0, edit:GetCursorPosition() - back));
+	end
+end
+
+local function PickOtherSpell(edit, position, replaceTo, expected)
+	SE.PickSpell("Value from another spell", function(id)
+		id = tonumber(id);
+
+		if ( not id or not edit:IsVisible() ) then
+			return;
+		end
+
+		local text = edit:GetText() or "";
+
+		if ( replaceTo and string.sub(text, position + 1, replaceTo) ~= expected ) then
+			replaceTo = nil;
+		end
+
+		InsertAt(edit, min(position, #text), "$"..id.."s1", nil, replaceTo);
+	end);
+end
+
+-- Popup under a field while a $ token is typed ---------------------------------------------------
+
+local popup;
+
+local function PopupOwner()
+	return popup and popup:IsShown() and popup.edit or nil;
+end
+
+local function ClosePopup()
+	if ( not popup or not popup.edit ) then
+		if ( popup ) then
+			popup:Hide();
+		end
+
+		return;
+	end
+
+	local edit = popup.edit;
+	popup.edit = nil;
+	popup.catcher:Hide();
+	popup:Hide();
+	edit:SetAltArrowKeyMode(popup.altArrows and true or false);
+	edit:SetScript("OnEnterPressed", popup.enterScript);
+	edit:SetScript("OnEscapePressed", popup.escapeScript);
+	popup.enterScript = nil;
+	popup.escapeScript = nil;
+end
+
+local function PickFromPopup(item)
+	local edit = popup.edit;
+
+	if ( not edit or not item ) then
+		ClosePopup();
+		return;
+	end
+
+	local start, finish = popup.start, edit:GetCursorPosition();
+	local expected = string.sub(edit:GetText() or "", start + 1, finish);
+	ClosePopup();
+
+	if ( string.sub(expected, 1, 1) ~= "$" ) then
+		return;
+	end
+
+	if ( item.pickSpell ) then
+		PickOtherSpell(edit, start, finish, expected);
+		return;
+	end
+
+	InsertAt(edit, start, item.token, item.back, finish);
+end
+
+-- Moves the cursor one letter, the arrow keys go to the popup while it is open.
+local function StepCursor(edit, direction)
+	local text = edit:GetText() or "";
+	local position = edit:GetCursorPosition();
+
+	repeat
+		position = position + direction;
+		local byte = string.byte(text, position + 1);
+	until ( position <= 0 or position >= #text or not byte or byte < 128 or byte >= 192 )
+
+	edit:SetCursorPosition(max(0, min(#text, position)));
+end
+
+local function PopupKey(key)
+	local edit = PopupOwner();
+
+	if ( not edit ) then
+		return false;
+	end
+
+	if ( key == "UP" ) then
+		popup.list:Move(-1);
+	elseif ( key == "DOWN" ) then
+		popup.list:Move(1);
+	elseif ( key == "LEFT" or key == "RIGHT" ) then
+		ClosePopup();
+		StepCursor(edit, key == "LEFT" and -1 or 1);
+	elseif ( key == "PRINTSCREEN" ) then
+		if ( Screenshot ) then
+			Screenshot();
+		end
+	else
+		return false;
+	end
+
+	return true;
+end
+
+-- Fallback for arrow keys that pass the catcher and reach the workspace hotkeys.
+function SE.TokenPopupKey(key)
+	if ( key == "UP" or key == "DOWN" or key == "LEFT" or key == "RIGHT" ) then
+		return PopupKey(key);
+	end
+
+	return false;
+end
+
+local function CreatePopup()
+	popup = CreateFrame("Frame", "GameEditorSpellTokenPopup", EditorParent, "NoggitBoxTemplate");
+	popup:SetFrameStrata("TOOLTIP");
+	popup:SetClampedToScreen(true);
+	popup:EnableMouse(true);
+	popup:EnableMouseWheel(true);
+	NoggitBox_Set(popup, NOGGIT_COLOR_BASE, NOGGIT_COLOR_HOVER);
+	popup:Hide();
+
+	popup.list = CreateTokenList(popup, "GameEditorSpellTokenPopup", 8, 20, PickFromPopup);
+	popup.list:Layout(1, -2, -1);
+	popup:SetScript("OnMouseWheel", function(_, delta) popup.list:Scroll(-delta); end);
+
+	popup.hint = SE.Label(popup, "Up and Down choose, Enter or a click inserts, Escape closes", "NoggitFont10", NOGGIT_COLOR_DISABLED);
+	popup.hint:SetPoint("BOTTOMLEFT", popup, "BOTTOMLEFT", 7, 4);
+	popup:SetHeight(8 * 20 + 22);
+
+	-- Arrow keys the edit box passes on with alt arrow mode reach this frame, it sits one level below the edit box.
+	popup.catcher = CreateFrame("Frame", "GameEditorSpellTokenKeys", EditorParent);
+	popup.catcher:Hide();
+	popup.catcher:EnableKeyboard(true);
+	popup.catcher:SetScript("OnKeyDown", function(_, key)
+		PopupKey(key);
+	end);
+end
+
+local function OpenPopup(edit, start)
+	if ( not popup ) then
+		CreatePopup();
+	end
+
+	ClosePopup();
+	popup.edit = edit;
+	popup.start = start;
+	popup.tokens = BuildTokens(CurrentValues());
+	popup.altArrows = edit:GetAltArrowKeyMode() and true or false;
+	edit:SetAltArrowKeyMode(true);
+
+	-- Enter and Escape belong to the popup while it is open, the field gets its own scripts back on close.
+	popup.enterScript = edit:GetScript("OnEnterPressed");
+	popup.escapeScript = edit:GetScript("OnEscapePressed");
+	edit:SetScript("OnEnterPressed", function() PickFromPopup(popup.list:Selected()); end);
+	edit:SetScript("OnEscapePressed", function() ClosePopup(); end);
+
+	local catcher = popup.catcher;
+	catcher:SetParent(edit:GetParent());
+	catcher:SetFrameStrata(edit:GetFrameStrata());
+	catcher:SetFrameLevel(max(0, edit:GetFrameLevel() - 1));
+	catcher:Show();
+
+	local anchor = edit.seTokenAnchor or edit;
+	popup:ClearAllPoints();
+	popup:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2);
+	popup:SetWidth(min(560, max(420, anchor:GetWidth() or 420)));
+	popup:Show();
+end
+
+-- Opens on a typed $, follows the typing, closes when the text before the cursor stops being a token.
+local function UpdatePopup(edit, typed)
+	local text = edit:GetText() or "";
+	local position = edit:GetCursorPosition();
+	local before = string.sub(text, 1, position);
+	local prefix = string.match(before, "%$(<[%w_]*)$") or string.match(before, "%$(%w*)$");
+
+	if ( PopupOwner() == edit ) then
+		if ( not prefix or position - #prefix - 1 ~= popup.start ) then
+			ClosePopup();
+			return;
+		end
+	elseif ( typed and prefix == "" ) then
+		OpenPopup(edit, position - 1);
+	else
+		return;
+	end
+
+	local items = FilterPrefix(popup.tokens, prefix, CurrentValues());
+
+	if ( #items == 0 ) then
+		ClosePopup();
+		return;
+	end
+
+	popup.list:SetItems(items);
+end
+
+local lastTokenEdit;
+
+-- Gives an edit box the $ popup, anchor is the frame the popup opens under.
+function SE.AttachTokenHelper(edit, anchor)
+	if ( edit.seTokenHelper ) then
+		return;
+	end
+
+	edit.seTokenHelper = true;
+	edit.seTokenAnchor = anchor;
+
+	edit:HookScript("OnTextChanged", function(self, userInput)
+		if ( userInput ) then
+			UpdatePopup(self, true);
+		end
+	end);
+	edit:HookScript("OnCursorChanged", function(self)
+		if ( PopupOwner() == self ) then
+			UpdatePopup(self, false);
+		end
+	end);
+	edit:HookScript("OnEditFocusGained", function(self)
+		lastTokenEdit = self;
+	end);
+	edit:HookScript("OnEditFocusLost", function(self)
+		self.seLastCursor = self:GetCursorPosition();
+		self.seLastText = self:GetText();
+
+		if ( PopupOwner() == self ) then
+			ClosePopup();
+		end
+	end);
+end
+
+local TOKEN_COLUMNS = { "^SpellDescription%d+$", "^SpellToolTip%d+$" };
+
+-- Gives the description and tooltip rows of a property grid the $ popup.
+function SE.AttachTokenHelperToGrid(grid)
+	for column, row in pairs(grid.rowsByColumn or {}) do
+		for _, pattern in ipairs(TOKEN_COLUMNS) do
+			if ( string.find(column, pattern) and row.edit ) then
+				SE.AttachTokenHelper(row.edit);
+			end
+		end
+	end
+end
+
+-- Picker window, opened by the Variables buttons ---------------------------------------------------
+
+local tokenWindow;
+
+local function WindowFilter()
+	tokenWindow.list:SetItems(FilterText(tokenWindow.tokens, tokenWindow.search:GetText(), CurrentValues()));
+end
+
+local function PickFromWindow(item)
+	local edit = tokenWindow.target;
+	local position = tokenWindow.position;
+	GameEditor_HideWindow(tokenWindow);
+
+	if ( not item or not edit or not edit:IsVisible() ) then
+		return;
+	end
+
+	position = min(position or 0, #(edit:GetText() or ""));
+
+	if ( item.pickSpell ) then
+		PickOtherSpell(edit, position);
+		return;
+	end
+
+	InsertAt(edit, position, item.token, item.back);
+end
+
+local function CreateTokenWindow()
+	tokenWindow = GameEditor_CreateWindow("GameEditorSpellTokenWindow", "Description variables", 600, 520);
+	local content = tokenWindow.content;
+
+	tokenWindow.search = SE.SearchBox(content, 200, "Filter, for example s1, duration or a spell id", function()
+		WindowFilter();
+	end);
+	tokenWindow.search:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0);
+	tokenWindow.search:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, 0);
+	tokenWindow.search:SetScript("OnEnterPressed", function()
+		PickFromWindow(tokenWindow.list:Selected());
+	end);
+
+	local box = SE.Box(content, "GameEditorSpellTokenWindowList", NOGGIT_COLOR_DARK, NOGGIT_COLOR_MID);
+	box:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -28);
+	box:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", 0, 22);
+	box:EnableMouseWheel(true);
+	tokenWindow.list = CreateTokenList(box, "GameEditorSpellTokenWindow", 19, 22, PickFromWindow);
+	tokenWindow.list:Layout(1, -2, -1);
+	box:SetScript("OnMouseWheel", function(_, delta) tokenWindow.list:Scroll(-delta); end);
+
+	tokenWindow.note = SE.Label(content, "", "NoggitFont10", NOGGIT_COLOR_DISABLED);
+	tokenWindow.note:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 2, 4);
+	tokenWindow.note:SetPoint("RIGHT", content, "RIGHT", -2, 0);
+end
+
+-- Opens the picker for edit, the pick goes where its cursor was.
+function SE.ShowTokenPicker(edit, title)
+	if ( not edit ) then
+		return;
+	end
+
+	if ( not tokenWindow ) then
+		CreateTokenWindow();
+	end
+
+	ClosePopup();
+	local text = edit:GetText() or "";
+	local position;
+
+	if ( edit:HasFocus() ) then
+		position = edit:GetCursorPosition();
+	elseif ( edit.seLastCursor and edit.seLastText == text ) then
+		position = edit.seLastCursor;
+	else
+		position = #text;
+	end
+
+	tokenWindow.target = edit;
+	tokenWindow.position = position;
+	tokenWindow.tokens = BuildTokens(CurrentValues());
+	tokenWindow:SetTitle(title and ("Variables for "..title) or "Description variables");
+	tokenWindow.note:SetText(format("Click or Enter inserts at the cursor. Values are from spell %s, a red ? could not be resolved.", tostring(SE.CurrentId() or "-")));
+	tokenWindow.search:SetQuietText("");
+	tokenWindow.search.hint:Show();
+	WindowFilter();
+	GameEditor_ShowWindow(tokenWindow);
+	tokenWindow.search:SetFocus();
+end
+
+function SE.LastTokenEdit()
+	return lastTokenEdit;
+end
+
+function SE.HideTokenHelpers()
+	ClosePopup();
+
+	if ( tokenWindow and tokenWindow:IsShown() ) then
+		GameEditor_HideWindow(tokenWindow);
+	end
+end
+
+SE.On("SPELL_LOADED", function() SE.HideTokenHelpers(); end);
+
+-- Texts section ---------------------------------------------------------------------------------------
+
+local TEXT_COLUMNS = { "SpellName0", "SpellRank0", "SpellDescription0", "SpellToolTip0" };
+
+local function BuildTexts(parent)
+	local frame = CreateFrame("Frame", "GameEditorSpellTexts", parent);
+	local y = SE.SectionTitle(frame, "Texts", "Name, rank, the spellbook description and the buff tooltip. The preview resolves the $ variables with the current values.", 0);
+
+	local tabHolder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextTabs"), frame);
+	tabHolder:SetHeight(24);
+	tabHolder:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	tabHolder:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
+	y = y - 30;
+
+	local english = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextEnglish"), frame);
+	english:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	english:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+
+	local locales = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextLocales"), frame);
+	locales:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
+	locales:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+	locales:Hide();
+
+	local tabs = NoggitTabs_Create(tabHolder, { "English", "Other locales and masks" }, 1, function(index)
+		if ( index == 1 ) then
+			locales:Hide();
+			english:Show();
+		else
+			english:Hide();
+			locales:Show();
+		end
+	end);
+	tabs[1]:SetPoint("LEFT", tabHolder, "LEFT", 0, 0);
+
+	local help = SE.GlyphButton(tabHolder, 0xF059, SE.TOKEN_HELP, nil, 24);
+	help:SetPoint("RIGHT", tabHolder, "RIGHT", 0, 0);
+
+	local scroll, child = GameEditor_CreateScrollFrame(english);
+	scroll:SetAllPoints(english);
+	frame.fields = {};
+
+	local insertButton = SE.Button(tabHolder, "Insert variable", 100, function()
+		local edit = SE.LastTokenEdit();
+
+		if ( not edit or not edit:IsVisible() ) then
+			edit = frame.fields.SpellDescription0.edit;
+		end
+
+		if ( not edit:IsVisible() ) then
+			GameEditor_Notify("Click into a description or tooltip field first.", "info");
+			return;
+		end
+
+		SE.ShowTokenPicker(edit);
+	end, "Pick a $ variable for the last description or tooltip you edited.\nTyping $ in a field lists them too.");
+	insertButton:SetHeight(20);
+	insertButton:SetPoint("RIGHT", help, "LEFT", -6, 0);
+
+	-- OnTextChanged runs a frame after SetText, only typed text counts as an edit.
+	local function LineField(column, label)
+		local title = SE.Label(child, label, "NoggitFontBold");
+		local edit = NoggitLineEdit_Create(child, 200);
+		edit:SetHeight(24);
+		edit:SetMaxLetters(255);
+		edit:SetScript("OnTextChanged", function(self, userInput)
+			local text = self:GetText();
+
+			if ( userInput and text ~= self.shownText ) then
+				self.shownText = text;
+				SE.SetValue(column, text, frame);
+			end
+		end);
+		edit.SetValue = function(self, text)
+			text = text or "";
+			self.shownText = text;
+
+			if ( self:GetText() == text ) then
+				return;
+			end
+
+			self:SetText(text);
+			self:SetCursorPosition(0);
+		end;
+		frame.fields[column] = edit;
+		return title, edit;
+	end
+
+	local function AreaField(column, label, shortName)
+		local title = SE.Label(child, label, "NoggitFontBold");
+		local area = SE.CreateTextArea(child, function(text)
+			SE.SetValue(column, text, frame);
+		end);
+		SE.AttachTokenHelper(area.edit, area);
+
+		local variables = SE.Button(child, "Variables", 76, function()
+			SE.ShowTokenPicker(area.edit, shortName);
+		end, "Lists every $ variable with its current value, a click inserts it at the cursor");
+		variables:SetHeight(18);
+		variables:SetPoint("BOTTOMRIGHT", area, "TOPRIGHT", 0, 1);
+
+		frame.fields[column] = area;
+		return title, area;
+	end
+
+	local function Preview()
+		local box = SE.Box(child, "GameEditorSpellTextPreview", { 0.05, 0.05, 0.07, 1 }, NOGGIT_COLOR_MID);
+		box.text = box:CreateFontString(nil, "ARTWORK", "GameTooltipText");
+		box.text:SetJustifyH("LEFT");
+		box.text:SetJustifyV("TOP");
+		box.text:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -6);
+		return box;
+	end
+
+	local nameTitle, nameEdit = LineField("SpellName0", "Name");
+	local rankTitle, rankEdit = LineField("SpellRank0", "Rank");
+	local descriptionTitle, descriptionArea = AreaField("SpellDescription0", "Description (spellbook and action bar tooltip)", "the description");
+	local descriptionPreview = Preview();
+	descriptionPreview.text:SetTextColor(1, 0.82, 0);
+	local auraTitle, auraArea = AreaField("SpellToolTip0", "Aura tooltip (shown on the buff or debuff)", "the aura tooltip");
+	local auraPreview = Preview();
+	auraPreview.text:SetTextColor(1, 1, 1);
+	local unresolved = SE.Label(child, "", nil, NOGGIT_COLOR_DISABLED);
+
+	frame.Layout = function(self)
+		scroll.UpdateRange();
+		local width = max(200, child:GetWidth());
+		local top = -2;
+
+		nameTitle:ClearAllPoints();
+		nameTitle:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
+		rankTitle:ClearAllPoints();
+		rankTitle:SetPoint("TOPLEFT", child, "TOPLEFT", floor(width * 0.62) + 2, top);
+		top = top - 18;
+		nameEdit:ClearAllPoints();
+		nameEdit:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
+		nameEdit:SetWidth(floor(width * 0.62) - 8);
+		rankEdit:ClearAllPoints();
+		rankEdit:SetPoint("TOPLEFT", child, "TOPLEFT", floor(width * 0.62), top);
+		rankEdit:SetPoint("RIGHT", child, "RIGHT", 0, 0);
+		top = top - 34;
+
+		local function Area(title, area, height, preview)
+			title:ClearAllPoints();
+			title:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
+			top = top - 18;
+			area:ClearAllPoints();
+			area:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
+			area:SetPoint("RIGHT", child, "RIGHT", 0, 0);
+			area:SetHeight(height);
+			top = top - height - 4;
+			preview:ClearAllPoints();
+			preview:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
+			preview:SetPoint("RIGHT", child, "RIGHT", 0, 0);
+			preview.text:SetWidth(width - 16);
+			local textHeight = preview.text:GetText() and preview.text:GetText() ~= "" and preview.text:GetHeight() or 12;
+			preview:SetHeight(textHeight + 14);
+			top = top - textHeight - 14 - 12;
+		end
+
+		Area(descriptionTitle, descriptionArea, 120, descriptionPreview);
+		Area(auraTitle, auraArea, 76, auraPreview);
+		unresolved:ClearAllPoints();
+		unresolved:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
+		unresolved:SetPoint("RIGHT", child, "RIGHT", 0, 0);
+		top = top - 20;
+		child:SetHeight(-top);
+		scroll.UpdateRange();
+	end;
+
+	frame.RefreshPreview = function(self)
+		local values = SE.cur and SE.cur.values or {};
+		local description = SE.ResolveText(values.SpellDescription0 or "", values, true);
+		local aura = SE.ResolveText(values.SpellToolTip0 or "", values, true);
+		descriptionPreview.text:SetText(description ~= "" and description or "|cff8f8f8f(no description)|r");
+		auraPreview.text:SetText(aura ~= "" and aura or "|cff8f8f8f(no aura tooltip)|r");
+
+		local missing = 0;
+
+		for _ in string.gmatch(description..aura, "|cffff5050") do
+			missing = missing + 1;
+		end
+
+		unresolved:SetText(missing > 0 and format("|cffff5050%d variable%s could not be resolved.|r Hover the question mark for the supported ones.", missing, missing == 1 and "" or "s") or "All variables resolved.");
+		self:Layout();
+	end;
+
+	frame.Refresh = function(self)
+		local values = SE.cur and SE.cur.values or {};
+
+		for _, column in ipairs(TEXT_COLUMNS) do
+			self.fields[column]:SetValue(values[column] ~= nil and tostring(values[column]) or "");
+		end
+
+		self.stamp = SE.stamp;
+		self:RefreshPreview();
+	end;
+
+	local localeGroups = {
+		{ title = "Locale masks", columns = { "SpellNameFlag7", "SpellRankFlags7", "SpellDescriptionFlags7", "SpellToolTipFlags7" } },
+	};
+
+	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
+		table.insert(localeGroups, { title = "Other locales", columns = group.columns });
+	end
+
+	local localeGrid = SE.CreateSpellGrid(locales, localeGroups, { filter = true, labelWidth = 220 });
+	localeGrid.frame:SetAllPoints(locales);
+	SE.AttachTokenHelperToGrid(localeGrid);
+	locales:SetScript("OnShow", function() SE.SyncGrid(localeGrid); end);
+
+	english:SetScript("OnSizeChanged", function() frame:Layout(); end);
+	frame:SetScript("OnHide", function() SE.HideTokenHelpers(); end);
+	frame:SetScript("OnShow", function(self)
+		if ( self.stamp ~= SE.stamp ) then
+			self:Refresh();
+		else
+			self:Layout();
+		end
+	end);
+
+	SE.On("VALUE_CHANGED", function(_, source)
+		if ( frame:IsVisible() ) then
+			if ( source == frame ) then
+				frame.previewQueued = true;
+			else
+				frame:Refresh();
+			end
+		end
+	end);
+	SE.On("SPELL_LOADED", function()
+		if ( frame:IsVisible() ) then
+			frame:Refresh();
+		end
+	end);
+	SE.On("REFRESH", function()
+		if ( frame.previewQueued and frame:IsVisible() ) then
+			frame.previewQueued = false;
+			frame:RefreshPreview();
+		end
+	end);
+
+	frame.stamp = -1;
+	return frame;
+end
+
+do
+	local columns = { "SpellName0", "SpellRank0", "SpellDescription0", "SpellToolTip0", "SpellNameFlag7", "SpellRankFlags7", "SpellDescriptionFlags7", "SpellToolTipFlags7" };
+
+	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
+		for _, column in ipairs(group.columns) do
+			table.insert(columns, column);
+		end
+	end
+
+	SE.AddSection({ key = "texts", title = "Texts", group = "spell", columns = columns, build = BuildTexts });
+end
+
+-- Items and all fields -----------------------------------------------------------------------------
+
+local function SimpleGridSection(key, title, description, groups, options)
+	SE.AddSection({
+		key = key,
+		title = title,
+		group = "spell",
+		columns = SE.ColumnsOf(groups),
+		build = function(parent)
+			local frame = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellSection"), parent);
+			local y = SE.SectionTitle(frame, title, description, 0);
+			local grid = SE.CreateSpellGrid(frame, groups, options);
+			SE.AttachTokenHelperToGrid(grid);
+			grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y - 2);
+			grid.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+			frame:SetScript("OnShow", function() SE.SyncGrid(grid); end);
+			return frame;
+		end,
+	});
+end
+
+SimpleGridSection("items", "Items and Reagents", "Required equipment, totems and the reagents the cast consumes.", SE.GroupsByTitle({ "Items and Reagents" }));
+
+do
+	local groups = {};
+
+	for _, group in ipairs(Data.Groups and Data.Groups.Spell or {}) do
+		table.insert(groups, { title = group.title, columns = group.columns, collapsed = group.collapsed });
+	end
+
+	SimpleGridSection("all", "All fields", "Every column of the Spell row in one place. Type in the filter to find a field by label or column name.", groups, { filter = true });
+end

@@ -13,7 +13,7 @@ void DrawLine(const C3Vector& a, const C3Vector& b, CImVector color);
 void DrawSphere(const C3Vector& center, float radius, CImVector color);
 void DrawWireSphere(const C3Vector& center, float radius, CImVector color);
 void DrawTorus(const C3Vector& origin, const C3Vector& axis, const C3Vector& side, float ringRadius, float tubeRadius, CImVector color);
-void DrawRotationGizmo(const C3Vector& origin, float scale, Axis selected);
+void DrawRotationGizmo(const C3Vector& origin, float scale, Axis selected, bool yawOnly = false);
 
 }
 

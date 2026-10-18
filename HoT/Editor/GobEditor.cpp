@@ -1,49 +1,66 @@
 #include "HoT/Editor/GobEditor.h"
-#include "Engine/Source/Base/Coordinate.h"
-#include "Engine/Source/Event/Event.h"
-#include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
-#include "Engine/Source/Gx/Gx.h"
-#include "HoT/Core/Chat.h"
-#include "HoT/Editor/Editor.h"
-#include "HoT/Editor/GizmoDraw.h"
-#include "HoT/Editor/GizmoPick.h"
+#include <cmath>
+#include <cstdlib>
+#include <string>
+#include <vector>
 #include "HoT/Editor/Quat.h"
+#include "HoT/Editor/Selection.h"
+#include "HoT/Game/Session.h"
+#include "HoT/Lua/Script.h"
+#include "HoT/Net/Handlers.h"
+#include "HoT/Net/Opcodes.h"
+#include "HoT/Net/Packet.h"
 #include "WoW/Source/Object/ObjectClient/GameObject_C.h"
 #include "WoW/Source/ObjectMgrClient/ObjectMgrClient.h"
-#include "WoW/Source/UIUtil/Camera.h"
-#include "WoW/Source/Ui/WorldFrame.h"
+#include "WoW/Source/Ui/GameUI.h"
 
 namespace HoT::Editor::GobEditor {
 
-struct DragState {
-    bool m_active = false;
-    bool m_isRotation = false;
-    Axis m_axis = Axis::None;
-    C3Vector m_startObjPos{};
-    C3Vector m_anchorOnAxis{};
-    float m_anchorAngle = 0.0f;
-    C3Vector m_ringAxis{};
-    C3Vector m_ringRefDir{};
-    C3Vector m_ringRefPerp{};
-    Quat m_startRot{};
+static constexpr int8_t kRequiredSecurityLevel = 3;
+
+enum FieldType : uint8_t {
+    FIELD_UINT = 0,
+    FIELD_INT = 1,
+    FIELD_FLOAT = 2,
+    FIELD_STRING = 3,
+    FIELD_UINT64 = 4,
+    FIELD_INT64 = 5,
 };
 
-struct EditorState {
-    C3Vector m_start{};
-    C3Vector m_end{};
-    C3Vector m_gizmoPosition{};
-    Axis m_gizmoTranslationAxis = Axis::None;
-    Axis m_gizmoRotationAxis = Axis::None;
-    DragState m_gizmoDragState{};
-    uint64_t m_currentObjectGuid = 0;
+enum Scope : uint8_t {
+    SCOPE_TEMPLATE = 0,
+    SCOPE_SPAWN = 1,
+    SCOPE_TEMPLATE_ADDON = 2,
+    SCOPE_SPAWN_ADDON = 3,
+    SCOPE_COUNT = 4,
 };
 
-static constexpr float kTranslationGizmoScale = 1.0f;
-static constexpr float kRotationGizmoScale = 1.3f;
+struct Field {
+    std::string m_key;
+    uint8_t m_type = FIELD_UINT;
+    double m_number = 0.0;
+    std::string m_string;
+};
 
-static EditorState s_state;
-static bool s_enabled;
-static bool s_eventsRegistered;
+struct Snapshot {
+    bool m_valid = false;
+    uint64_t m_guid = 0;
+    uint32_t m_entry = 0;
+    uint32_t m_spawnId = 0;
+    std::string m_name;
+    float m_x = 0.0f;
+    float m_y = 0.0f;
+    float m_z = 0.0f;
+    float m_o = 0.0f;
+    float m_rotation[4] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    uint8_t m_state = 0;
+    uint32_t m_type = 0;
+    uint32_t m_displayId = 0;
+    bool m_has[SCOPE_COUNT] = { true, true, false, false };
+    std::vector<Field> m_fields[SCOPE_COUNT];
+};
+
+static Snapshot s_data;
 
 DecodedGuid DecodeGuid(uint64_t full) {
     DecodedGuid guid{};
@@ -60,6 +77,10 @@ std::string GuidToString(uint64_t guid) {
 }
 
 CGGameObject_C* GameObjectByGuid(uint64_t guid) {
+    if (!guid) {
+        return nullptr;
+    }
+
     return static_cast<CGGameObject_C*>(ClntObjMgrObjectPtr(WOWGUID{ guid }, TYPEMASK_GAMEOBJECT, __FILE__, __LINE__));
 }
 
@@ -67,258 +88,432 @@ uint64_t& PackedRotation(CGGameObject_C* object) {
     return *reinterpret_cast<uint64_t*>(&object->m_passenger.m_facing);
 }
 
-static bool UpdateMouseRay(const EVENT_DATA_MOUSE* data) {
-    if (!data) {
-        return false;
+static uint64_t GuidArgument(lua_State* L, int index, uint64_t fallback) {
+    if (lua_type(L, index) == LUA_TSTRING) {
+        if (const char* text = lua_tostring(L, index)) {
+            return std::strtoull(text, nullptr, 10);
+        }
     }
 
-    CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
-
-    if (!frame || !frame->m_camera) {
-        return false;
-    }
-
-    float ddcX = 0.0f;
-    float ddcY = 0.0f;
-    NDCToDDC(data->m_x, data->m_y, &ddcX, &ddcY);
-    MouseToWorld(frame, ddcX, ddcY, &s_state.m_start, &s_state.m_end);
-
-    return true;
+    return fallback;
 }
 
-static int32_t OnMouseDown(const void* rawData, void* param) {
-    if (!s_enabled) {
+static void ReadFields(Net::Packet& packet, std::vector<Field>& fields) {
+    char buffer[512];
+    uint16_t count = packet.GetUInt16();
+    fields.clear();
+    fields.reserve(count);
+
+    for (uint16_t i = 0; i < count && packet.CanRead(1); i++) {
+        Field field;
+        packet.GetString(buffer, sizeof(buffer));
+        field.m_key = buffer;
+        field.m_type = packet.GetUInt8();
+
+        switch (field.m_type) {
+            case FIELD_UINT:
+                field.m_number = packet.GetUInt32();
+                break;
+            case FIELD_INT:
+                field.m_number = packet.GetInt32();
+                break;
+            case FIELD_FLOAT:
+                field.m_number = packet.GetFloat();
+                break;
+            case FIELD_STRING:
+                packet.GetString(buffer, sizeof(buffer));
+                field.m_string = buffer;
+                break;
+            case FIELD_UINT64:
+                field.m_string = std::to_string(packet.GetUInt64());
+                break;
+            case FIELD_INT64:
+                field.m_string = std::to_string(packet.GetInt64());
+                break;
+            default:
+                return;
+        }
+
+        fields.push_back(std::move(field));
+    }
+}
+
+static int32_t Packet_SMSG_GOB_EDITOR_DATA(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    Net::Packet packet(msg);
+    char buffer[512];
+
+    if (packet.GetUInt8() != 1) {
+        packet.GetString(buffer, sizeof(buffer));
+        Lua::SignalEvent("HOT_GOB_EDITOR_RESULT", "%d%s", 0, buffer);
         return 1;
     }
 
-    const EVENT_DATA_MOUSE* data = static_cast<const EVENT_DATA_MOUSE*>(rawData);
+    Snapshot data;
+    data.m_guid = packet.GetUInt64();
+    data.m_entry = packet.GetUInt32();
+    data.m_spawnId = packet.GetUInt32();
+    packet.GetString(buffer, sizeof(buffer));
+    data.m_name = buffer;
+    data.m_x = packet.GetFloat();
+    data.m_y = packet.GetFloat();
+    data.m_z = packet.GetFloat();
+    data.m_o = packet.GetFloat();
 
-    if (!data || data->m_button != MOUSE_BUTTON_LEFT) {
+    for (float& value : data.m_rotation) {
+        value = packet.GetFloat();
+    }
+
+    data.m_state = packet.GetUInt8();
+    data.m_type = packet.GetUInt32();
+    data.m_displayId = packet.GetUInt32();
+
+    ReadFields(packet, data.m_fields[SCOPE_TEMPLATE]);
+    ReadFields(packet, data.m_fields[SCOPE_SPAWN]);
+
+    for (uint8_t scope = SCOPE_TEMPLATE_ADDON; scope < SCOPE_COUNT; scope++) {
+        data.m_has[scope] = packet.CanRead(1) && packet.GetUInt8() != 0;
+
+        if (data.m_has[scope]) {
+            ReadFields(packet, data.m_fields[scope]);
+        }
+    }
+
+    data.m_valid = true;
+
+    uint64_t previous = s_data.m_valid ? s_data.m_guid : 0;
+    bool sameSpawn = previous && data.m_spawnId && data.m_spawnId == s_data.m_spawnId;
+    s_data = std::move(data);
+
+    if (sameSpawn && previous != s_data.m_guid) {
+        Selection::Replace(previous, s_data.m_guid);
+    }
+
+    Selection::OnGameObjectSnapshot(s_data.m_guid);
+
+    Lua::SignalEvent("HOT_GOB_EDITOR_DATA", nullptr);
+    return 1;
+}
+
+static int32_t Packet_SMSG_GOB_EDITOR_RESULT(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    char buffer[1024];
+    int32_t ok = 0;
+
+    {
+        Net::Packet packet(msg);
+        ok = packet.GetUInt8();
+        packet.GetString(buffer, sizeof(buffer));
+    }
+
+    Lua::SignalEvent("HOT_GOB_EDITOR_RESULT", "%d%s", ok, buffer);
+    return 1;
+}
+
+static int32_t Packet_SMSG_GOB_EDITOR_SELECT(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    uint64_t guid = 0;
+
+    {
+        Net::Packet packet(msg);
+        guid = packet.GetUInt64();
+    }
+
+    if (!Selection::Select(guid)) {
         return 1;
     }
 
-    if (!UpdateMouseRay(data)) {
+    if (CGGameObject_C* object = GameObjectByGuid(guid)) {
+        // HoT: the DLL passed a std::string object through the varargs for %s.
+        std::string text = GuidToString(guid);
+        const C3Vector& position = object->m_passenger.m_position;
+        Lua::SignalEvent("HOT_GOB_SELECTED", "%s%u%f%f%f", text.c_str(), 0u, position.x, position.y, position.z);
+    }
+
+    return 1;
+}
+
+static void PushFields(lua_State* L, const std::vector<Field>& fields) {
+    lua_createtable(L, 0, static_cast<int>(fields.size()));
+    int tableIdx = lua_gettop(L);
+
+    for (const Field& field : fields) {
+        if (field.m_type == FIELD_STRING || field.m_type == FIELD_UINT64 || field.m_type == FIELD_INT64) {
+            lua_pushstring(L, field.m_string.c_str());
+        } else {
+            lua_pushnumber(L, field.m_number);
+        }
+
+        lua_setfield(L, tableIdx, field.m_key.c_str());
+    }
+}
+
+static void SetNumber(lua_State* L, int tableIdx, const char* key, double value) {
+    lua_pushnumber(L, value);
+    lua_setfield(L, tableIdx, key);
+}
+
+// GobEditor_Request([guid string]) asks for the snapshot of the guid, the selection or the target.
+static int32_t Script_Request(lua_State* L) {
+    uint64_t guid = Selection::SelectedKind() == Selection::Kind::GameObject ? Selection::SelectedGuid() : 0;
+    guid = GuidArgument(L, 1, guid);
+
+    if (!guid) {
+        guid = CGGameUI::m_lockedTarget.m_guid;
+    }
+
+    if (!guid) {
+        lua_pushboolean(L, 0);
         return 1;
     }
 
-    EditorState& state = s_state;
-    CGGameObject_C* gameObject = SelectedGameObject();
+    Request(guid);
+    lua_pushboolean(L, 1);
+    return 1;
+}
 
-    if (gameObject && state.m_gizmoTranslationAxis != Axis::None) {
-        C3Vector axisDir = AxisDirection(state.m_gizmoTranslationAxis);
-        float t = ClosestRayAxisParameter(state.m_start, state.m_end, state.m_gizmoPosition, axisDir);
+static int32_t Script_GetData(lua_State* L) {
+    const Snapshot& data = s_data;
 
-        state.m_gizmoDragState.m_active = true;
-        state.m_gizmoDragState.m_isRotation = false;
-        state.m_gizmoDragState.m_axis = state.m_gizmoTranslationAxis;
-        state.m_gizmoDragState.m_startObjPos = state.m_gizmoPosition;
-        state.m_gizmoDragState.m_anchorOnAxis = VectorMath::Add(state.m_gizmoPosition, VectorMath::Scale(axisDir, t));
+    if (!data.m_valid) {
+        lua_pushnil(L);
+        return 1;
+    }
 
+    lua_createtable(L, 0, 18);
+    int root = lua_gettop(L);
+
+    lua_pushstring(L, GuidToString(data.m_guid).c_str());
+    lua_setfield(L, root, "guid");
+    SetNumber(L, root, "entry", data.m_entry);
+    SetNumber(L, root, "spawnId", data.m_spawnId);
+    lua_pushstring(L, data.m_name.c_str());
+    lua_setfield(L, root, "name");
+    SetNumber(L, root, "x", data.m_x);
+    SetNumber(L, root, "y", data.m_y);
+    SetNumber(L, root, "z", data.m_z);
+    SetNumber(L, root, "o", data.m_o);
+    SetNumber(L, root, "state", data.m_state);
+    SetNumber(L, root, "type", data.m_type);
+    SetNumber(L, root, "displayId", data.m_displayId);
+
+    lua_createtable(L, 0, 4);
+    int rotation = lua_gettop(L);
+    SetNumber(L, rotation, "x", data.m_rotation[0]);
+    SetNumber(L, rotation, "y", data.m_rotation[1]);
+    SetNumber(L, rotation, "z", data.m_rotation[2]);
+    SetNumber(L, rotation, "w", data.m_rotation[3]);
+    lua_setfield(L, root, "rotation");
+
+    static const char* const s_names[SCOPE_COUNT] = { "template", "spawn", "templateAddon", "spawnAddon" };
+
+    for (uint8_t scope = 0; scope < SCOPE_COUNT; scope++) {
+        if (scope == SCOPE_SPAWN && !data.m_spawnId) {
+            continue;
+        }
+
+        if (!data.m_has[scope]) {
+            continue;
+        }
+
+        PushFields(L, data.m_fields[scope]);
+        lua_setfield(L, root, s_names[scope]);
+    }
+
+    lua_settop(L, root);
+    return 1;
+}
+
+static uint8_t FieldTypeFor(uint8_t scope, const std::string& key) {
+    if (scope >= SCOPE_COUNT) {
+        return 0xFF;
+    }
+
+    for (const Field& field : s_data.m_fields[scope]) {
+        if (field.m_key == key) {
+            return field.m_type;
+        }
+    }
+
+    return 0xFF;
+}
+
+// GobEditor_SetFields(scope, { key = value }), scopes are template, spawn, template addon and spawn addon.
+static int32_t Script_SetFields(lua_State* L) {
+    if (!s_data.m_valid || lua_type(L, 2) != LUA_TTABLE) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    uint8_t scope = static_cast<uint8_t>(lua_tonumber(L, 1));
+
+    if (scope >= SCOPE_COUNT) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    std::vector<Field> pending;
+    lua_pushnil(L);
+
+    while (lua_next(L, 2)) {
+        if (lua_type(L, -2) == LUA_TSTRING) {
+            int valueType = lua_type(L, -1);
+            Field field;
+            field.m_key = lua_tostring(L, -2);
+            field.m_type = FieldTypeFor(scope, field.m_key);
+
+            if (valueType == LUA_TNUMBER) {
+                field.m_number = lua_tonumber(L, -1);
+            } else if (valueType == LUA_TBOOLEAN) {
+                field.m_number = lua_toboolean(L, -1) ? 1.0 : 0.0;
+            } else if (valueType == LUA_TSTRING) {
+                if (const char* text = lua_tostring(L, -1)) {
+                    field.m_string = text;
+                    field.m_number = std::atof(text);
+                }
+            }
+
+            if (field.m_type == 0xFF) {
+                if (valueType == LUA_TSTRING) {
+                    field.m_type = FIELD_STRING;
+                } else if (field.m_number != std::floor(field.m_number)) {
+                    field.m_type = FIELD_FLOAT;
+                } else {
+                    field.m_type = field.m_number < 0.0 ? FIELD_INT : FIELD_UINT;
+                }
+            }
+
+            pending.push_back(std::move(field));
+        }
+
+        lua_pop(L, 1);
+    }
+
+    if (pending.empty()) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Net::Packet packet(Net::CMSG_GOB_EDITOR_SET_FIELDS);
+    packet.PutUInt64(s_data.m_guid);
+    packet.PutUInt8(scope);
+    packet.PutUInt16(static_cast<uint16_t>(pending.size()));
+
+    for (const Field& field : pending) {
+        packet.PutString(field.m_key.c_str());
+        packet.PutUInt8(field.m_type);
+
+        switch (field.m_type) {
+            case FIELD_UINT:
+                packet.PutUInt32(field.m_number <= 0.0 ? 0u : static_cast<uint32_t>(field.m_number));
+                break;
+            case FIELD_INT:
+                packet.PutInt32(static_cast<int32_t>(field.m_number));
+                break;
+            case FIELD_FLOAT:
+                packet.PutFloat(static_cast<float>(field.m_number));
+                break;
+            case FIELD_UINT64:
+                packet.PutUInt64(field.m_string.empty() ? (field.m_number <= 0.0 ? 0ull : static_cast<uint64_t>(field.m_number)) : std::strtoull(field.m_string.c_str(), nullptr, 0));
+                break;
+            case FIELD_INT64:
+                packet.PutInt64(field.m_string.empty() ? static_cast<int64_t>(field.m_number) : std::strtoll(field.m_string.c_str(), nullptr, 0));
+                break;
+            default:
+                packet.PutString(field.m_string.c_str());
+                break;
+        }
+    }
+
+    packet.Send();
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// GobEditor_Commit([guid string]) sends the live client position and rotation.
+static int32_t Script_Commit(lua_State* L) {
+    uint64_t guid = GuidArgument(L, 1, Selection::SelectedKind() == Selection::Kind::GameObject ? Selection::SelectedGuid() : 0);
+
+    if (!GameObjectByGuid(guid)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Commit(guid);
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+template <lua_CFunction Function>
+static int32_t Gated(lua_State* L) {
+    if (!Session::HasClearance(kRequiredSecurityLevel)) {
         return 0;
     }
 
-    if (gameObject && state.m_gizmoRotationAxis != Axis::None) {
-        C3Vector axis{};
-        C3Vector refDir{};
-        C3Vector refPerp{};
-        RingBasis(state.m_gizmoRotationAxis, axis, refDir, refPerp);
-
-        float angle = 0.0f;
-
-        if (!RayAngleOnRing(state.m_start, state.m_end, state.m_gizmoPosition, axis, refDir, refPerp, angle)) {
-            return 1;
-        }
-
-        state.m_gizmoDragState.m_active = true;
-        state.m_gizmoDragState.m_isRotation = true;
-        state.m_gizmoDragState.m_axis = state.m_gizmoRotationAxis;
-        state.m_gizmoDragState.m_startObjPos = state.m_gizmoPosition;
-        state.m_gizmoDragState.m_anchorAngle = angle;
-        state.m_gizmoDragState.m_ringAxis = axis;
-        state.m_gizmoDragState.m_ringRefDir = refDir;
-        state.m_gizmoDragState.m_ringRefPerp = refPerp;
-        state.m_gizmoDragState.m_startRot = UnpackQuat(PackedRotation(gameObject));
-
-        return 0;
-    }
-
-    return 1;
+    return Function(L);
 }
 
-static int32_t OnMouseUp(const void* rawData, void* param) {
-    const EVENT_DATA_MOUSE* data = static_cast<const EVENT_DATA_MOUSE*>(rawData);
-
-    if (!data || data->m_button != MOUSE_BUTTON_LEFT) {
-        return 1;
+void Request(uint64_t guid) {
+    if (guid && Session::HasClearance(kRequiredSecurityLevel)) {
+        Net::Packet(Net::CMSG_GOB_EDITOR_REQUEST).PutUInt64(guid).Send();
     }
-
-    s_state.m_gizmoDragState.m_active = false;
-    s_state.m_gizmoDragState.m_axis = Axis::None;
-
-    return 1;
 }
 
-static int32_t OnMouseMove(const void* rawData, void* param) {
-    if (!s_enabled) {
-        return 1;
-    }
-
-    const EVENT_DATA_MOUSE* data = static_cast<const EVENT_DATA_MOUSE*>(rawData);
-
-    if (!UpdateMouseRay(data)) {
-        return 1;
-    }
-
-    EditorState& state = s_state;
-    CGGameObject_C* gameObject = SelectedGameObject();
-
-    if (!gameObject) {
-        state.m_gizmoTranslationAxis = Axis::None;
-        state.m_gizmoRotationAxis = Axis::None;
-        state.m_gizmoDragState.m_active = false;
-
-        return 1;
-    }
-
-    DragState& drag = state.m_gizmoDragState;
-
-    if (drag.m_active) {
-        if (!drag.m_isRotation) {
-            C3Vector axisDir = AxisDirection(drag.m_axis);
-            float t = ClosestRayAxisParameter(state.m_start, state.m_end, drag.m_startObjPos, axisDir);
-            C3Vector currentOnAxis = VectorMath::Add(drag.m_startObjPos, VectorMath::Scale(axisDir, t));
-            C3Vector delta = VectorMath::Subtract(currentOnAxis, drag.m_anchorOnAxis);
-            state.m_gizmoPosition = VectorMath::Add(drag.m_startObjPos, delta);
-
-            gameObject->m_passenger.m_position = state.m_gizmoPosition;
-            gameObject->UpdateWorldObject(0);
-
-            return 1;
-        }
-
-        float currentAngle = 0.0f;
-
-        if (!RayAngleOnRing(state.m_start, state.m_end, drag.m_startObjPos, drag.m_ringAxis, drag.m_ringRefDir, drag.m_ringRefPerp, currentAngle)) {
-            return 1;
-        }
-
-        float delta = NormalizeSignedAngleDelta(currentAngle - drag.m_anchorAngle);
-        Quat deltaRot = AxisAngleToQuat(drag.m_ringAxis.x, drag.m_ringAxis.y, drag.m_ringAxis.z, delta);
-        Quat finalRot = MultiplyQuat(deltaRot, drag.m_startRot);
-        PackedRotation(gameObject) = PackQuat(finalRot);
-        gameObject->UpdateWorldObject(0);
-
-        return 1;
-    }
-
-    state.m_gizmoPosition = gameObject->m_passenger.m_position;
-    state.m_gizmoTranslationAxis = PickTranslationGizmo(state.m_start, state.m_end, state.m_gizmoPosition, kTranslationGizmoScale);
-    state.m_gizmoRotationAxis = PickRotationGizmo(state.m_start, state.m_end, state.m_gizmoPosition, kRotationGizmoScale);
-
-    return 1;
+void Forget() {
+    s_data = Snapshot();
 }
 
-CGGameObject_C* SelectedGameObject() {
-    if (s_state.m_currentObjectGuid == 0) {
-        return nullptr;
+void Commit(uint64_t guid) {
+    CGGameObject_C* object = GameObjectByGuid(guid);
+
+    if (!object || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
     }
 
-    return GameObjectByGuid(s_state.m_currentObjectGuid);
-}
+    const C3Vector& position = object->m_passenger.m_position;
+    Quat q = UnpackQuat(PackedRotation(object));
 
-uint64_t CurrentSelectedGobGUID() {
-    return s_state.m_currentObjectGuid;
-}
-
-void ClearSelection() {
-    s_state.m_currentObjectGuid = 0;
-    s_state.m_gizmoTranslationAxis = Axis::None;
-    s_state.m_gizmoRotationAxis = Axis::None;
-    s_state.m_gizmoDragState = {};
+    Net::Packet(Net::CMSG_GOB_EDITOR_UPDATE)
+        .PutInt64(static_cast<int64_t>(guid))
+        .PutFloat(position.x)
+        .PutFloat(position.y)
+        .PutFloat(position.z)
+        .PutFloat(q.x)
+        .PutFloat(q.y)
+        .PutFloat(q.z)
+        .PutFloat(q.w)
+        .Send();
 }
 
 bool SelectGameObject(uint64_t guid) {
-    CGGameObject_C* gameObject = GameObjectByGuid(guid);
+    return GameObjectByGuid(guid) && Selection::Select(guid);
+}
 
-    if (!gameObject) {
-        ClearSelection();
-        Chat::Print("EditorRuntime: object not found (guid %llu)", static_cast<unsigned long long>(guid));
-
-        return false;
+void ClearSelection() {
+    if (Selection::SelectedKind() == Selection::Kind::GameObject) {
+        Selection::Clear();
     }
+}
 
-    s_state.m_currentObjectGuid = guid;
-    s_state.m_gizmoPosition = gameObject->m_passenger.m_position;
-    s_state.m_gizmoTranslationAxis = Axis::None;
-    s_state.m_gizmoRotationAxis = Axis::None;
-    s_state.m_gizmoDragState = {};
+CGGameObject_C* SelectedGameObject() {
+    return Selection::SelectedKind() == Selection::Kind::GameObject ? GameObjectByGuid(Selection::SelectedGuid()) : nullptr;
+}
 
-    return true;
+uint64_t CurrentSelectedGobGUID() {
+    return Selection::SelectedKind() == Selection::Kind::GameObject ? Selection::SelectedGuid() : 0;
 }
 
 void Apply() {
-    s_enabled = true;
-}
+    Net::RegisterWorldHandler(Net::SMSG_GOB_EDITOR_SELECT, Packet_SMSG_GOB_EDITOR_SELECT);
+    Net::RegisterWorldHandler(Net::SMSG_GOB_EDITOR_DATA, Packet_SMSG_GOB_EDITOR_DATA);
+    Net::RegisterWorldHandler(Net::SMSG_GOB_EDITOR_RESULT, Packet_SMSG_GOB_EDITOR_RESULT);
 
-void OnGameInitialize() {
-    if (!s_enabled || s_eventsRegistered) {
-        return;
-    }
-
-    EventRegisterEx(EVENT_ID_MOUSEDOWN, OnMouseDown, nullptr, 10.0f);
-    EventRegisterEx(EVENT_ID_MOUSEUP, OnMouseUp, nullptr, 10.0f);
-    EventRegisterEx(EVENT_ID_MOUSEMOVE, OnMouseMove, nullptr, 10.0f);
-    s_eventsRegistered = true;
+    Lua::RegisterFunction("GobEditor_Request", Gated<Script_Request>);
+    Lua::RegisterFunction("GobEditor_GetData", Gated<Script_GetData>);
+    Lua::RegisterFunction("GobEditor_SetFields", Gated<Script_SetFields>);
+    Lua::RegisterFunction("GobEditor_Commit", Gated<Script_Commit>);
 }
 
 void OnGameDestroy() {
-    if (s_eventsRegistered) {
-        EventUnregister(EVENT_ID_MOUSEDOWN, OnMouseDown);
-        EventUnregister(EVENT_ID_MOUSEUP, OnMouseUp);
-        EventUnregister(EVENT_ID_MOUSEMOVE, OnMouseMove);
-        s_eventsRegistered = false;
-    }
-
-    s_state = {};
-}
-
-void OnWorldRender(CGWorldFrame* frame) {
-    if (!s_enabled || !frame || !frame->m_camera || s_state.m_currentObjectGuid == 0) {
-        return;
-    }
-
-    CGGameObject_C* gameObject = SelectedGameObject();
-
-    if (!gameObject) {
-        return;
-    }
-
-    if (!s_state.m_gizmoDragState.m_active) {
-        s_state.m_gizmoPosition = gameObject->m_passenger.m_position;
-    }
-
-    CGxDevice* device = g_theGxDevicePtr;
-
-    if (!device) {
-        return;
-    }
-
-    device->RsPush();
-    GxRsSet(GxRs_VertexShader, nullptr);
-    GxRsSet(GxRs_PixelShader, nullptr);
-    GxRsSet(GxRs_Culling, 0);
-    GxRsSet(GxRs_Fog, 0);
-    GxRsSet(GxRs_Lighting, 0);
-
-    CImVector transparent;
-    GxSceneClear(2, transparent);
-    GxRsSet(GxRs_DepthTest, 1);
-
-    C3Vector drawPosition = VectorMath::Subtract(s_state.m_gizmoPosition, frame->m_camera->m_position);
-    GizmoDraw::DrawTranslationGizmo(drawPosition, kTranslationGizmoScale, s_state.m_gizmoTranslationAxis);
-    GizmoDraw::DrawRotationGizmo(drawPosition, kRotationGizmoScale, s_state.m_gizmoRotationAxis);
-
-    device->RsPop();
+    s_data = Snapshot();
 }
 
 }

@@ -1,0 +1,14 @@
+# SpellClassMaskExtension.dbc
+uint SpellID
+uint SpellClassSet0
+uint SpellClassMask0_0
+uint SpellClassMask0_1
+uint SpellClassMask0_2
+uint SpellClassSet1
+uint SpellClassMask1_0
+uint SpellClassMask1_1
+uint SpellClassMask1_2
+uint SpellClassSet2
+uint SpellClassMask2_0
+uint SpellClassMask2_1
+uint SpellClassMask2_2

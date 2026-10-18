@@ -1156,6 +1156,12 @@ static bool OpenArchiveWithRetry(const char* name, int32_t priority, uint32_t sl
     return false;
 }
 
+// HoT: the map editor lists tilesets and models across every open archive.
+SArchive* const* ClientGetArchiveHandles(uint32_t& count) {
+    count = s_archiveHandles.Count();
+    return s_archiveHandles.m_data;
+}
+
 // VERIFY: 47b56ac0 manual
 // OFFSET: 0x00404AD0
 static void CloseAllArchives() {

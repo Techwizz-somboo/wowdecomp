@@ -13,6 +13,7 @@
 #include "WoW/Source/Net/Types.h"
 
 struct CVar;
+struct SArchive;
 class CDataStore;
 
 class CAsyncObject;
@@ -73,6 +74,8 @@ extern char s_localeCode[5];
 extern int32_t s_isPvPRealm;
 extern int32_t s_region;
 
+// HoT: exposes the open archive list to the map editor.
+SArchive* const* ClientGetArchiveHandles(uint32_t& count);
 void AsyncFileReadRegisterCVars();
 void BeginCloseGame();
 int32_t CCommand_Perf(const char* command, const char* arguments);

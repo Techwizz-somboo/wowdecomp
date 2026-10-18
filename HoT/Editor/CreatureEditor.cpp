@@ -7,6 +7,7 @@
 #include "Engine/Source/Gx/Gx.h"
 #include "HoT/Editor/GizmoDraw.h"
 #include "HoT/Editor/GobEditor.h"
+#include "HoT/Editor/Selection.h"
 #include "HoT/Editor/VectorMath.h"
 #include "HoT/Game/Session.h"
 #include "HoT/Lua/Script.h"
@@ -28,6 +29,8 @@ enum FieldType : uint8_t {
     FIELD_INT = 1,
     FIELD_FLOAT = 2,
     FIELD_STRING = 3,
+    FIELD_UINT64 = 4,
+    FIELD_INT64 = 5,
 };
 
 enum WaypointOp : uint8_t {
@@ -115,6 +118,9 @@ struct Snapshot {
 
 static Snapshot s_data;
 static bool s_drawPath;
+static uint32_t s_nodeDelay;
+static uint8_t s_nodeMoveType;
+static bool s_pathForced;
 static uint32_t s_selectedPoint;
 
 static bool TableHas(lua_State* L, int tableIdx, const char* key) {
@@ -218,6 +224,12 @@ static void ReadFields(Net::Packet& packet, std::vector<Field>& fields) {
             case FIELD_STRING:
                 packet.GetString(buffer, sizeof(buffer));
                 field.m_string = buffer;
+                break;
+            case FIELD_UINT64:
+                field.m_string = std::to_string(packet.GetUInt64());
+                break;
+            case FIELD_INT64:
+                field.m_string = std::to_string(packet.GetInt64());
                 break;
             default:
                 return;
@@ -328,7 +340,17 @@ static int32_t Packet_SMSG_CREATURE_EDITOR_DATA(void* param, NETMESSAGE msgId, u
     }
 
     data.m_valid = true;
+
+    uint64_t previous = s_data.m_valid ? s_data.m_guid : 0;
+    bool sameSpawn = previous && data.m_spawnId && data.m_spawnId == s_data.m_spawnId;
     s_data = std::move(data);
+
+    if (sameSpawn && previous != s_data.m_guid) {
+        Selection::Replace(previous, s_data.m_guid);
+    }
+
+    Selection::OnCreatureSnapshot(s_data.m_guid);
+
     Lua::SignalEvent("HOT_CREATURE_EDITOR_DATA", nullptr);
     return 1;
 }
@@ -430,7 +452,7 @@ static int32_t Script_Request(lua_State* L) {
     }
 
     uint32_t pathId = lua_isnumber(L, 2) ? ToUInt32(lua_tonumber(L, 2)) : 0;
-    Net::Packet(Net::CMSG_CREATURE_EDITOR_REQUEST).PutUInt64(guid).PutUInt32(pathId).Send();
+    Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_REQUEST).PutUInt64(guid).PutUInt32(pathId).Send();
 
     lua_pushboolean(L, 1);
     return 1;
@@ -579,10 +601,6 @@ static int32_t Script_SetFields(lua_State* L) {
             entry.m_type = FieldTypeFor(scope, entry.m_key);
             entry.m_number = 0.0;
 
-            if (entry.m_type == 0xFF) {
-                entry.m_type = valueType == LUA_TSTRING ? FIELD_STRING : FIELD_UINT;
-            }
-
             if (valueType == LUA_TNUMBER) {
                 entry.m_number = lua_tonumber(L, -1);
             } else if (valueType == LUA_TBOOLEAN) {
@@ -591,6 +609,16 @@ static int32_t Script_SetFields(lua_State* L) {
                 if (const char* text = lua_tostring(L, -1)) {
                     entry.m_text = text;
                     entry.m_number = std::atof(text);
+                }
+            }
+
+            if (entry.m_type == 0xFF) {
+                if (valueType == LUA_TSTRING) {
+                    entry.m_type = FIELD_STRING;
+                } else if (entry.m_number != std::floor(entry.m_number)) {
+                    entry.m_type = FIELD_FLOAT;
+                } else {
+                    entry.m_type = entry.m_number < 0.0 ? FIELD_INT : FIELD_UINT;
                 }
             }
 
@@ -605,7 +633,7 @@ static int32_t Script_SetFields(lua_State* L) {
         return 1;
     }
 
-    Net::Packet packet(Net::CMSG_CREATURE_EDITOR_SET_FIELDS);
+    Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_SET_FIELDS);
     packet.PutUInt64(s_data.m_guid);
     packet.PutUInt8(scope);
     packet.PutUInt16(static_cast<uint16_t>(pending.size()));
@@ -623,6 +651,12 @@ static int32_t Script_SetFields(lua_State* L) {
                 break;
             case FIELD_FLOAT:
                 packet.PutFloat(static_cast<float>(entry.m_number));
+                break;
+            case FIELD_UINT64:
+                packet.PutUInt64(entry.m_text.empty() ? (entry.m_number <= 0.0 ? 0ull : static_cast<uint64_t>(entry.m_number)) : std::strtoull(entry.m_text.c_str(), nullptr, 0));
+                break;
+            case FIELD_INT64:
+                packet.PutInt64(entry.m_text.empty() ? static_cast<int64_t>(entry.m_number) : std::strtoll(entry.m_text.c_str(), nullptr, 0));
                 break;
             default:
                 packet.PutString(entry.m_text.c_str());
@@ -648,7 +682,7 @@ static int32_t Script_SetAddon(lua_State* L) {
     const int tableIdx = 3;
     std::vector<uint32_t> auras = TableNumberArray(L, tableIdx, "auras");
 
-    Net::Packet packet(Net::CMSG_CREATURE_EDITOR_SET_ADDON);
+    Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_SET_ADDON);
     packet.PutUInt64(s_data.m_guid);
     packet.PutUInt8(scope);
     packet.PutUInt8(mode);
@@ -706,7 +740,7 @@ static int32_t Script_Waypoint(lua_State* L) {
         packet.PutFloat(orientation);
     };
 
-    Net::Packet packet(Net::CMSG_CREATURE_EDITOR_WAYPOINT);
+    Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_WAYPOINT);
     packet.PutUInt64(s_data.m_guid);
     packet.PutUInt8(op);
 
@@ -770,7 +804,7 @@ static int32_t Script_Equipment(lua_State* L) {
         return 1;
     }
 
-    Net::Packet packet(Net::CMSG_CREATURE_EDITOR_EQUIPMENT);
+    Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_EQUIPMENT);
     packet.PutUInt64(s_data.m_guid);
     packet.PutUInt8(static_cast<uint8_t>(lua_tonumber(L, 1)));
     packet.PutUInt8(static_cast<uint8_t>(lua_tonumber(L, 2)));
@@ -783,6 +817,44 @@ static int32_t Script_Equipment(lua_State* L) {
 
     lua_pushboolean(L, 1);
     return 1;
+}
+
+// CreatureEditor_Move([guid string], x, y, z, o) moves the spawn, the guid defaults to the snapshot creature.
+static int32_t Script_Move(lua_State* L) {
+    int base = 1;
+    uint64_t guid = s_data.m_valid ? s_data.m_guid : 0;
+
+    if (lua_type(L, 1) == LUA_TSTRING) {
+        if (const char* text = lua_tostring(L, 1)) {
+            guid = std::strtoull(text, nullptr, 10);
+        }
+
+        base = 2;
+    }
+
+    if (!guid || !lua_isnumber(L, base) || !lua_isnumber(L, base + 1) || !lua_isnumber(L, base + 2)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    C3Vector position = {
+        static_cast<float>(lua_tonumber(L, base)),
+        static_cast<float>(lua_tonumber(L, base + 1)),
+        static_cast<float>(lua_tonumber(L, base + 2)),
+    };
+
+    float orientation = lua_isnumber(L, base + 3) ? static_cast<float>(lua_tonumber(L, base + 3)) : s_data.m_orientation;
+    Move(guid, position, orientation);
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CreatureEditor_SetNodeDefaults(delay, moveType) sets what nodes added in the world start with.
+static int32_t Script_SetNodeDefaults(lua_State* L) {
+    s_nodeDelay = lua_isnumber(L, 1) ? ToUInt32(lua_tonumber(L, 1)) : 0;
+    s_nodeMoveType = lua_isnumber(L, 2) ? static_cast<uint8_t>(ToUInt32(lua_tonumber(L, 2))) : 0;
+    return 0;
 }
 
 static int32_t Script_SetPathDrawing(lua_State* L) {
@@ -835,7 +907,7 @@ static int32_t Gated(lua_State* L) {
 }
 
 void OnWorldRender(CGWorldFrame* frame) {
-    if (!s_drawPath || !s_data.m_valid || s_data.m_nodes.empty() || !frame || !frame->m_camera) {
+    if (!(s_drawPath || s_pathForced) || !s_data.m_valid || s_data.m_nodes.empty() || !frame || !frame->m_camera) {
         return;
     }
 
@@ -865,7 +937,7 @@ void OnWorldRender(CGWorldFrame* frame) {
     CImVector nodeColor(255, 170, 40, 255);
     CImVector firstColor(90, 220, 60, 255);
     CImVector selectedColor(30, 210, 255, 255);
-    C3Vector lift = { 0.0f, 0.0f, 0.4f };
+    C3Vector lift = { 0.0f, 0.0f, kNodeLift };
 
     C3Vector previous{};
     bool hasPrevious = false;
@@ -899,12 +971,154 @@ void OnWorldRender(CGWorldFrame* frame) {
 void OnGameDestroy() {
     s_data = Snapshot();
     s_drawPath = false;
+    s_pathForced = false;
     s_selectedPoint = 0;
 }
 
+void Request(uint64_t guid) {
+    if (guid && Session::HasClearance(kRequiredSecurityLevel)) {
+        Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_REQUEST).PutUInt64(guid).PutUInt32(0).Send();
+    }
+}
+
+void Forget() {
+    s_data = Snapshot();
+    s_selectedPoint = 0;
+}
+
+void Move(uint64_t guid, const C3Vector& position, float orientation) {
+    if (!guid || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
+    }
+
+    Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_MOVE)
+        .PutUInt64(guid)
+        .PutFloat(position.x)
+        .PutFloat(position.y)
+        .PutFloat(position.z)
+        .PutFloat(orientation)
+        .Send();
+}
+
+uint64_t SnapshotGuid() {
+    return s_data.m_valid ? s_data.m_guid : 0;
+}
+
+uint32_t PathId() {
+    return s_data.m_valid ? s_data.m_pathId : 0;
+}
+
+size_t NodeCount() {
+    return s_data.m_valid ? s_data.m_nodes.size() : 0;
+}
+
+bool GetNode(size_t index, uint32_t& point, C3Vector& position) {
+    if (!s_data.m_valid || index >= s_data.m_nodes.size()) {
+        return false;
+    }
+
+    point = s_data.m_nodes[index].m_point;
+    position = s_data.m_nodes[index].m_position;
+    return true;
+}
+
+static Node* FindNode(uint32_t point) {
+    for (Node& node : s_data.m_nodes) {
+        if (node.m_point == point) {
+            return &node;
+        }
+    }
+
+    return nullptr;
+}
+
+void PreviewNode(uint32_t point, const C3Vector& position) {
+    if (Node* node = FindNode(point)) {
+        node->m_position = position;
+    }
+}
+
+void MoveNode(uint32_t point, const C3Vector& position) {
+    Node* node = FindNode(point);
+
+    if (!node || !s_data.m_pathId || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
+    }
+
+    node->m_position = position;
+
+    Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_WAYPOINT)
+        .PutUInt64(s_data.m_guid)
+        .PutUInt8(WP_MOVE_POINT)
+        .PutUInt32(s_data.m_pathId)
+        .PutUInt32(point)
+        .PutFloat(position.x)
+        .PutFloat(position.y)
+        .PutFloat(position.z)
+        .PutUInt8(node->m_hasOrientation ? 1 : 0)
+        .PutFloat(node->m_orientation)
+        .Send();
+}
+
+void AddNode(uint32_t afterPoint, const C3Vector& position) {
+    if (!s_data.m_valid || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
+    }
+
+    Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_WAYPOINT);
+    packet.PutUInt64(s_data.m_guid);
+
+    if (!s_data.m_pathId) {
+        packet.PutUInt8(WP_CREATE_PATH);
+    } else {
+        packet.PutUInt8(WP_ADD_POINT);
+        packet.PutUInt32(s_data.m_pathId);
+        packet.PutUInt32(afterPoint);
+    }
+
+    packet.PutFloat(position.x);
+    packet.PutFloat(position.y);
+    packet.PutFloat(position.z);
+    packet.PutUInt8(0);
+    packet.PutFloat(0.0f);
+    packet.PutUInt32(s_nodeDelay);
+    packet.PutUInt8(s_nodeMoveType);
+    packet.Send();
+}
+
+void DeleteNode(uint32_t point) {
+    if (!FindNode(point) || !s_data.m_pathId || !Session::HasClearance(kRequiredSecurityLevel)) {
+        return;
+    }
+
+    Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_WAYPOINT)
+        .PutUInt64(s_data.m_guid)
+        .PutUInt8(WP_DELETE_POINT)
+        .PutUInt32(s_data.m_pathId)
+        .PutUInt32(point)
+        .Send();
+}
+
+uint32_t SelectedPoint() {
+    return s_selectedPoint;
+}
+
+void SetSelectedPoint(uint32_t point) {
+    if (s_selectedPoint == point) {
+        return;
+    }
+
+    s_selectedPoint = point;
+    Lua::SignalEvent("HOT_CREATURE_EDITOR_POINT_SELECTED", "%d", static_cast<int32_t>(point));
+}
+
+void SetPathForced(bool forced) {
+    s_pathForced = forced;
+}
+
 void Apply() {
-    Net::RegisterWorldHandler(Net::SMSG_CREATURE_EDITOR_DATA, Packet_SMSG_CREATURE_EDITOR_DATA);
-    Net::RegisterWorldHandler(Net::SMSG_CREATURE_EDITOR_RESULT, Packet_SMSG_CREATURE_EDITOR_RESULT);
+    Net::RegisterWorldHandler(Net::SMSG_GAME_EDITOR_CREATURE_DATA, Packet_SMSG_CREATURE_EDITOR_DATA);
+    Net::RegisterWorldHandler(Net::SMSG_GAME_EDITOR_CREATURE_RESULT, Packet_SMSG_CREATURE_EDITOR_RESULT);
 
     Lua::RegisterFunction("CreatureEditor_Request", Gated<Script_Request>);
     Lua::RegisterFunction("CreatureEditor_GetData", Gated<Script_GetData>);
@@ -912,7 +1126,9 @@ void Apply() {
     Lua::RegisterFunction("CreatureEditor_SetAddon", Gated<Script_SetAddon>);
     Lua::RegisterFunction("CreatureEditor_Waypoint", Gated<Script_Waypoint>);
     Lua::RegisterFunction("CreatureEditor_Equipment", Gated<Script_Equipment>);
+    Lua::RegisterFunction("CreatureEditor_Move", Gated<Script_Move>);
     Lua::RegisterFunction("CreatureEditor_SetPathDrawing", Gated<Script_SetPathDrawing>);
+    Lua::RegisterFunction("CreatureEditor_SetNodeDefaults", Gated<Script_SetNodeDefaults>);
     Lua::RegisterFunction("CreatureEditor_GetPlayerPosition", Gated<Script_GetPlayerPosition>);
     Lua::RegisterFunction("CreatureEditor_GetTargetGuid", Gated<Script_GetTargetGuid>);
 }

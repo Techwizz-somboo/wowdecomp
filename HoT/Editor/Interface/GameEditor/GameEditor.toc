@@ -1,0 +1,18 @@
+## Interface: 30300
+## Title: Game Editor
+GameEditorCompat.lua
+NoggitFonts.xml
+NoggitTemplates.xml
+NoggitWidgets.lua
+NoggitDialogs.lua
+NoggitMenus.lua
+Data\Enums.lua
+Data\Fields.lua
+Data\Groups.lua
+GameEditor.lua
+Widgets\PropertyGrid.lua
+Map\Map.xml
+Creature\Creature.xml
+GameObject\GameObject.xml
+Spell\Spell.xml
+GameEditor.xml

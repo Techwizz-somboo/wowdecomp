@@ -1,21 +1,21 @@
 #include "HoT/Editor/Editor.h"
-#include <string>
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Tempest/C3Vector.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "HoT/Core/Modules.h"
 #include "HoT/Editor/CreatureEditor.h"
+#include "HoT/Editor/Dbc/DbcEditor.h"
 #include "HoT/Editor/FreeCam.h"
 #include "HoT/Editor/GobEditor.h"
-#include "HoT/Editor/Map/BrushDecal.h"
-#include "HoT/Editor/Map/MapEditorRuntime.h"
+#include "HoT/Editor/Map/Map.h"
+#include "HoT/Editor/Mode.h"
 #include "HoT/Editor/MouseFunctions.h"
+#include "HoT/Editor/Selection.h"
+#include "HoT/Editor/Spell/SpellPreview.h"
+#include "HoT/Editor/Spell/WorldTables.h"
+#include "HoT/Editor/TemplateSearch.h"
 #include "HoT/Lua/Script.h"
-#include "HoT/Net/Handlers.h"
-#include "HoT/Net/Opcodes.h"
-#include "HoT/Net/Packet.h"
-#include "WoW/Source/Object/ObjectClient/GameObject_C.h"
 #include "WoW/Source/UIUtil/Camera.h"
 #include "WoW/Source/Ui/WorldFrame.h"
 
@@ -44,14 +44,12 @@ void MouseToWorld(CGWorldFrame* frame, float mouseX, float mouseY, C3Vector* sta
 }
 
 void BeforeWorldRender(CGWorldFrame* frame, C3Vector& decalPosition, float& decalSize, int32_t& decalStyle) {
-    MapEditor::BrushDecal::Bind(&decalPosition, &decalSize, &decalStyle);
-    MapEditor::Runtime::BeforeWorldRender(frame);
+    Mode::OnDecal(decalPosition, decalSize, decalStyle);
 }
 
 void AfterWorldRender(CGWorldFrame* frame) {
-    GobEditor::OnWorldRender(frame);
     CreatureEditor::OnWorldRender(frame);
-    MapEditor::Runtime::AfterWorldRender(frame);
+    Mode::OnWorldRender(frame);
 }
 
 int32_t OnHitTestPoint(int32_t kind, const HITTESTRESULT* result) {
@@ -64,23 +62,6 @@ CameraUpdateScope::~CameraUpdateScope() {
     FreeCam::OnCameraUpdated(this->m_camera);
 }
 
-static int32_t Packet_SMSG_GOB_EDITOR_SELECT(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
-    Net::Packet packet(msg);
-    uint64_t guid = packet.GetUInt64();
-
-    GobEditor::SelectGameObject(guid);
-    CGGameObject_C* object = GobEditor::SelectedGameObject();
-
-    if (object) {
-        // HoT: the DLL passed a std::string object through the varargs for %s.
-        std::string text = GobEditor::GuidToString(guid);
-        const C3Vector& position = object->m_passenger.m_position;
-        Lua::SignalEvent("HOT_GOB_SELECTED", "%s%u%f%f%f", text.c_str(), 0u, position.x, position.y, position.z);
-    }
-
-    return 1;
-}
-
 class EditorModule : public Module {
     public:
     const char* Name() const override {
@@ -90,23 +71,48 @@ class EditorModule : public Module {
     void OnInitializeGlobal() override {
         GobEditor::Apply();
         CreatureEditor::Apply();
-        MapEditor::Runtime::Apply();
+        Selection::Apply();
+        Map::Apply();
         FreeCam::RegisterScripts();
         MouseFunctions::RegisterScripts();
-        Net::RegisterWorldHandler(Net::SMSG_GOB_EDITOR_SELECT, Packet_SMSG_GOB_EDITOR_SELECT);
+        Mode::RegisterScripts();
+        Dbc::Apply();
+        SpellPreview::Apply();
+        WorldTables::Apply();
+        TemplateSearch::Apply();
     }
 
     void OnPlayerClientInitialize() override {
-        GobEditor::OnGameInitialize();
-        MapEditor::Runtime::OnGameClientInitialize();
         FreeCam::OnGameInitialize();
+        Mode::OnGameInitialize();
+    }
+
+    void OnLoadingScreenStarted() override {
+        SpellPreview::Stop();
+        Mode::OnWorldUnloaded();
+    }
+
+    void OnIdle() override {
+        Dbc::OnIdle();
+        SpellPreview::OnIdle();
+    }
+
+    void OnScriptsLoaded(Lua::State state) override {
+        if (state == Lua::State::Game) {
+            Mode::OnScriptsReloaded();
+        }
     }
 
     void OnDestroyGame() override {
+        Mode::OnGameDestroy();
+        Selection::OnGameDestroy();
         GobEditor::OnGameDestroy();
         CreatureEditor::OnGameDestroy();
-        MapEditor::Runtime::OnGameClientDestroy();
         FreeCam::OnGameDestroy();
+        SpellPreview::OnGameDestroy();
+        Dbc::OnGameDestroy();
+        WorldTables::OnGameDestroy();
+        TemplateSearch::OnGameDestroy();
     }
 };
 

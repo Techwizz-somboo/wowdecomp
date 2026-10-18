@@ -286,12 +286,15 @@ void DrawTorus(const C3Vector& origin, const C3Vector& axis, const C3Vector& sid
     Submit(GxPrim_Triangles, kVertCount, verts, kIndexCount, indices, color);
 }
 
-void DrawRotationGizmo(const C3Vector& origin, float scale, Axis selected) {
+void DrawRotationGizmo(const C3Vector& origin, float scale, Axis selected, bool yawOnly) {
     float ringRadius = 1.0f * scale;
     float tubeRadius = 0.02f * scale;
 
-    DrawTorus(origin, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, ringRadius, tubeRadius, ColorFor(Axis::X, selected, Red()));
-    DrawTorus(origin, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, ringRadius, tubeRadius, ColorFor(Axis::Y, selected, Green()));
+    if (!yawOnly) {
+        DrawTorus(origin, { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, ringRadius, tubeRadius, ColorFor(Axis::X, selected, Red()));
+        DrawTorus(origin, { 0.0f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f }, ringRadius, tubeRadius, ColorFor(Axis::Y, selected, Green()));
+    }
+
     DrawTorus(origin, { 0.0f, 0.0f, 1.0f }, { 1.0f, 0.0f, 0.0f }, ringRadius, tubeRadius, ColorFor(Axis::Z, selected, Blue()));
 }
 
