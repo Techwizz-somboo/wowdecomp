@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 #include "HoT/Core/Log.h"
+#include "HoT/DB/Custom.h"
 #include "HoT/Editor/Dbc/Schema.h"
 #include "HoT/Editor/Dbc/Store.h"
 #include "HoT/Game/Session.h"
@@ -55,6 +56,14 @@ static std::unordered_set<std::string> s_strings;
 static bool s_spellsDirty = false;
 static bool s_modelAttachDirty = false;
 static bool s_effectNamesDirty = false;
+
+struct ClassMaskBit {
+    std::vector<std::string> names;
+    int32_t spells = 0;
+};
+
+// Bits of the spell class mask by family, rebuilt after a Spell row changes.
+static std::unordered_map<int32_t, std::vector<ClassMaskBit>> s_classMaskBits;
 
 static const char* Intern(const std::string& text) {
     return s_strings.insert(text).first->c_str();
@@ -199,6 +208,9 @@ static void OnRowWritten(const Store& store, int32_t id, bool inserted) {
     if (stem == "Spell") {
         GrowKnownSpellBits();
         s_spellsDirty = true;
+        s_classMaskBits.clear();
+    } else if (stem == "SpellClassMaskExtension") {
+        s_classMaskBits.clear();
     } else if (stem == "SpellVisualKit" || stem == "SpellVisualKitModelAttach") {
         s_modelAttachDirty = true;
     } else if (stem == "SpellVisualEffectName") {
@@ -877,6 +889,116 @@ static int32_t Script_UnpatchSpellTooltip(lua_State* L) {
     return 0;
 }
 
+static constexpr size_t kClassMaskBits = 96;
+static constexpr size_t kClassMaskNames = 3;
+
+static const std::vector<ClassMaskBit>& ClassMaskBits(int32_t family) {
+    auto it = s_classMaskBits.find(family);
+
+    if (it != s_classMaskBits.end()) {
+        return it->second;
+    }
+
+    std::vector<ClassMaskBit> bits(kClassMaskBits);
+
+    auto add = [&](const int32_t* mask, const char* spellName) {
+        std::string name = spellName ? spellName : "";
+
+        for (size_t bit = 0; bit < kClassMaskBits; bit++) {
+            if (!(static_cast<uint32_t>(mask[bit / 32]) & (1u << (bit % 32)))) {
+                continue;
+            }
+
+            ClassMaskBit& entry = bits[bit];
+            entry.spells++;
+
+            if (!name.empty() && entry.names.size() < kClassMaskNames && std::find(entry.names.begin(), entry.names.end(), name) == entry.names.end()) {
+                entry.names.push_back(name);
+            }
+        }
+    };
+
+    Table spells;
+
+    if (Resolve("Spell", spells)) {
+        std::vector<uint8_t> record(spells.store->recordSize);
+        int32_t total = spells.store->db->m_numRecords;
+
+        for (int32_t index = 0; index < total; index++) {
+            if (spells.store->readIndex(index, record.data())) {
+                const SpellRec* spell = reinterpret_cast<const SpellRec*>(record.data());
+
+                if (spell->m_spellClassSet == family) {
+                    add(spell->m_spellClassMask, spell->m_name);
+                }
+            }
+        }
+
+        // Extension blocks put a spell into more families, the client and the server match spell mods against them too.
+        Table extensions;
+
+        if (Resolve("SpellClassMaskExtension", extensions)) {
+            std::vector<uint8_t> row(extensions.store->recordSize);
+            int32_t rows = extensions.store->db->m_numRecords;
+
+            for (int32_t index = 0; index < rows; index++) {
+                if (!extensions.store->readIndex(index, row.data())) {
+                    continue;
+                }
+
+                const HoT::DB::SpellClassMaskExtensionRec* ext = reinterpret_cast<const HoT::DB::SpellClassMaskExtensionRec*>(row.data());
+                const char* name = spells.store->read(ext->m_id, record.data()) ? reinterpret_cast<const SpellRec*>(record.data())->m_name : nullptr;
+
+                for (const auto& block : ext->m_blocks) {
+                    if (block.m_spellClassSet == family) {
+                        add(block.m_spellClassMask, name);
+                    }
+                }
+            }
+        }
+    }
+
+    return s_classMaskBits.emplace(family, std::move(bits)).first->second;
+}
+
+// DbcEditor_GetClassMaskNames(family) -> { [bit 0-95] = { name, tooltip } } for the bits spells of that family carry, extension blocks included.
+static int32_t Script_GetClassMaskNames(lua_State* L) {
+    int32_t family;
+
+    if (!IdArgument(L, 1, family)) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    const std::vector<ClassMaskBit>& bits = ClassMaskBits(family);
+    lua_newtable(L);
+    int result = lua_gettop(L);
+
+    for (size_t bit = 0; bit < bits.size(); bit++) {
+        const ClassMaskBit& entry = bits[bit];
+
+        if (!entry.spells) {
+            continue;
+        }
+
+        std::string name;
+
+        for (const std::string& part : entry.names) {
+            name += (name.empty() ? "" : ", ") + part;
+        }
+
+        lua_createtable(L, 0, 2);
+        lua_pushstring(L, name.c_str());
+        lua_setfield(L, -2, "name");
+        std::string tooltip = std::to_string(entry.spells) + (entry.spells == 1 ? " spell carries" : " spells carry") + " the bit in this family";
+        lua_pushstring(L, tooltip.c_str());
+        lua_setfield(L, -2, "tooltip");
+        lua_rawseti(L, result, static_cast<int>(bit));
+    }
+
+    return 1;
+}
+
 // DbcEditor_Save(table, id, values) sends the full row, unspecified columns come from the current row or zero.
 static int32_t Script_Save(lua_State* L) {
     Table table;
@@ -929,6 +1051,7 @@ void Apply() {
     Lua::RegisterFunction("DbcEditor_ParseSpellText", Gated<Script_ParseSpellText>);
     Lua::RegisterFunction("DbcEditor_PatchSpellTooltip", Gated<Script_PatchSpellTooltip>);
     Lua::RegisterFunction("DbcEditor_UnpatchSpellTooltip", Gated<Script_UnpatchSpellTooltip>);
+    Lua::RegisterFunction("DbcEditor_GetClassMaskNames", Gated<Script_GetClassMaskNames>);
 }
 
 void OnIdle() {
@@ -951,6 +1074,7 @@ void OnIdle() {
 void OnGameDestroy() {
     s_spellsDirty = false;
     s_localOriginals.clear();
+    s_classMaskBits.clear();
 }
 
 }

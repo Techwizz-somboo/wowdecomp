@@ -80,7 +80,7 @@ function SE.CreateSpellGrid(parent, groups, options)
 	local grid = GameEditor_CreatePropertyGrid(parent, {
 		table = SE.TABLE,
 		groups = groups,
-		readOnly = { ID = true },
+		readOnly = { m_id = true },
 		filter = options.filter,
 		visible = options.visible,
 		labelWidth = options.labelWidth or 190,
@@ -121,14 +121,14 @@ GridSection("general", "General", "Identity, casting, cost and the conditions th
 -- Attributes -----------------------------------------------------------------------------------------
 
 local ATTRIBUTE_COLUMNS = {
-	{ column = "Attributes", flags = "SpellAttr0", title = "Attributes 0" },
-	{ column = "AttributesEx", flags = "SpellAttr1", title = "Attributes 1" },
-	{ column = "AttributesEx2", flags = "SpellAttr2", title = "Attributes 2" },
-	{ column = "AttributesEx3", flags = "SpellAttr3", title = "Attributes 3" },
-	{ column = "AttributesEx4", flags = "SpellAttr4", title = "Attributes 4" },
-	{ column = "AttributesEx5", flags = "SpellAttr5", title = "Attributes 5" },
-	{ column = "AttributesEx6", flags = "SpellAttr6", title = "Attributes 6" },
-	{ column = "AttributesEx7", flags = "SpellAttr7", title = "Attributes 7" },
+	{ column = "m_attributes", flags = "SpellAttr0", title = "Attributes 0" },
+	{ column = "m_attributesEx", flags = "SpellAttr1", title = "Attributes 1" },
+	{ column = "m_attributesExB", flags = "SpellAttr2", title = "Attributes 2" },
+	{ column = "m_attributesExC", flags = "SpellAttr3", title = "Attributes 3" },
+	{ column = "m_attributesExD", flags = "SpellAttr4", title = "Attributes 4" },
+	{ column = "m_attributesExE", flags = "SpellAttr5", title = "Attributes 5" },
+	{ column = "m_attributesExF", flags = "SpellAttr6", title = "Attributes 6" },
+	{ column = "m_attributesExG", flags = "SpellAttr7", title = "Attributes 7" },
 };
 
 local function HexValue(value)
@@ -416,14 +416,14 @@ do
 		table.insert(targeting.columns, column);
 	end
 
-	table.insert(targeting.columns, "RangeIndex");
+	table.insert(targeting.columns, "m_rangeIndex");
 	groups = { targeting };
 
 	for index = 1, 3 do
 		table.insert(groups, {
 			title = "Effect "..index.." targets",
-			columns = { "EffectImplicitTargetA"..index, "EffectImplicitTargetB"..index, "EffectRadiusIndex"..index, "EffectChainTarget"..index },
-			when = function(values) return SE.Number(values["Effect"..index]) ~= 0; end,
+			columns = { "m_implicitTargetA["..(index - 1).."]", "m_implicitTargetB["..(index - 1).."]", "m_effectRadiusIndex["..(index - 1).."]", "m_effectChainTargets["..(index - 1).."]" },
+			when = function(values) return SE.Number(values["m_effect["..(index - 1).."]"]) ~= 0; end,
 		});
 	end
 
@@ -438,12 +438,12 @@ function SE.EffectGroups(index)
 	local letter = CLASS_MASK_LETTERS[index];
 
 	return {
-		{ title = "Type", columns = { "Effect"..index, "EffectApplyAuraName"..index, "EffectMechanic"..index } },
-		{ title = "Value", columns = { "EffectBasePoints"..index, "EffectDieSides"..index, "EffectRealPointsPerLevel"..index, "EffectPointsPerComboPoint"..index,
-			"EffectMultipleValue"..index, "EffectDamageMultiplier"..index, "EffectBonusMultiplier"..index } },
-		{ title = "Targets", columns = { "EffectImplicitTargetA"..index, "EffectImplicitTargetB"..index, "EffectRadiusIndex"..index, "EffectChainTarget"..index } },
-		{ title = "Parameters", columns = { "EffectAmplitude"..index, "EffectMiscValue"..index, "EffectMiscValueB"..index, "EffectTriggerSpell"..index, "EffectItemType"..index } },
-		{ title = "Spell class mask", columns = { "EffectSpellClassMask"..letter.."1", "EffectSpellClassMask"..letter.."2", "EffectSpellClassMask"..letter.."3" } },
+		{ title = "Type", columns = { "m_effect["..(index - 1).."]", "m_effectAura["..(index - 1).."]", "m_effectMechanic["..(index - 1).."]" } },
+		{ title = "Value", columns = { "m_effectBasePoints["..(index - 1).."]", "m_effectDieSides["..(index - 1).."]", "m_effectRealPointsPerLevel["..(index - 1).."]", "m_effectPointsPerCombo["..(index - 1).."]",
+			"m_effectAmplitude["..(index - 1).."]", "m_effectChainAmplitude["..(index - 1).."]", "m_effectBonusCoefficient["..(index - 1).."]" } },
+		{ title = "Targets", columns = { "m_implicitTargetA["..(index - 1).."]", "m_implicitTargetB["..(index - 1).."]", "m_effectRadiusIndex["..(index - 1).."]", "m_effectChainTargets["..(index - 1).."]" } },
+		{ title = "Parameters", columns = { "m_effectAuraPeriod["..(index - 1).."]", "m_effectMiscValue["..(index - 1).."]", "m_effectMiscValueB["..(index - 1).."]", "m_effectTriggerSpell["..(index - 1).."]", "m_effectItemType["..(index - 1).."]" } },
+		{ title = "Spell class mask", columns = { "m_effectSpellClassMask"..letter.."[0]", "m_effectSpellClassMask"..letter.."[1]", "m_effectSpellClassMask"..letter.."[2]" } },
 	};
 end
 
@@ -452,8 +452,8 @@ function SE.EffectColumns(index)
 end
 
 local function MiscInfo(values, index)
-	local effect = SE.Number(values["Effect"..index]);
-	local aura = SE.Number(values["EffectApplyAuraName"..index]);
+	local effect = SE.Number(values["m_effect["..(index - 1).."]"]);
+	local aura = SE.Number(values["m_effectAura["..(index - 1).."]"]);
 	local misc = Data.MiscValue or {};
 	return (aura ~= 0 and misc.Aura and misc.Aura[aura]) or (misc.Effect and misc.Effect[effect]);
 end
@@ -485,14 +485,14 @@ local function MiscText(info, slot, value)
 end
 
 local function ClassMaskText(values, index)
-	local family = SE.Number(values.SpellFamilyName);
+	local family = SE.Number(values.m_spellClassSet);
 	local names = Data.ClassMask and Data.ClassMask[family];
 	local letter = CLASS_MASK_LETTERS[index];
 	local found = {};
 	local any = false;
 
 	for word = 0, 2 do
-		local mask = SE.Number(values["EffectSpellClassMask"..letter..(word + 1)]);
+		local mask = SE.Number(values["m_effectSpellClassMask"..letter.."["..word.."]"]);
 
 		if ( mask ~= 0 ) then
 			any = true;
@@ -515,14 +515,14 @@ end
 
 -- Short description of an effect for the chips and the card header.
 function SE.EffectSummary(values, index)
-	local effect = SE.Number(values["Effect"..index]);
+	local effect = SE.Number(values["m_effect["..(index - 1).."]"]);
 
 	if ( effect == 0 ) then
 		return "No effect", nil;
 	end
 
 	local name = SE.EnumText("SpellEffect", effect);
-	local aura = SE.Number(values["EffectApplyAuraName"..index]);
+	local aura = SE.Number(values["m_effectAura["..(index - 1).."]"]);
 
 	if ( aura ~= 0 ) then
 		name = name..": "..SE.EnumText("SpellAura", aura);
@@ -602,7 +602,7 @@ local function BuildEffects(parent)
 	buttons:SetPoint("BOTTOMRIGHT", card, "BOTTOMRIGHT", -8, 6);
 
 	frame.openTrigger = SE.Button(buttons, "Open trigger spell", 120, function()
-		local id = SE.Number(SE.GetValue("EffectTriggerSpell"..frame.selected));
+		local id = SE.Number(SE.GetValue("m_effectTriggerSpell["..(frame.selected - 1).."]"));
 
 		if ( id > 0 ) then
 			SE.Open(id);
@@ -631,7 +631,7 @@ local function BuildEffects(parent)
 			values[target[position]] = value;
 		end
 
-		SE.Changed("Effect"..to);
+		SE.Changed("m_effect["..(to - 1).."]");
 		frame:Select(to);
 	end
 
@@ -652,9 +652,9 @@ local function BuildEffects(parent)
 					SE.cur.values[column] = 0;
 				end
 
-				SE.cur.values["EffectDamageMultiplier"..from] = 1;
-				SE.cur.values["EffectBonusMultiplier"..from] = 1;
-				SE.Changed("Effect"..from);
+				SE.cur.values["m_effectChainAmplitude["..(from - 1).."]"] = 1;
+				SE.cur.values["m_effectBonusCoefficient["..(from - 1).."]"] = 1;
+				SE.Changed("m_effect["..(from - 1).."]");
 			end
 		end });
 		copyMenus[from] = definition;
@@ -679,8 +679,8 @@ local function BuildEffects(parent)
 	gridHolder:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
 
 	local function Visible(index)
-		local effectColumn = "Effect"..index;
-		local auraColumn = "EffectApplyAuraName"..index;
+		local effectColumn = "m_effect["..(index - 1).."]";
+		local auraColumn = "m_effectAura["..(index - 1).."]";
 
 		return function(column, values)
 			if ( frame.showAll or column == effectColumn ) then
@@ -723,7 +723,7 @@ local function BuildEffects(parent)
 			chip.title:SetText(format("Effect %d%s", index, changed > 0 and format("  |cffffcc00%d changed|r", changed) or ""));
 			chip.name:SetText(name);
 			chip.value:SetText(value and ("Value "..value) or "");
-			NoggitText_SetColor(chip.name, SE.Number(values["Effect"..index]) == 0 and NOGGIT_COLOR_DISABLED or NOGGIT_COLOR_TEXT);
+			NoggitText_SetColor(chip.name, SE.Number(values["m_effect["..(index - 1).."]"]) == 0 and NOGGIT_COLOR_DISABLED or NOGGIT_COLOR_TEXT);
 
 			if ( index == self.selected ) then
 				NoggitBox_Set(chip, NOGGIT_COLOR_BASE, NOGGIT_COLOR_ACCENT);
@@ -738,7 +738,7 @@ local function BuildEffects(parent)
 	frame.RefreshCard = function(self)
 		local values = SE.cur and SE.cur.values or {};
 		local index = self.selected;
-		local effect = SE.Number(values["Effect"..index]);
+		local effect = SE.Number(values["m_effect["..(index - 1).."]"]);
 		local lines = {};
 
 		if ( effect == 0 ) then
@@ -746,8 +746,8 @@ local function BuildEffects(parent)
 		else
 			local name, value = SE.EffectSummary(values, index);
 			local text = format("%s   |cff8f8f8fvalue|r %s", name, value);
-			local amplitude = SE.Number(values["EffectAmplitude"..index]);
-			local duration = SE.DurationInfo(SE.Number(values.DurationIndex)) or 0;
+			local amplitude = SE.Number(values["m_effectAuraPeriod["..(index - 1).."]"]);
+			local duration = SE.DurationInfo(SE.Number(values.m_durationIndex)) or 0;
 
 			if ( amplitude > 0 and duration > 0 ) then
 				local ticks = floor(duration / amplitude);
@@ -756,17 +756,17 @@ local function BuildEffects(parent)
 
 			lines[1] = text;
 
-			local targetA = SE.EnumText("SpellImplicitTarget", SE.Number(values["EffectImplicitTargetA"..index]));
-			local targetB = SE.EnumText("SpellImplicitTarget", SE.Number(values["EffectImplicitTargetB"..index]));
-			local _, radius = SE.RadiusInfo(SE.Number(values["EffectRadiusIndex"..index]));
-			local chain = SE.Number(values["EffectChainTarget"..index]);
+			local targetA = SE.EnumText("SpellImplicitTarget", SE.Number(values["m_implicitTargetA["..(index - 1).."]"]));
+			local targetB = SE.EnumText("SpellImplicitTarget", SE.Number(values["m_implicitTargetB["..(index - 1).."]"]));
+			local _, radius = SE.RadiusInfo(SE.Number(values["m_effectRadiusIndex["..(index - 1).."]"]));
+			local chain = SE.Number(values["m_effectChainTargets["..(index - 1).."]"]);
 			lines[2] = format("|cff8f8f8fTargets|r %s / %s%s%s", targetA, targetB,
 				radius and ("   |cff8f8f8fradius|r "..radius) or "", chain > 0 and ("   |cff8f8f8fchain|r "..chain) or "");
 
 			local info = MiscInfo(values, index);
 			local misc = {};
-			local miscA = MiscText(info, "a", SE.Number(values["EffectMiscValue"..index]));
-			local miscB = MiscText(info, "b", SE.Number(values["EffectMiscValueB"..index]));
+			local miscA = MiscText(info, "a", SE.Number(values["m_effectMiscValue["..(index - 1).."]"]));
+			local miscB = MiscText(info, "b", SE.Number(values["m_effectMiscValueB["..(index - 1).."]"]));
 
 			if ( miscA ) then
 				table.insert(misc, miscA);
@@ -776,7 +776,7 @@ local function BuildEffects(parent)
 				table.insert(misc, miscB);
 			end
 
-			local trigger = SE.Number(values["EffectTriggerSpell"..index]);
+			local trigger = SE.Number(values["m_effectTriggerSpell["..(index - 1).."]"]);
 
 			if ( trigger ~= 0 ) then
 				local triggerName, triggerRank = SE.SpellName(trigger);
@@ -792,7 +792,7 @@ local function BuildEffects(parent)
 			self.card.lines[line]:SetText(lines[line] or "");
 		end
 
-		SE.SetEnabled(self.openTrigger, SE.Number(values["EffectTriggerSpell"..index]) > 0);
+		SE.SetEnabled(self.openTrigger, SE.Number(values["m_effectTriggerSpell["..(index - 1).."]"]) > 0);
 	end;
 
 	frame.Select = function(self, index)
@@ -842,3 +842,50 @@ end
 
 GridSection("procs", "Procs", "When an aura of this spell procs. The server side rules for the same spell are in the Proc rules tab under Server.",
 	GroupsByTitle({ "Procs" }));
+
+-- HoT tables keyed by the spell id -------------------------------------------------------------------
+
+local function SpellRowSection(key, title, description, tableName, missingText)
+	local editor;
+
+	SE.AddSection({
+		key = key,
+		title = title,
+		group = "spell",
+		columns = {},
+		build = function(parent)
+			local frame = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellSection"), parent);
+			local y = SE.SectionTitle(frame, title, description, 0);
+			editor = SE.CreateDbcEditor(frame, tableName, {
+				title = title,
+				groups = Data.Groups and Data.Groups[tableName],
+				labelWidth = 200,
+				rowId = SE.CurrentId,
+				emptyText = "Open a spell first.",
+				missingText = missingText,
+			});
+			editor.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y - 2);
+			editor.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+
+			SE.On("SPELL_LOADED", function()
+				editor:Load(SE.CurrentId(), not editor:IsDirty() or editor.pending);
+			end);
+
+			editor:Load(SE.CurrentId(), true);
+			return frame;
+		end,
+		badge = function()
+			if ( editor and editor:IsDirty() ) then
+				return "|cffffcc00unsaved|r";
+			end
+		end,
+	});
+end
+
+SpellRowSection("classMaskExtension", "Class mask extension",
+	"Up to three more spell families and class masks for this spell, so spell modifiers of other families can affect it. A block with no mask bits set matches nothing.",
+	"SpellClassMaskExtension", "This spell has no class mask extension row. Create one to give it more families.");
+
+SpellRowSection("customAttr", "Custom attributes",
+	"Server side custom attribute bits from SpellCustomAttr.dbc.",
+	"SpellCustomAttr", "This spell has no custom attribute row.");

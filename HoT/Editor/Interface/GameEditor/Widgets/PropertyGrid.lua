@@ -447,8 +447,8 @@ local function EffectiveField(grid, column)
 	local field = FieldFor(grid, column);
 
 	if ( field.miscValue and field.effect and Data.MiscValue ) then
-		local effect = tonumber(grid.values["Effect"..field.effect]) or 0;
-		local aura = tonumber(grid.values["EffectApplyAuraName"..field.effect]) or 0;
+		local effect = tonumber(grid.values["m_effect["..(field.effect - 1).."]"]) or 0;
+		local aura = tonumber(grid.values["m_effectAura["..(field.effect - 1).."]"]) or 0;
 		local info = (aura ~= 0 and Data.MiscValue.Aura and Data.MiscValue.Aura[aura]) or (Data.MiscValue.Effect and Data.MiscValue.Effect[effect]);
 		local slot = field.miscValue;
 

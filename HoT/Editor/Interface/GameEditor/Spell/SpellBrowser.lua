@@ -114,9 +114,9 @@ local function RefreshRow(row, item, selected)
 	local name, rank, icon;
 
 	if ( doc ) then
-		name = doc.values.SpellName0;
-		rank = doc.values.SpellRank0;
-		icon = SE.IconPath(doc.values.SpellIconID);
+		name = doc.values["m_name[0]"];
+		rank = doc.values["m_nameSubtext[0]"];
+		icon = SE.IconPath(doc.values.m_spellIconID);
 	else
 		local infoName, infoRank, infoIcon = GetSpellInfo(item.id);
 		name = item.name or infoName;
@@ -127,9 +127,9 @@ local function RefreshRow(row, item, selected)
 			local values = SE.GetRow(SE.TABLE, item.id);
 
 			if ( values ) then
-				name = name or values.SpellName0;
-				rank = rank or values.SpellRank0;
-				icon = icon or SE.IconPath(values.SpellIconID);
+				name = name or values["m_name[0]"];
+				rank = rank or values["m_nameSubtext[0]"];
+				icon = icon or SE.IconPath(values.m_spellIconID);
 			end
 		end
 	end

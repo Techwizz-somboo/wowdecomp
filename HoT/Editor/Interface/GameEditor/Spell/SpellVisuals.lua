@@ -4,29 +4,29 @@ local SE = GameEditorSpell;
 local Data = GameEditorData or {};
 
 local KIT_LABELS = {
-	PrecastKit = "Precast", CastKit = "Cast", ImpactKit = "Impact", StateKit = "State", StateDoneKit = "State done",
-	ChannelKit = "Channel", CasterImpactKit = "Caster impact", TargetImpactKit = "Target impact",
-	MissileTargetingKit = "Missile target", InstantAreaKit = "Instant area", ImpactAreaKit = "Impact area",
-	PersistentAreaKit = "Persistent area",
+	m_precastKit = "Precast", m_castKit = "Cast", m_impactKit = "Impact", m_stateKit = "State", m_stateDoneKit = "State done",
+	m_channelKit = "Channel", m_casterImpactKit = "Caster impact", m_targetImpactKit = "Target impact",
+	m_missileTargetingKit = "Missile target", m_instantAreaKit = "Instant area", m_impactAreaKit = "Impact area",
+	m_persistentAreaKit = "Persistent area",
 };
 
 local VISUAL_GROUPS = {
-	{ title = "Visual", columns = { "ID", "Flags", "AnimEventSoundId" } },
+	{ title = "Visual", columns = { "m_id", "m_flags", "m_animEventSoundID" } },
 	{ title = "Kits", columns = SE.VISUAL_KIT_COLUMNS },
-	{ title = "Missile", columns = { "HasMissile", "MissileModel", "MissilePathType", "MissileMotion", "MissileSound", "MissileAttachment",
-		"MissileDestinationAttachment", "MissileFollowGroundHeight", "MissileFollowDropSpeed", "MissileFollowApproach", "MissileFollowGroundFlags",
-		"MissileCastOffsetX", "MissileCastOffsetY", "MissileCastOffsetZ", "MissileImpactOffsetX", "MissileImpactOffsetY", "MissileImpactOffsetZ" } },
+	{ title = "Missile", columns = { "m_hasMissile", "m_missileModel", "m_missilePathType", "m_missileMotion", "m_missileSound", "m_missileAttachment",
+		"m_missileDestinationAttachment", "m_missileFollowGroundHeight", "m_missileFollowGroundDropSpeed", "m_missileFollowGroundApproach", "m_missileFollowGroundFlags",
+		"m_missileCastOffset[0]", "m_missileCastOffset[1]", "m_missileCastOffset[2]", "m_missileImpactOffset[0]", "m_missileImpactOffset[1]", "m_missileImpactOffset[2]" } },
 };
 
 local KIT_GROUPS = {
-	{ title = "Kit", columns = { "ID", "Flags" } },
-	{ title = "Animation", columns = { "StartAnimId", "AnimationId" } },
-	{ title = "Effects", columns = { "HeadEffect", "ChestEffect", "BaseEffect", "LeftHandEffect", "RightHandEffect", "BreathEffect",
-		"LeftWeaponEffect", "RightWeaponEffect", "SpecialEffect1", "SpecialEffect2", "SpecialEffect3", "WorldEffect" } },
-	{ title = "Sound and camera", columns = { "SoundID", "ShakeID" } },
-	{ title = "Procedures", columns = { "CharProc1", "CharProc2", "CharProc3", "CharProc4",
-		"CharParamZero1", "CharParamZero2", "CharParamZero3", "CharParamZero4", "CharParamOne1", "CharParamOne2", "CharParamOne3", "CharParamOne4",
-		"CharParamTwo1", "CharParamTwo2", "CharParamTwo3", "CharParamTwo4", "CharParamThree1", "CharParamThree2", "CharParamThree3", "CharParamThree4" } },
+	{ title = "Kit", columns = { "m_id", "m_flags" } },
+	{ title = "Animation", columns = { "m_startAnimID", "m_animID" } },
+	{ title = "Effects", columns = { "m_headEffect", "m_chestEffect", "m_baseEffect", "m_leftHandEffect", "m_rightHandEffect", "m_breathEffect",
+		"m_leftWeaponEffect", "m_rightWeaponEffect", "m_specialEffect[0]", "m_specialEffect[1]", "m_specialEffect[2]", "m_worldEffect" } },
+	{ title = "Sound and camera", columns = { "m_soundID", "m_shakeID" } },
+	{ title = "Procedures", columns = { "m_charProc[0]", "m_charProc[1]", "m_charProc[2]", "m_charProc[3]",
+		"m_charParamZero[0]", "m_charParamZero[1]", "m_charParamZero[2]", "m_charParamZero[3]", "m_charParamOne[0]", "m_charParamOne[1]", "m_charParamOne[2]", "m_charParamOne[3]",
+		"m_charParamTwo[0]", "m_charParamTwo[1]", "m_charParamTwo[2]", "m_charParamTwo[3]", "m_charParamThree[0]", "m_charParamThree[1]", "m_charParamThree[2]", "m_charParamThree[3]" } },
 };
 
 local isKitColumn = {};
@@ -92,10 +92,10 @@ local function CreateMissileWindow()
 		labelWidth = 170,
 		emptyText = "The spell has no SpellMissile row. Create one to tune the missile flight.",
 		onCreated = function(_, id)
-			SE.SetValue("SpellMissileID", id);
+			SE.SetValue("m_spellMissileID", id);
 		end,
 		onIdEntered = function(_, id)
-			SE.SetValue("SpellMissileID", id);
+			SE.SetValue("m_spellMissileID", id);
 		end,
 	});
 	missileWindow.editor.frame:SetAllPoints(missileWindow.content);
@@ -110,7 +110,7 @@ function SE.OpenMissile()
 		CreateMissileWindow();
 	end
 
-	missileWindow.editor:Load(SE.Number(SE.GetValue("SpellMissileID")));
+	missileWindow.editor:Load(SE.Number(SE.GetValue("m_spellMissileID")));
 	GameEditor_ShowWindow(missileWindow);
 end
 
@@ -169,10 +169,10 @@ local function BuildVisuals(parent)
 	grid.frame:SetHeight(186);
 	y = y - 192;
 
-	frame.icon = IconStrip(frame, "SpellIconID", "Icon");
+	frame.icon = IconStrip(frame, "m_spellIconID", "Icon");
 	frame.icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
 	frame.icon:SetPoint("RIGHT", frame, "CENTER", -6, 0);
-	frame.activeIcon = IconStrip(frame, "ActiveIconID", "Active icon");
+	frame.activeIcon = IconStrip(frame, "m_activeIconID", "Active icon");
 	frame.activeIcon:SetPoint("TOPLEFT", frame, "TOP", 6, y);
 	frame.activeIcon:SetPoint("RIGHT", frame, "RIGHT", 0, 0);
 	y = y - 56;
@@ -240,10 +240,10 @@ local function BuildVisuals(parent)
 			end
 		end,
 		onCreated = function(_, id)
-			SE.SetValue("SpellVisual"..frame.slot, id);
+			SE.SetValue("m_spellVisualID["..(frame.slot - 1).."]", id);
 		end,
 		onIdEntered = function(_, id)
-			SE.SetValue("SpellVisual"..frame.slot, id);
+			SE.SetValue("m_spellVisualID["..(frame.slot - 1).."]", id);
 		end,
 		onStatus = function()
 			if ( frame.RefreshKits ) then
@@ -266,7 +266,7 @@ local function BuildVisuals(parent)
 	end;
 
 	frame.LoadVisual = function(self, force)
-		visualEditor:Load(SE.Number(SE.GetValue("SpellVisual"..self.slot)), force);
+		visualEditor:Load(SE.Number(SE.GetValue("m_spellVisualID["..(self.slot - 1).."]")), force);
 		self:RefreshKits();
 	end;
 
@@ -294,16 +294,16 @@ local function BuildVisuals(parent)
 		end
 
 		if ( missileWindow and missileWindow:IsShown() ) then
-			missileWindow.editor:Load(SE.Number(SE.GetValue("SpellMissileID")));
+			missileWindow.editor:Load(SE.Number(SE.GetValue("m_spellMissileID")));
 		end
 	end);
 
 	SE.On("VALUE_CHANGED", function(column)
-		if ( column == "SpellVisual"..frame.slot ) then
+		if ( column == "m_spellVisualID["..(frame.slot - 1).."]" ) then
 			frame:LoadVisual();
 		end
 
-		if ( frame:IsVisible() and (column == "SpellIconID" or column == "ActiveIconID") ) then
+		if ( frame:IsVisible() and (column == "m_spellIconID" or column == "m_activeIconID") ) then
 			frame.icon:Refresh();
 			frame.activeIcon:Refresh();
 		end
@@ -396,11 +396,11 @@ end
 
 local function DescriptionVariables(values)
 	local names = {};
-	local id = SE.Number(values.SpellDescriptionVariableID);
+	local id = SE.Number(values.m_descriptionVariablesID);
 	local row = id > 0 and SE.GetRow("SpellDescriptionVariables", id);
 
-	if ( row and row.Formula ) then
-		for name in string.gmatch(tostring(row.Formula), "%$([%w_]+)=") do
+	if ( row and row.m_variables ) then
+		for name in string.gmatch(tostring(row.m_variables), "%$([%w_]+)=") do
 			table.insert(names, name);
 		end
 	end
@@ -432,7 +432,7 @@ local function BuildTokens(values)
 		for index = 1, 3 do
 			local item = Add(definition[1]..index, format(definition[2], index), true);
 
-			if ( SE.Number(values["Effect"..index]) == 0 ) then
+			if ( SE.Number(values["m_effect["..(index - 1).."]"]) == 0 ) then
 				item.text = item.text.."  |cff7f7f7f(effect "..index.." is empty)|r";
 				item.dim = true;
 			end
@@ -1025,7 +1025,7 @@ SE.On("SPELL_LOADED", function() SE.HideTokenHelpers(); end);
 
 -- Texts section ---------------------------------------------------------------------------------------
 
-local TEXT_COLUMNS = { "SpellName0", "SpellRank0", "SpellDescription0", "SpellToolTip0" };
+local TEXT_COLUMNS = { "m_name[0]", "m_nameSubtext[0]", "m_description[0]", "m_auraDescription[0]" };
 
 local function BuildTexts(parent)
 	local frame = CreateFrame("Frame", "GameEditorSpellTexts", parent);
@@ -1136,12 +1136,12 @@ local function BuildTexts(parent)
 		return box;
 	end
 
-	local nameTitle, nameEdit = LineField("SpellName0", "Name");
-	local rankTitle, rankEdit = LineField("SpellRank0", "Rank");
-	local descriptionTitle, descriptionArea = AreaField("SpellDescription0", "Description (spellbook and action bar tooltip)", "the description");
+	local nameTitle, nameEdit = LineField("m_name[0]", "Name");
+	local rankTitle, rankEdit = LineField("m_nameSubtext[0]", "Rank");
+	local descriptionTitle, descriptionArea = AreaField("m_description[0]", "Description (spellbook and action bar tooltip)", "the description");
 	local descriptionPreview = Preview();
 	descriptionPreview.text:SetTextColor(1, 0.82, 0);
-	local auraTitle, auraArea = AreaField("SpellToolTip0", "Aura tooltip (shown on the buff or debuff)", "the aura tooltip");
+	local auraTitle, auraArea = AreaField("m_auraDescription[0]", "Aura tooltip (shown on the buff or debuff)", "the aura tooltip");
 	local auraPreview = Preview();
 	auraPreview.text:SetTextColor(1, 1, 1);
 	local unresolved = SE.Label(child, "", nil, NOGGIT_COLOR_DISABLED);
@@ -1194,8 +1194,8 @@ local function BuildTexts(parent)
 
 	frame.RefreshPreview = function(self)
 		local values = SE.cur and SE.cur.values or {};
-		local description = SE.ResolveText(values.SpellDescription0 or "", values, true);
-		local aura = SE.ResolveText(values.SpellToolTip0 or "", values, true);
+		local description = SE.ResolveText(values["m_description[0]"] or "", values, true);
+		local aura = SE.ResolveText(values["m_auraDescription[0]"] or "", values, true);
 		descriptionPreview.text:SetText(description ~= "" and description or "|cff8f8f8f(no description)|r");
 		auraPreview.text:SetText(aura ~= "" and aura or "|cff8f8f8f(no aura tooltip)|r");
 
@@ -1221,7 +1221,7 @@ local function BuildTexts(parent)
 	end;
 
 	local localeGroups = {
-		{ title = "Locale masks", columns = { "SpellNameFlag7", "SpellRankFlags7", "SpellDescriptionFlags7", "SpellToolTipFlags7" } },
+		{ title = "Locale masks", columns = { "m_nameFlags", "m_nameSubtextFlags", "m_descriptionFlags", "m_auraDescriptionFlags" } },
 	};
 
 	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
@@ -1269,7 +1269,7 @@ local function BuildTexts(parent)
 end
 
 do
-	local columns = { "SpellName0", "SpellRank0", "SpellDescription0", "SpellToolTip0", "SpellNameFlag7", "SpellRankFlags7", "SpellDescriptionFlags7", "SpellToolTipFlags7" };
+	local columns = { "m_name[0]", "m_nameSubtext[0]", "m_description[0]", "m_auraDescription[0]", "m_nameFlags", "m_nameSubtextFlags", "m_descriptionFlags", "m_auraDescriptionFlags" };
 
 	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
 		for _, column in ipairs(group.columns) do

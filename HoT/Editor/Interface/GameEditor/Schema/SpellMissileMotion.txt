@@ -1,5 +1,0 @@
-uint ID 					
-uint name string
-uint script string
-uint flags
-uint missileCount

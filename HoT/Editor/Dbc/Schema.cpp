@@ -2,16 +2,14 @@
 #include <cctype>
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <unordered_map>
-#include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "HoT/Core/Log.h"
+#include "HoT/Editor/Dbc/Binding.h"
 #include "WoW/Source/Client.h"
 
 namespace HoT::Editor::Dbc {
 
 static constexpr uint32_t kLocaleCount = 16;
-static constexpr uint32_t kLocaleGroupSize = kLocaleCount + 1;
 
 static std::unordered_map<std::string, std::unique_ptr<Schema>> s_schemas;
 
@@ -25,193 +23,51 @@ static std::string Lower(const std::string& text) {
     return out;
 }
 
-static bool ReadText(const std::string& path, std::string& text) {
-    SFileImpl* file = nullptr;
-
-    if (!SFile::OpenEx(nullptr, path.c_str(), 0, &file) || !file) {
-        return false;
+static uint32_t SizeOf(ColumnType type) {
+    switch (type) {
+        case ColumnType::String:
+            return sizeof(const char*);
+        case ColumnType::UInt8:
+        case ColumnType::Int8:
+            return 1;
+        default:
+            return 4;
     }
-
-    uint32_t size = SFileGetFileSize(file, nullptr);
-    text.resize(size);
-    bool ok = !size || SFileReadFile(file, text.data(), size, nullptr, nullptr, 0);
-    SFileCloseFile(file);
-
-    return ok;
 }
 
-static bool ParseType(const std::string& token, ColumnType& type) {
-    std::string t = Lower(token);
-
-    if (t == "uint" || t == "uint32" || t == "unsigned") {
-        type = ColumnType::UInt;
-    } else if (t == "int" || t == "int32") {
-        type = ColumnType::Int;
-    } else if (t == "float") {
-        type = ColumnType::Float;
-    } else if (t == "uint8" || t == "byte") {
-        type = ColumnType::UInt8;
-    } else if (t == "int8") {
-        type = ColumnType::Int8;
-    } else if (t == "string") {
-        type = ColumnType::String;
-    } else {
-        return false;
-    }
-
-    return true;
+Builder::Builder(Schema& schema) : m_schema(schema) {
 }
 
-// Strips trailing digits, an underscore and a Flag or Flags suffix so Name3 and NameFlags share a stem.
-static std::string GroupStem(const std::string& name) {
-    std::string s = name;
-
-    while (!s.empty() && isdigit(static_cast<unsigned char>(s.back()))) {
-        s.pop_back();
-    }
-
-    if (!s.empty() && s.back() == '_') {
-        s.pop_back();
-    }
-
-    for (const char* suffix : { "Flags", "Flag" }) {
-        size_t length = strlen(suffix);
-
-        if (s.size() > length && s.compare(s.size() - length, length, suffix) == 0) {
-            s.erase(s.size() - length);
-            break;
-        }
-    }
-
-    return s;
+void Builder::Value(const char* name, uint32_t offset, ColumnType type) {
+    Column column;
+    column.name = name;
+    column.type = type;
+    column.slot = Slot::Value;
+    column.offset = offset;
+    column.size = SizeOf(type);
+    m_schema.columns.push_back(std::move(column));
 }
 
-static bool IsLocaleGroup(const std::vector<Column>& columns, size_t start) {
-    if (start + kLocaleGroupSize > columns.size() || columns[start].type != ColumnType::String) {
-        return false;
-    }
-
-    bool allStrings = columns[start + kLocaleCount].type != ColumnType::String;
-
-    for (size_t i = 0; i < kLocaleCount && allStrings; i++) {
-        allStrings = columns[start + i].type == ColumnType::String;
-    }
-
-    if (allStrings) {
-        return true;
-    }
-
-    std::string stem = GroupStem(columns[start].name);
-
-    for (size_t i = 1; i < kLocaleGroupSize; i++) {
-        if (GroupStem(columns[start + i].name) != stem) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static uint32_t Align(uint32_t value, uint32_t alignment) {
-    return (value + alignment - 1) & ~(alignment - 1);
-}
-
-static void Layout(Schema& schema) {
+void Builder::Locale(const char* member, uint32_t offset) {
     uint32_t locale = s_locale >= 0 && static_cast<uint32_t>(s_locale) < kLocaleCount ? static_cast<uint32_t>(s_locale) : 0;
-    uint32_t offset = 0;
-    uint32_t maxAlign = 4;
-    std::vector<Column>& columns = schema.columns;
 
-    for (size_t i = 0; i < columns.size();) {
-        if (IsLocaleGroup(columns, i)) {
-            offset = Align(offset, 8);
-            maxAlign = 8;
-
-            for (uint32_t k = 0; k < kLocaleGroupSize; k++) {
-                Column& column = columns[i + k];
-                column.slot = k == locale ? Slot::LocaleString : Slot::Dropped;
-                column.offset = offset;
-                column.size = k == locale ? 8 : 0;
-                column.localeFlags = k == kLocaleCount;
-            }
-
-            offset += 8;
-            i += kLocaleGroupSize;
-            continue;
-        }
-
-        Column& column = columns[i];
-
-        switch (column.type) {
-            case ColumnType::String:
-                column.size = 8;
-                break;
-            case ColumnType::UInt8:
-            case ColumnType::Int8:
-                column.size = 1;
-                break;
-            default:
-                column.size = 4;
-                break;
-        }
-
-        offset = Align(offset, column.size);
-        maxAlign = column.size > maxAlign ? column.size : maxAlign;
-        column.offset = offset;
-        column.slot = Slot::Value;
-        offset += column.size;
-        i++;
-    }
-
-    schema.recordSize = Align(offset, maxAlign);
-}
-
-static std::unique_ptr<Schema> Parse(const std::string& table, const std::string& text) {
-    auto schema = std::make_unique<Schema>();
-    schema->table = table;
-
-    std::istringstream lines(text);
-    std::string line;
-
-    while (std::getline(lines, line)) {
-        std::istringstream tokens(line);
-        std::string typeToken;
-        std::string name;
-        std::string flag;
-
-        if (!(tokens >> typeToken) || typeToken[0] == '#' || !(tokens >> name)) {
-            continue;
-        }
-
+    for (uint32_t k = 0; k < kLocaleCount; k++) {
         Column column;
-
-        if (!ParseType(typeToken, column.type)) {
-            // Directive lines such as IGNORE_ORDER carry no column.
-            continue;
-        }
-
-        if ((tokens >> flag) && Lower(flag) == "string") {
-            column.type = ColumnType::String;
-        }
-
-        column.name = name;
-        schema->columns.push_back(std::move(column));
+        column.name = std::string(member) + "[" + std::to_string(k) + "]";
+        column.type = ColumnType::String;
+        column.slot = k == locale ? Slot::LocaleString : Slot::Dropped;
+        column.offset = k == locale ? offset : 0;
+        column.size = k == locale ? SizeOf(ColumnType::String) : 0;
+        m_schema.columns.push_back(std::move(column));
     }
 
-    if (schema->columns.empty()) {
-        return nullptr;
-    }
-
-    Layout(*schema);
-
-    for (size_t i = 0; i < schema->columns.size(); i++) {
-        if (IsStringField(schema->columns[i])) {
-            schema->nameColumn = static_cast<int32_t>(i);
-            break;
-        }
-    }
-
-    return schema;
+    Column flags;
+    flags.name = std::string(member) + "Flags";
+    flags.type = ColumnType::UInt;
+    flags.slot = Slot::Dropped;
+    flags.size = 0;
+    flags.localeFlags = true;
+    m_schema.columns.push_back(std::move(flags));
 }
 
 const Schema* GetSchema(const char* table) {
@@ -226,15 +82,23 @@ const Schema* GetSchema(const char* table) {
         return it->second.get();
     }
 
-    std::string text;
     std::unique_ptr<Schema> schema;
 
-    if (ReadText(std::string("Interface\\GameEditor\\Schema\\") + table + ".txt", text)) {
-        schema = Parse(table, text);
-    }
+    if (const Binding* binding = FindBinding(table)) {
+        schema = std::make_unique<Schema>();
+        schema->table = binding->table;
+        schema->recordSize = binding->recordSize;
+        Builder builder(*schema);
+        binding->bind(builder);
 
-    if (!schema) {
-        LOG_DEBUG << "no game editor schema for " << table;
+        for (size_t i = 0; i < schema->columns.size(); i++) {
+            if (IsStringField(schema->columns[i])) {
+                schema->nameColumn = static_cast<int32_t>(i);
+                break;
+            }
+        }
+    } else {
+        LOG_DEBUG << "no game editor binding for " << table;
     }
 
     return s_schemas.emplace(key, std::move(schema)).first->second.get();

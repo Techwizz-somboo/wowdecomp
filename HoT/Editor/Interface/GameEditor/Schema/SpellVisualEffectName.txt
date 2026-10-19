@@ -1,8 +1,0 @@
-# SpellVisualEffectName.dbc structure for 3.3.5a 12340
-uint ID
-uint Name string
-uint FilePath string
-float AreaEffectSize
-float Scale
-float MinAllowedScale
-float MaxAllowedScale

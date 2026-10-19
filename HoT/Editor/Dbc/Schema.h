@@ -39,7 +39,7 @@ struct Schema {
     int32_t nameColumn = -1;
 };
 
-// Parsed once from Interface\GameEditor\Schema\<table>.txt, null when the binding is missing or empty.
+// Built once from the client record binding, null when the table has none.
 const Schema* GetSchema(const char* table);
 
 int32_t FindColumn(const Schema& schema, const char* name);

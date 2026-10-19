@@ -288,9 +288,9 @@ function SE.CreatePreviewPanel(parent)
 		local cur = SE.cur;
 
 		if ( cur ) then
-			self.icon:SetTexture(SE.IconPath(cur.values.SpellIconID));
-			self.name:SetText(tostring(cur.values.SpellName0 or ""));
-			self.detail:SetText(format("%d%s%s", cur.id, (cur.values.SpellRank0 and cur.values.SpellRank0 ~= "") and ("  -  "..cur.values.SpellRank0) or "",
+			self.icon:SetTexture(SE.IconPath(cur.values.m_spellIconID));
+			self.name:SetText(tostring(cur.values["m_name[0]"] or ""));
+			self.detail:SetText(format("%d%s%s", cur.id, (cur.values["m_nameSubtext[0]"] and cur.values["m_nameSubtext[0]"] ~= "") and ("  -  "..cur.values["m_nameSubtext[0]"]) or "",
 				(SE.IsDirty() and "  |cffffcc00unsaved|r") or ""));
 		else
 			self.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");

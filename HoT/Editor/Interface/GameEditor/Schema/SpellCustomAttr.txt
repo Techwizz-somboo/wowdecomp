@@ -1,4 +1,0 @@
-# SpellCustomAttr.dbc
-uint SpellID
-uint Attributes
-uint Attributes2

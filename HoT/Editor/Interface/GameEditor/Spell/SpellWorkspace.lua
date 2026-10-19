@@ -117,7 +117,7 @@ local tabBar;
 local contextDoc;
 
 local function TabName(doc)
-	local name = tostring(doc.values.SpellName0 or "");
+	local name = tostring(doc.values["m_name[0]"] or "");
 
 	if ( name == "" ) then
 		return tostring(doc.id);
@@ -132,7 +132,7 @@ local function TabName(doc)
 end
 
 local function TabTooltip(doc)
-	local name, rank = tostring(doc.values.SpellName0 or ""), tostring(doc.values.SpellRank0 or "");
+	local name, rank = tostring(doc.values["m_name[0]"] or ""), tostring(doc.values["m_nameSubtext[0]"] or "");
 	local lines = { format("%d  %s%s", doc.id, name ~= "" and name or "(no name)", rank ~= "" and ("  |cff8f8f8f"..rank.."|r") or "") };
 
 	if ( SE.pendingSave[doc.id] ) then
@@ -177,8 +177,8 @@ local function RefreshTab(tab)
 	local active = doc == SE.cur;
 	tab.label:SetText((SE.DocHasUnsaved(doc) and "|cffffcc00*|r " or "")..TabName(doc));
 
-	if ( tab.iconId ~= doc.values.SpellIconID ) then
-		tab.iconId = doc.values.SpellIconID;
+	if ( tab.iconId ~= doc.values.m_spellIconID ) then
+		tab.iconId = doc.values.m_spellIconID;
 		tab.icon:SetTexture(SE.IconPath(tab.iconId));
 	end
 
@@ -213,7 +213,7 @@ local TAB_MENU = {
 	{ text = "Copy to a new id", onClick = function()
 		if ( contextDoc and SE.DocIndex(contextDoc) ) then
 			local values = SE.Copy(contextDoc.values);
-			values.ID = contextDoc.id;
+			values.m_id = contextDoc.id;
 			SE.NewSpell(values);
 		end
 	end },
@@ -476,17 +476,17 @@ local function RefreshHeader()
 	end
 
 	local values = cur.values;
-	header.icon:SetTexture(SE.IconPath(values.SpellIconID));
-	local name = tostring(values.SpellName0 or "");
+	header.icon:SetTexture(SE.IconPath(values.m_spellIconID));
+	local name = tostring(values["m_name[0]"] or "");
 	header.name:SetText(name ~= "" and name or "(no name)");
-	header.rank:SetText(tostring(values.SpellRank0 or ""));
+	header.rank:SetText(tostring(values["m_nameSubtext[0]"] or ""));
 	header.rank:ClearAllPoints();
 	header.rank:SetPoint("BOTTOMLEFT", header.name, "BOTTOMRIGHT", 10, 1);
 
-	local family = SE.Number(values.SpellFamilyName);
+	local family = SE.Number(values.m_spellClassSet);
 	local parts = {
 		format("|cffffffffID %d|r", cur.id),
-		SE.SchoolText(values.SchoolMask),
+		SE.SchoolText(values.m_schoolMask),
 		family ~= 0 and SE.EnumText("SpellFamily", family) or nil,
 		SE.CastText(values),
 		SE.RangeText(values),
@@ -501,7 +501,7 @@ local function RefreshHeader()
 	end
 
 	header.info:SetText(table.concat(info, "   |cff5f5f5f|||r   "));
-	local description = SE.ResolveText(values.SpellDescription0 or "", values, true);
+	local description = SE.ResolveText(values["m_description[0]"] or "", values, true);
 	header.description:SetText(description ~= "" and description or "|cff8f8f8fNo description.|r");
 
 	local state;
@@ -574,7 +574,7 @@ local function BuildHeader(parent)
 	iconFrame:SetScript("OnClick", function()
 		if ( SE.cur ) then
 			HideHoverTooltip();
-			SE.ShowIconBrowser("Spell icon", SE.GetValue("SpellIconID"), function(id) SE.SetValue("SpellIconID", id); end);
+			SE.ShowIconBrowser("Spell icon", SE.GetValue("m_spellIconID"), function(id) SE.SetValue("m_spellIconID", id); end);
 		end
 	end);
 
@@ -762,7 +762,7 @@ local function BuildStrip(parent)
 	strip.save:SetPoint("TOP", stop, "BOTTOM", 0, -14);
 
 	strip.Refresh = function(self)
-		self.icon:SetTexture(SE.cur and SE.IconPath(SE.cur.values.SpellIconID) or "Interface\\Icons\\INV_Misc_QuestionMark");
+		self.icon:SetTexture(SE.cur and SE.IconPath(SE.cur.values.m_spellIconID) or "Interface\\Icons\\INV_Misc_QuestionMark");
 		local index = SE.DocIndex(SE.cur);
 		self.count:SetText(index and format("%d/%d", index, #SE.docs) or "");
 		self.save.background = SE.AnyUnsaved() and { 0.45, 0.36, 0.1, 1 } or nil;
@@ -940,7 +940,7 @@ local function BuildMenus()
 			separator,
 			{ text = "Spell icon", onClick = function()
 				if ( SE.cur ) then
-					SE.ShowIconBrowser("Spell icon", SE.GetValue("SpellIconID"), function(id) SE.SetValue("SpellIconID", id); end);
+					SE.ShowIconBrowser("Spell icon", SE.GetValue("m_spellIconID"), function(id) SE.SetValue("m_spellIconID", id); end);
 				end
 			end },
 			{ text = "Spell missile", onClick = SE.OpenMissile },
@@ -992,7 +992,7 @@ local function Status()
 	local cur = SE.cur;
 
 	if ( cur ) then
-		table.insert(cells, format("Spell %d: %s", cur.id, tostring(cur.values.SpellName0 or "")));
+		table.insert(cells, format("Spell %d: %s", cur.id, tostring(cur.values["m_name[0]"] or "")));
 
 		if ( SE.pendingSave[cur.id] ) then
 			table.insert(cells, "saving");

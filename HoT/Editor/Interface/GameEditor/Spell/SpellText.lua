@@ -12,22 +12,22 @@ end
 
 -- Effect value range at the player's level, the way the client computes it for tooltips.
 function SE.EffectRange(values, index)
-	local base = N(values, "EffectBasePoints"..index);
-	local die = N(values, "EffectDieSides"..index);
-	local perLevel = N(values, "EffectRealPointsPerLevel"..index);
+	local base = N(values, "m_effectBasePoints["..(index - 1).."]");
+	local die = N(values, "m_effectDieSides["..(index - 1).."]");
+	local perLevel = N(values, "m_effectRealPointsPerLevel["..(index - 1).."]");
 	local bonus = 0;
 
 	if ( perLevel ~= 0 ) then
 		local level = UnitLevel("player") or 1;
-		local maxLevel = N(values, "MaximumLevel");
+		local maxLevel = N(values, "m_maxLevel");
 
 		if ( maxLevel > 0 and level > maxLevel ) then
 			level = maxLevel;
-		elseif ( level < N(values, "BaseLevel") ) then
-			level = N(values, "BaseLevel");
+		elseif ( level < N(values, "m_baseLevel") ) then
+			level = N(values, "m_baseLevel");
 		end
 
-		bonus = floor(perLevel * (level - N(values, "SpellLevel")));
+		bonus = floor(perLevel * (level - N(values, "m_spellLevel")));
 	end
 
 	local low, high = base + bonus, base + bonus;
@@ -57,12 +57,12 @@ function SE.EffectRangeText(values, index, multiplier)
 end
 
 local function DurationMs(values)
-	local ms = SE.DurationInfo(N(values, "DurationIndex"));
+	local ms = SE.DurationInfo(N(values, "m_durationIndex"));
 	return ms or 0;
 end
 
 local function Ticks(values, index)
-	local amplitude = N(values, "EffectAmplitude"..index);
+	local amplitude = N(values, "m_effectAuraPeriod["..(index - 1).."]");
 	local duration = DurationMs(values);
 
 	if ( amplitude <= 0 or duration <= 0 ) then
@@ -121,12 +121,12 @@ TOKENS.o = function(values, index, context)
 end;
 
 TOKENS.t = function(values, index, context)
-	local seconds = N(values, "EffectAmplitude"..index) / 1000 * (context.multiplier or 1);
+	local seconds = N(values, "m_effectAuraPeriod["..(index - 1).."]") / 1000 * (context.multiplier or 1);
 	return SE.Trim(seconds), seconds;
 end;
 
 TOKENS.a = function(values, index)
-	local radius = SE.RadiusInfo(N(values, "EffectRadiusIndex"..index)) or 0;
+	local radius = SE.RadiusInfo(N(values, "m_effectRadiusIndex["..(index - 1).."]")) or 0;
 	return SE.Trim(radius), radius;
 end;
 
@@ -135,42 +135,42 @@ TOKENS.d = function(values)
 	return DurationText(values), ms / 1000;
 end;
 
-TOKENS.h = function(values) return tostring(N(values, "ProcChance")), N(values, "ProcChance"); end;
-TOKENS.n = function(values) return tostring(N(values, "ProcCharges")), N(values, "ProcCharges"); end;
-TOKENS.u = function(values) return tostring(N(values, "StackAmount")), N(values, "StackAmount"); end;
-TOKENS.i = function(values) return tostring(N(values, "MaximumAffectedTargets")), N(values, "MaximumAffectedTargets"); end;
-TOKENS.v = function(values) return tostring(N(values, "MaximumTargetLevel")), N(values, "MaximumTargetLevel"); end;
-TOKENS.c = function(values) return tostring(N(values, "ManaCost")), N(values, "ManaCost"); end;
-TOKENS.p = function(values) return tostring(N(values, "ManaPerSecond")), N(values, "ManaPerSecond"); end;
+TOKENS.h = function(values) return tostring(N(values, "m_procChance")), N(values, "m_procChance"); end;
+TOKENS.n = function(values) return tostring(N(values, "m_procCharges")), N(values, "m_procCharges"); end;
+TOKENS.u = function(values) return tostring(N(values, "m_cumulativeAura")), N(values, "m_cumulativeAura"); end;
+TOKENS.i = function(values) return tostring(N(values, "m_maxTargets")), N(values, "m_maxTargets"); end;
+TOKENS.v = function(values) return tostring(N(values, "m_maxTargetLevel")), N(values, "m_maxTargetLevel"); end;
+TOKENS.c = function(values) return tostring(N(values, "m_manaCost")), N(values, "m_manaCost"); end;
+TOKENS.p = function(values) return tostring(N(values, "m_manaPerSecond")), N(values, "m_manaPerSecond"); end;
 TOKENS.z = function() return "(hearthstone location)"; end;
 
 TOKENS.x = function(values, index)
-	local count = N(values, "EffectChainTarget"..index);
+	local count = N(values, "m_effectChainTargets["..(index - 1).."]");
 	return tostring(count), count;
 end;
 
 TOKENS.q = function(values, index)
-	local value = N(values, "EffectMiscValue"..index);
+	local value = N(values, "m_effectMiscValue["..(index - 1).."]");
 	return tostring(value), value;
 end;
 
 TOKENS.e = function(values, index)
-	local value = N(values, "EffectMultipleValue"..index);
+	local value = N(values, "m_effectAmplitude["..(index - 1).."]");
 	return SE.Trim(value), value;
 end;
 
 TOKENS.b = function(values, index)
-	local value = N(values, "EffectPointsPerComboPoint"..index);
+	local value = N(values, "m_effectPointsPerCombo["..(index - 1).."]");
 	return SE.Trim(value), value;
 end;
 
 TOKENS.f = function(values, index)
-	local value = N(values, "EffectDamageMultiplier"..index);
+	local value = N(values, "m_effectChainAmplitude["..(index - 1).."]");
 	return SE.Trim(value), value;
 end;
 
 TOKENS.r = function(values)
-	local info = SE.RangeInfo(N(values, "RangeIndex"));
+	local info = SE.RangeInfo(N(values, "m_rangeIndex"));
 	local range = info and info.max or 0;
 	return SE.Trim(range), range;
 end;
@@ -196,7 +196,7 @@ local function LinkedValues(id, context)
 end
 
 local function Variables(values)
-	local id = N(values, "SpellDescriptionVariableID");
+	local id = N(values, "m_descriptionVariablesID");
 
 	if ( id <= 0 ) then
 		return nil;
@@ -204,13 +204,13 @@ local function Variables(values)
 
 	local row = SE.GetRow("SpellDescriptionVariables", id);
 
-	if ( not row or not row.Formula ) then
+	if ( not row or not row.m_variables ) then
 		return nil;
 	end
 
 	local variables = {};
 
-	for name, formula in string.gmatch(tostring(row.Formula), "%$([%w_]+)=([^\r\n]+)") do
+	for name, formula in string.gmatch(tostring(row.m_variables), "%$([%w_]+)=([^\r\n]+)") do
 		variables[string.lower(name)] = formula;
 	end
 
@@ -314,7 +314,7 @@ Resolve = function(text, values, depth, context)
 	context = context or {};
 	context.values = values;
 	context.depth = depth;
-	context.id = context.id or N(values, "ID");
+	context.id = context.id or N(values, "m_id");
 
 	if ( context.variables == nil ) then
 		context.variables = Variables(values) or false;
@@ -507,14 +507,14 @@ end
 
 -- The client's own parser gives exactly what the player sees, the Lua resolver is the fallback.
 local function NativeResolve(text, values)
-	local id = values and tonumber(values.ID) or SE.CurrentId();
+	local id = values and tonumber(values.m_id) or SE.CurrentId();
 
 	if ( not DbcEditor_ParseSpellText or not id or not values ) then
 		return nil;
 	end
 
 	local row = SE.Copy(values);
-	row.SpellDescription0 = text;
+	row["m_description[0]"] = text;
 	local ok, result = pcall(DbcEditor_ParseSpellText, id, row);
 	return ok and result or nil;
 end
@@ -536,7 +536,7 @@ end
 
 -- What the client prints for the description, aura picks the buff text instead.
 function SE.NativeSpellText(values, aura)
-	local id = values and tonumber(values.ID) or SE.CurrentId();
+	local id = values and tonumber(values.m_id) or SE.CurrentId();
 
 	if ( not DbcEditor_ParseSpellText or not id ) then
 		return nil;
@@ -549,9 +549,9 @@ end
 -- One line summaries used by the tooltip preview ---------------------------------------------------
 
 function SE.CostText(values)
-	local powerType = N(values, "PowerType");
-	local cost = N(values, "ManaCost");
-	local percent = N(values, "ManaCostPercentage");
+	local powerType = N(values, "m_powerType");
+	local cost = N(values, "m_manaCost");
+	local percent = N(values, "m_manaCostPct");
 	local name = SE.EnumText("PowerType", powerType);
 
 	if ( powerType == 1 or powerType == 6 ) then
@@ -565,14 +565,14 @@ function SE.CostText(values)
 	if ( cost > 0 ) then
 		local text = format("%s %s", SE.Trim(cost), name);
 
-		if ( N(values, "ManaPerSecond") > 0 ) then
-			text = text..format(", plus %d per sec", N(values, "ManaPerSecond"));
+		if ( N(values, "m_manaPerSecond") > 0 ) then
+			text = text..format(", plus %d per sec", N(values, "m_manaPerSecond"));
 		end
 
 		return text;
 	end
 
-	if ( powerType == 5 and N(values, "RuneCostID") > 0 ) then
+	if ( powerType == 5 and N(values, "m_runeCostID") > 0 ) then
 		return "Runes";
 	end
 
@@ -580,15 +580,15 @@ function SE.CostText(values)
 end
 
 function SE.CastText(values)
-	if ( GameEditor_HasBit(N(values, "AttributesEx"), 2) or GameEditor_HasBit(N(values, "AttributesEx"), 6) ) then
+	if ( GameEditor_HasBit(N(values, "m_attributesEx"), 2) or GameEditor_HasBit(N(values, "m_attributesEx"), 6) ) then
 		return "Channeled";
 	end
 
-	if ( GameEditor_HasBit(N(values, "Attributes"), 2) or GameEditor_HasBit(N(values, "Attributes"), 10) ) then
+	if ( GameEditor_HasBit(N(values, "m_attributes"), 2) or GameEditor_HasBit(N(values, "m_attributes"), 10) ) then
 		return "Next melee";
 	end
 
-	local ms = SE.CastTimeInfo(N(values, "CastingTimeIndex"));
+	local ms = SE.CastTimeInfo(N(values, "m_castingTimeIndex"));
 
 	if ( not ms or ms <= 0 ) then
 		return "Instant";
@@ -598,7 +598,7 @@ function SE.CastText(values)
 end
 
 function SE.RangeText(values)
-	local info = SE.RangeInfo(N(values, "RangeIndex"));
+	local info = SE.RangeInfo(N(values, "m_rangeIndex"));
 
 	if ( not info or info.max <= 0 ) then
 		return nil;
@@ -616,7 +616,7 @@ function SE.RangeText(values)
 end
 
 function SE.CooldownText(values)
-	local ms = max(N(values, "RecoveryTime"), N(values, "CategoryRecoveryTime"));
+	local ms = max(N(values, "m_recoveryTime"), N(values, "m_categoryRecoveryTime"));
 
 	if ( ms <= 0 ) then
 		return nil;
@@ -629,11 +629,11 @@ function SE.ReagentText(values)
 	local parts = {};
 
 	for index = 1, 8 do
-		local item = N(values, "Reagent"..index);
+		local item = N(values, "m_reagent["..(index - 1).."]");
 
 		if ( item > 0 ) then
 			local name = GetItemInfo(item) or ("item "..item);
-			local count = N(values, "ReagentCount"..index);
+			local count = N(values, "m_reagentCount["..(index - 1).."]");
 			table.insert(parts, count > 1 and format("%s (%d)", name, count) or name);
 		end
 	end
@@ -720,8 +720,8 @@ local function CreateLuaTooltipPreview(parent, width)
 			return;
 		end
 
-		local name = values.SpellName0 ~= nil and tostring(values.SpellName0) or "";
-		Place(self.header, name ~= "" and name or "(no name)", values.SpellRank0 ~= "" and values.SpellRank0 or nil);
+		local name = values["m_name[0]"] ~= nil and tostring(values["m_name[0]"]) or "";
+		Place(self.header, name ~= "" and name or "(no name)", values["m_nameSubtext[0]"] ~= "" and values["m_nameSubtext[0]"] or nil);
 		self.header.right:SetTextColor(0.5, 0.5, 0.5);
 		Place(self.lines[1], SE.CostText(values), SE.RangeText(values));
 		self.lines[1].right:SetTextColor(1, 1, 1);
@@ -729,7 +729,7 @@ local function CreateLuaTooltipPreview(parent, width)
 		self.lines[2].right:SetTextColor(1, 1, 1);
 		Place(self.lines[3], SE.ReagentText(values));
 
-		local description = SE.ResolveText(values.SpellDescription0 or "", values, true);
+		local description = SE.ResolveText(values["m_description[0]"] or "", values, true);
 		self.description:ClearAllPoints();
 		self.description:SetPoint("TOPLEFT", self, "TOPLEFT", 10, y);
 		self.description:SetWidth(inner);
@@ -742,7 +742,7 @@ local function CreateLuaTooltipPreview(parent, width)
 			self.description:Hide();
 		end
 
-		local aura = SE.ResolveText(values.SpellToolTip0 or "", values, true);
+		local aura = SE.ResolveText(values["m_auraDescription[0]"] or "", values, true);
 
 		if ( aura ~= "" ) then
 			self.auraLabel:ClearAllPoints();
@@ -778,7 +778,7 @@ function SE.CreateTooltipPreview(parent, width)
 	frame.fallback:Hide();
 
 	frame.Update = function(self, values)
-		local id = values and (tonumber(values.ID) or SE.CurrentId());
+		local id = values and (tonumber(values.m_id) or SE.CurrentId());
 		local tip = self.game;
 		local patched = id and DbcEditor_PatchSpellTooltip and DbcEditor_PatchSpellTooltip(id, values);
 
@@ -798,7 +798,7 @@ function SE.CreateTooltipPreview(parent, width)
 		pcall(tip.SetHyperlink, tip, "spell:"..id);
 		DbcEditor_UnpatchSpellTooltip();
 
-		local aura = values.SpellToolTip0 and values.SpellToolTip0 ~= "" and SE.NativeSpellText(values, true);
+		local aura = values["m_auraDescription[0]"] and values["m_auraDescription[0]"] ~= "" and SE.NativeSpellText(values, true);
 
 		if ( aura and aura ~= "" ) then
 			tip:AddLine(" ");

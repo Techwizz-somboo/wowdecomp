@@ -1,5 +1,0 @@
-# SpellRadius.dbc structure for 3.3.5a 12340
-uint ID
-float Radius
-float RadiusPerLevel
-float MaximumRadius

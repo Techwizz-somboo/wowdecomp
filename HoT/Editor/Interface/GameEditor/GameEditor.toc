@@ -9,6 +9,9 @@ NoggitMenus.lua
 Data\Enums.lua
 Data\Fields.lua
 Data\Groups.lua
+Data\SpellEnums.lua
+Data\SpellFields.lua
+Data\SpellGroups.lua
 GameEditor.lua
 Widgets\PropertyGrid.lua
 Map\Map.xml

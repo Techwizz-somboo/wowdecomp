@@ -488,7 +488,7 @@ function DbcRowEditor:UpdateHeader()
 		status = self.id == 0 and "|cff8f8f8fnot set|r" or format("|cffff6060%d does not exist|r", self.id);
 		self.grid.frame:Hide();
 		self.empty:Show();
-		self.emptyText:SetText(self.id == 0 and (self.options.emptyText or "Nothing linked yet.") or format("There is no %s row %d in this client.", self.tableName, self.id));
+		self.emptyText:SetText(self.id == 0 and (self.options.emptyText or "Nothing linked yet.") or self.options.missingText or format("There is no %s row %d in this client.", self.tableName, self.id));
 	else
 		self.titleText:SetText(format("%s %d", title, self.id));
 		self.grid.frame:Show();
@@ -560,7 +560,7 @@ function DbcRowEditor:Save()
 	end
 
 	local row = SE.FullRow(self.tableName, self.values);
-	row.ID = self.id;
+	row.m_id = self.id;
 	self.saving = SE.Copy(row);
 	self.pending = true;
 	local ok, err = pcall(DbcEditor_Save, self.tableName, self.id, row);
@@ -579,7 +579,7 @@ function DbcRowEditor:ApplyLocal(quiet)
 	end
 
 	local row = SE.FullRow(self.tableName, self.values);
-	row.ID = self.id;
+	row.m_id = self.id;
 
 	if ( pcall(DbcEditor_ApplyLocal, self.tableName, self.id, row) ) then
 		self.appliedLocal = true;
@@ -620,10 +620,14 @@ function DbcRowEditor:Revert()
 	self:Discard();
 end
 
--- New row with the next free id, a copy of the open row when copy is set.
+-- New row with the next free id, or options.rowId for tables keyed by another row, a copy of the open row when copy is set.
 function DbcRowEditor:NewRow(copy)
-	local id = SE.NextId(self.tableName);
+	local id = self.options.rowId and tonumber(self.options.rowId(self)) or SE.NextId(self.tableName);
 	local values;
+
+	if ( not id or id <= 0 ) then
+		return;
+	end
 
 	if ( copy and (self.exists or self.isNew) ) then
 		values = SE.FullRow(self.tableName, self.values);
@@ -631,7 +635,7 @@ function DbcRowEditor:NewRow(copy)
 		values = SE.EmptyRow(self.tableName, id);
 	end
 
-	values.ID = id;
+	values.m_id = id;
 	self:DiscardLocal();
 	self.id = id;
 	self.values = values;
@@ -704,10 +708,17 @@ function SE.CreateDbcEditor(parent, tableName, options)
 	editor.applyButton = SE.Button(frame, "Apply", 54, function() editor:ApplyLocal(); end, "Patch this client only, to preview without saving");
 	editor.applyButton:SetPoint("RIGHT", editor.revertButton, "LEFT", -4, 0);
 
+	if ( options.rowId ) then
+		editor.idEdit:Hide();
+		pick:Hide();
+		editor.newButton:Hide();
+		editor.copyButton:Hide();
+	end
+
 	editor.grid = GameEditor_CreatePropertyGrid(frame, {
 		table = tableName,
 		groups = SE.CompleteGroups(tableName, options.groups),
-		readOnly = { ID = true },
+		readOnly = { m_id = true },
 		filter = options.filter ~= false,
 		labelWidth = options.labelWidth or 180,
 		onChange = function()

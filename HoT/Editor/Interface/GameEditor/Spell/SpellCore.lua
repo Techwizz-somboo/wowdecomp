@@ -22,8 +22,8 @@ SE.SCHOOL_COLORS = {
 SE.SCHOOL_NAMES = { [0] = "Physical", "Holy", "Fire", "Nature", "Frost", "Shadow", "Arcane" };
 
 SE.VISUAL_KIT_COLUMNS = {
-	"PrecastKit", "CastKit", "ImpactKit", "StateKit", "StateDoneKit", "ChannelKit", "CasterImpactKit", "TargetImpactKit",
-	"MissileTargetingKit", "InstantAreaKit", "ImpactAreaKit", "PersistentAreaKit",
+	"m_precastKit", "m_castKit", "m_impactKit", "m_stateKit", "m_stateDoneKit", "m_channelKit", "m_casterImpactKit", "m_targetImpactKit",
+	"m_missileTargetingKit", "m_instantAreaKit", "m_impactAreaKit", "m_persistentAreaKit",
 };
 
 SE.recent = SE.recent or {};
@@ -217,7 +217,7 @@ function SE.GetRow(tableName, id)
 		return nil;
 	end
 
-	if ( row[1] ~= nil and row.ID == nil and row.id == nil ) then
+	if ( row[1] ~= nil and row.m_id == nil and row.id == nil ) then
 		local map = {};
 		local schema = SE.Schema(tableName);
 
@@ -306,7 +306,7 @@ end
 
 function SE.EmptyRow(tableName, id)
 	local row = SE.FullRow(tableName, {});
-	row.ID = id;
+	row.m_id = id;
 	return row;
 end
 
@@ -331,12 +331,12 @@ function SE.CastTimeInfo(id)
 		return nil, nil;
 	end
 
-	local ms = SE.Number(row.CastingTime);
+	local ms = SE.Number(row.m_base);
 	local text = ms <= 0 and "Instant" or (SE.Trim(ms / 1000).." sec cast");
-	local perLevel = SE.Number(row.CastingTimePerLevel);
+	local perLevel = SE.Number(row.m_perLevel);
 
 	if ( perLevel ~= 0 ) then
-		text = text..format(", %s ms per level, min %s", SE.Trim(perLevel), SE.Trim(SE.Number(row.MinimumCastingTime)));
+		text = text..format(", %s ms per level, min %s", SE.Trim(perLevel), SE.Trim(SE.Number(row.m_minimum)));
 	end
 
 	return ms, text;
@@ -349,17 +349,17 @@ function SE.DurationInfo(id)
 		return nil, nil;
 	end
 
-	local ms = SE.Number(row.BaseDuration);
+	local ms = SE.Number(row.m_duration);
 
 	if ( ms < 0 ) then
 		return -1, "Until cancelled";
 	end
 
 	local text = SE.FormatTime(ms);
-	local maxMs = SE.Number(row.MaximumDuration);
+	local maxMs = SE.Number(row.m_maxDuration);
 
-	if ( SE.Number(row.PerLevel) ~= 0 or (maxMs > 0 and maxMs ~= ms) ) then
-		text = text..format(" (+%s ms per level, max %s)", SE.Trim(SE.Number(row.PerLevel)), SE.FormatTime(maxMs));
+	if ( SE.Number(row.m_durationPerLevel) ~= 0 or (maxMs > 0 and maxMs ~= ms) ) then
+		text = text..format(" (+%s ms per level, max %s)", SE.Trim(SE.Number(row.m_durationPerLevel)), SE.FormatTime(maxMs));
 	end
 
 	return ms, text;
@@ -372,11 +372,11 @@ function SE.RangeInfo(id)
 		return nil;
 	end
 
-	local minHostile = SE.Number(row.MinimumRangeHostile);
-	local maxHostile = SE.Number(row.MaximumRangeHostile);
-	local minFriend = SE.Number(row.MinimumRangeFriend);
-	local maxFriend = SE.Number(row.MaximumRangeFriend);
-	local name = row.Name1 or row.Name or "";
+	local minHostile = SE.Number(row["m_rangeMin[0]"]);
+	local maxHostile = SE.Number(row["m_rangeMax[0]"]);
+	local minFriend = SE.Number(row["m_rangeMin[1]"]);
+	local maxFriend = SE.Number(row["m_rangeMax[1]"]);
+	local name = row["m_displayName[0]"] or row.Name or "";
 	local yards;
 
 	if ( minHostile > 0 ) then
@@ -400,11 +400,11 @@ function SE.RadiusInfo(id)
 		return nil, nil;
 	end
 
-	local radius = SE.Number(row.Radius);
+	local radius = SE.Number(row.m_radius);
 	local text = SE.Trim(radius).." yd";
 
-	if ( SE.Number(row.RadiusPerLevel) ~= 0 ) then
-		text = text..format(" (+%s per level, max %s)", SE.Trim(SE.Number(row.RadiusPerLevel)), SE.Trim(SE.Number(row.MaximumRadius)));
+	if ( SE.Number(row.m_radiusPerLevel) ~= 0 ) then
+		text = text..format(" (+%s per level, max %s)", SE.Trim(SE.Number(row.m_radiusPerLevel)), SE.Trim(SE.Number(row.m_radiusMax)));
 	end
 
 	return radius, text;
@@ -412,7 +412,7 @@ end
 
 function SE.IconPath(iconId)
 	local row = SE.GetRow("SpellIcon", iconId);
-	local path = row and (row.Name or row.name);
+	local path = row and (row.m_textureFilename or row.name);
 
 	if ( path and path ~= "" ) then
 		return path;
@@ -429,7 +429,7 @@ end
 -- Icon of a spell row, or of a spell id when only the id is known.
 function SE.SpellIcon(spellId, values)
 	if ( values ) then
-		return SE.IconPath(values.SpellIconID);
+		return SE.IconPath(values.m_spellIconID);
 	end
 
 	local _, _, icon = GetSpellInfo(spellId);
@@ -439,7 +439,7 @@ function SE.SpellIcon(spellId, values)
 	end
 
 	local row = SE.GetRow(SE.TABLE, spellId);
-	return SE.IconPath(row and row.SpellIconID or 0);
+	return SE.IconPath(row and row.m_spellIconID or 0);
 end
 
 function SE.SpellName(spellId)
@@ -449,7 +449,7 @@ function SE.SpellName(spellId)
 		local row = SE.GetRow(SE.TABLE, spellId);
 
 		if ( row ) then
-			name, rank = row.SpellName0, row.SpellRank0;
+			name, rank = row["m_name[0]"], row["m_nameSubtext[0]"];
 		end
 	end
 
@@ -559,7 +559,7 @@ function SE.RegisterResolvers()
 
 	resolvers["dbc:SpellIcon"] = function(value)
 		local row = SE.GetRow("SpellIcon", value);
-		return row and SE.IconShortName(row.Name) or MISSING;
+		return row and SE.IconShortName(row.m_textureFilename) or MISSING;
 	end;
 
 	resolvers["dbc:SpellVisual"] = function(value)
@@ -577,7 +577,7 @@ function SE.RegisterResolvers()
 			end
 		end
 
-		return format("%d kit%s%s", kits, kits == 1 and "" or "s", SE.Number(row.MissileModel) ~= 0 and ", missile" or "");
+		return format("%d kit%s%s", kits, kits == 1 and "" or "s", SE.Number(row.m_missileModel) ~= 0 and ", missile" or "");
 	end;
 
 	resolvers["dbc:SpellMissile"] = function(value)
@@ -587,7 +587,7 @@ function SE.RegisterResolvers()
 			return MISSING;
 		end
 
-		return format("gravity %s, speed %s-%s", SE.Trim(SE.Number(row.gravity)), SE.Trim(SE.Number(row.defaultSpeedMin)), SE.Trim(SE.Number(row.defaultSpeedMax)));
+		return format("gravity %s, speed %s-%s", SE.Trim(SE.Number(row.m_gravity)), SE.Trim(SE.Number(row.m_defaultSpeedMin)), SE.Trim(SE.Number(row.m_defaultSpeedMax)));
 	end;
 
 	resolvers["dbc:SpellDescriptionVariables"] = function(value)
@@ -597,7 +597,7 @@ function SE.RegisterResolvers()
 			return MISSING;
 		end
 
-		local formula = string.gsub(tostring(row.Formula or ""), "[\r\n]+", "  ");
+		local formula = string.gsub(tostring(row.m_variables or ""), "[\r\n]+", "  ");
 		return string.sub(formula, 1, 80);
 	end;
 
@@ -1138,20 +1138,20 @@ end
 
 function SE.DefaultSpell(id)
 	local row = SE.EmptyRow(SE.TABLE, id);
-	row.SpellName0 = "New spell";
-	row.CastingTimeIndex = 1;
-	row.RangeIndex = 1;
-	row.SpellIconID = 1;
-	row.SchoolMask = 1;
-	row.StanceBarOrder = 0;
-	row.SpellNameFlag7 = SE.LOCALE_MASK;
-	row.SpellRankFlags7 = SE.LOCALE_MASK;
-	row.SpellDescriptionFlags7 = SE.LOCALE_MASK;
-	row.SpellToolTipFlags7 = SE.LOCALE_MASK;
+	row["m_name[0]"] = "New spell";
+	row.m_castingTimeIndex = 1;
+	row.m_rangeIndex = 1;
+	row.m_spellIconID = 1;
+	row.m_schoolMask = 1;
+	row.m_stanceBarOrder = 0;
+	row.m_nameFlags = SE.LOCALE_MASK;
+	row.m_nameSubtextFlags = SE.LOCALE_MASK;
+	row.m_descriptionFlags = SE.LOCALE_MASK;
+	row.m_auraDescriptionFlags = SE.LOCALE_MASK;
 
 	for index = 1, 3 do
-		row["EffectDamageMultiplier"..index] = 1;
-		row["EffectBonusMultiplier"..index] = 1;
+		row["m_effectChainAmplitude["..(index - 1).."]"] = 1;
+		row["m_effectBonusCoefficient["..(index - 1).."]"] = 1;
 	end
 
 	return row;
@@ -1170,7 +1170,7 @@ function SE.NewSpell(fromValues)
 
 	if ( fromValues ) then
 		values = SE.FullRow(SE.TABLE, fromValues);
-		values.ID = id;
+		values.m_id = id;
 	else
 		values = SE.DefaultSpell(id);
 	end
@@ -1183,7 +1183,7 @@ end
 function SE.CopySpell()
 	if ( SE.cur ) then
 		local values = SE.Copy(SE.cur.values);
-		values.ID = SE.cur.id;
+		values.m_id = SE.cur.id;
 		SE.NewSpell(values);
 	end
 end
@@ -1199,7 +1199,7 @@ function SE.SaveDoc(doc)
 	end
 
 	local row = SE.FullRow(SE.TABLE, doc.values);
-	row.ID = doc.id;
+	row.m_id = doc.id;
 	doc.saving = SE.Copy(row);
 	SE.pendingSave[doc.id] = true;
 
@@ -1239,7 +1239,7 @@ end
 -- What would be lost when the documents close, one line per document.
 local function UnsavedText(doc)
 	local parts = {};
-	local name = tostring(doc.values.SpellName0 or "");
+	local name = tostring(doc.values["m_name[0]"] or "");
 	local title = name ~= "" and format("%d %s", doc.id, name) or tostring(doc.id);
 
 	if ( doc.isNew ) then
@@ -1360,7 +1360,7 @@ function SE.ApplyLocal(quiet)
 	end
 
 	local row = SE.FullRow(SE.TABLE, cur.values);
-	row.ID = cur.id;
+	row.m_id = cur.id;
 	local ok, err = pcall(DbcEditor_ApplyLocal, SE.TABLE, cur.id, row);
 
 	if ( not ok ) then
