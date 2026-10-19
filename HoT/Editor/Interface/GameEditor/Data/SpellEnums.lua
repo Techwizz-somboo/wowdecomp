@@ -1155,11 +1155,12 @@ GameEditorData.Enums.SpellFamily = {
     [9] = "Hunter",
     [10] = "Paladin",
     [11] = "Shaman",
-    [12] = "Unk2 (Silence resistance?)",
+    [12] = "Timewalker",
     [13] = "Potion",
+    [14] = "HoT Talent Extension",
     [15] = "Death Knight",
+    [16] = "HoT Spell Extension",
     [17] = "Pet",
-    [18] = "Timewalker",
 }
 
 -- SpellMgr.h SpellGroupStackRule
@@ -2514,9 +2515,10 @@ GameEditorData.EnumTooltips.SpellFamily = {
     [11] = "SPELLFAMILY_SHAMAN",
     [12] = "SPELLFAMILY_CLASSLESS",
     [13] = "SPELLFAMILY_POTION",
+    [14] = "SPELLFAMILY_HOT_TALENT_EXTENSION",
     [15] = "SPELLFAMILY_DEATHKNIGHT",
+    [16] = "SPELLFAMILY_HOT_SPELL_EXTENSION",
     [17] = "SPELLFAMILY_PET",
-    [18] = "SPELLFAMILY_TIMEWALKER",
 }
 
 GameEditorData.EnumTooltips.SpellGroupStackRule = {
