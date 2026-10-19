@@ -8,6 +8,7 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "HoT/Core/Chat.h"
 #include "HoT/Editor/VectorMath.h"
+#include "HoT/Game/Session.h"
 #include "HoT/Lua/Script.h"
 #include "WoW/Source/Net/Types.h"
 #include "WoW/Source/Object/Movement.h"
@@ -19,6 +20,7 @@
 
 namespace HoT::Editor::FreeCam {
 
+static constexpr int8_t kRequiredSecurityLevel = 3;
 static constexpr uint32_t kHeartbeatIntervalMs = 250;
 
 static constexpr float kMinSpeed = 1.0f;
@@ -352,7 +354,13 @@ static void Fly(CGCamera* camera, float seconds) {
     }
 }
 
+static void Deactivate(bool announce);
+
 static void Tick(CGCamera* camera) {
+    if (s_state.m_active && !Session::HasClearance(kRequiredSecurityLevel)) {
+        Deactivate(false);
+    }
+
     ApplyCharacterVisibility();
 
     if (!s_state.m_active) {
@@ -382,7 +390,7 @@ static bool PlayerPosition(C3Vector& out) {
 }
 
 static void Activate(bool announce) {
-    if (s_state.m_active) {
+    if (s_state.m_active || !Session::HasClearance(kRequiredSecurityLevel)) {
         return;
     }
 
