@@ -102,9 +102,13 @@ uint32_t TimeOfDay() {
     return static_cast<uint32_t>(std::min(std::max(progression, 0.0f), 1.0f) * 1440.0f) % 1440;
 }
 
-void SetTimeOfDay(uint32_t minutes) {
+void SetTimeOfDay(float minutes) {
     s_timeOverride = true;
-    s_timeOfDay = static_cast<float>(minutes % 1440);
+    s_timeOfDay = std::fmod(std::fmod(minutes, 1440.0f) + 1440.0f, 1440.0f);
+}
+
+bool HasTimeOfDay() {
+    return s_timeOverride;
 }
 
 void ClearTimeOfDay() {

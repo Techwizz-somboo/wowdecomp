@@ -6,6 +6,15 @@ local Common = GameEditorObject;
 local Inspector = GameObject.Inspector;
 
 local cache;
+local templateCache;
+
+-- Entry of the template the inspector edits without a spawn, nil while it follows the selection.
+GameObject.templateEntry = nil;
+
+-- A reloaded UI starts out of template mode, the client keeps the mode across reloads.
+if ( GobEditor_SetTemplateMode ) then
+	GobEditor_SetTemplateMode(0);
+end
 
 function GameObject.GetSelectedGuid()
 	local kind, guid = GameEditor_GetSelection();
@@ -16,7 +25,7 @@ function GameObject.GetSelectedGuid()
 end
 
 -- Snapshot of the selected gameobject, nil while it is not loaded yet.
-function GameObject.GetData()
+function GameObject.GetSelectionData()
 	local guid = GameObject.GetSelectedGuid();
 
 	if ( not guid ) then
@@ -24,7 +33,7 @@ function GameObject.GetData()
 	end
 
 	if ( not cache or cache.guid ~= guid ) then
-		cache = GobEditor_GetData();
+		cache = GobEditor_GetData("selection");
 	end
 
 	if ( cache and cache.guid == guid ) then
@@ -32,7 +41,81 @@ function GameObject.GetData()
 	end
 end
 
+-- Snapshot of the template being edited without a spawn, nil while it is not loaded yet.
+function GameObject.GetTemplateData()
+	local entry = GameObject.templateEntry;
+
+	if ( not entry ) then
+		return nil;
+	end
+
+	if ( not templateCache or templateCache.entry ~= entry ) then
+		templateCache = GobEditor_GetData("template");
+
+		if ( templateCache ) then
+			templateCache.isTemplate = true;
+		end
+	end
+
+	if ( templateCache and templateCache.entry == entry ) then
+		return templateCache;
+	end
+end
+
+-- What the inspector edits, the template in template mode and the selection otherwise.
+function GameObject.GetData()
+	if ( GameObject.templateEntry ) then
+		return GameObject.GetTemplateData();
+	end
+
+	return GameObject.GetSelectionData();
+end
+
+-- Edits the template rows of the entry, no gameobject has to be spawned or selected.
+function GameObject.EditTemplate(entry)
+	entry = tonumber(entry);
+
+	if ( not entry or entry <= 0 ) then
+		return;
+	end
+
+	GameObject.templateEntry = entry;
+	templateCache = nil;
+	GobEditor_SetTemplateMode(entry);
+	GobEditor_RequestTemplate(entry);
+
+	if ( GameEditor_GetWorkspace() ~= "gameobject" ) then
+		GameEditor_SetWorkspace("gameobject", "select");
+	end
+
+	Inspector.Refresh();
+end
+
+function GameObject.CloseTemplate()
+	if ( not GameObject.templateEntry ) then
+		return;
+	end
+
+	GameObject.templateEntry = nil;
+	templateCache = nil;
+	GobEditor_SetTemplateMode(0);
+	Inspector.Refresh();
+end
+
+Common.templateEditors.gameobject = GameObject.EditTemplate;
+
+local function FindTemplate()
+	Common.ShowTemplateBrowser("gameobject");
+end
+
+GameObject.FindTemplate = FindTemplate;
+
 function GameObject.Request()
+	if ( GameObject.templateEntry ) then
+		GobEditor_RequestTemplate(GameObject.templateEntry);
+		return;
+	end
+
 	local guid = GameObject.GetSelectedGuid();
 
 	if ( guid ) then
@@ -46,7 +129,9 @@ local function WithSpawn(action)
 	return function()
 		local data = GameObject.GetData();
 
-		if ( not data ) then
+		if ( GameObject.templateEntry ) then
+			GameEditor_Notify("A template has no spawn, close it and select a gameobject in the world", "info");
+		elseif ( not data ) then
 			GameEditor_Notify("Select a gameobject first", "info");
 		elseif ( not data.spawn ) then
 			GameEditor_Notify("This gameobject is not a database spawn", "info");
@@ -72,9 +157,18 @@ local events = CreateFrame("Frame", "GameEditorGameObjectEvents");
 events:RegisterEvent("HOT_GOB_EDITOR_DATA");
 events:RegisterEvent("GAME_EDITOR_SELECTION_CHANGED");
 events:RegisterEvent("GAME_EDITOR_GIZMO_CHANGED");
-events:SetScript("OnEvent", function(_, event)
-	if ( event == "HOT_GOB_EDITOR_DATA" ) then
-		cache = GobEditor_GetData();
+events:SetScript("OnEvent", function(_, event, arg1)
+	if ( event == "HOT_GOB_EDITOR_DATA" and tonumber(arg1) == 1 ) then
+		templateCache = GobEditor_GetData("template");
+
+		if ( templateCache ) then
+			templateCache.isTemplate = true;
+			Common.RememberName("gameobject", templateCache.entry, templateCache.name);
+		end
+
+		Inspector.Refresh();
+	elseif ( event == "HOT_GOB_EDITOR_DATA" ) then
+		cache = GobEditor_GetData("selection");
 
 		if ( cache ) then
 			Common.RememberName("gameobject", cache.entry, cache.name);
@@ -82,6 +176,10 @@ events:SetScript("OnEvent", function(_, event)
 
 		Inspector.Refresh();
 	elseif ( event == "GAME_EDITOR_SELECTION_CHANGED" ) then
+		if ( arg1 == "gameobject" and GameObject.templateEntry ) then
+			GameObject.CloseTemplate();
+		end
+
 		Inspector.Refresh();
 	elseif ( event == "GAME_EDITOR_GIZMO_CHANGED" and IsActive() ) then
 		GameEditor_RefreshViewToolbar();
@@ -126,6 +224,8 @@ local function BuildMenus()
 			{ text = "Selection", disabled = true },
 			separator,
 			{ text = "Spawn gameobject...", shortcut = "Ctrl+N", onClick = function() Common.ShowSpawnWindow("gameobject"); end },
+			{ text = "Find template...", shortcut = "Ctrl+F", onClick = FindTemplate },
+			{ text = "Close template", onClick = GameObject.CloseTemplate },
 			{ text = "Duplicate", shortcut = "Ctrl+D", onClick = function() Common.Duplicate("gameobject"); end },
 			{ text = "Delete spawn", shortcut = "Del", onClick = function() Common.ConfirmDelete("gameobject"); end },
 			separator,
@@ -155,6 +255,7 @@ local KEYS = {
 	{ "Ctrl+S", "Save every changed tab of the gameobject" },
 	{ "F5", "Reload the gameobject from the server" },
 	{ "Ctrl+N", "Spawn a gameobject" },
+	{ "Ctrl+F", "Find a gameobject template by name or entry and edit it without a spawn" },
 	{ "Ctrl+D", "Spawn a copy next to the selection" },
 	{ "Ctrl+R", "Respawn the selected gameobject" },
 	{ "Ctrl+U", "Clear pitch and roll of the selection" },
@@ -165,10 +266,17 @@ local HOTKEYS = {
 	["CTRL-S"] = function() Inspector.SaveAll(); end,
 	["F5"] = GameObject.Request,
 	["CTRL-N"] = function() Common.ShowSpawnWindow("gameobject"); end,
+	["CTRL-F"] = FindTemplate,
 	["CTRL-D"] = function() Common.Duplicate("gameobject"); end,
 	["CTRL-R"] = Respawn,
 	["CTRL-U"] = ResetRotation,
-	["DELETE"] = function() Common.ConfirmDelete("gameobject"); end,
+	["DELETE"] = function()
+		if ( GameObject.templateEntry ) then
+			return false;
+		end
+
+		Common.ConfirmDelete("gameobject");
+	end,
 };
 
 local function OnHotkey(key)
@@ -184,8 +292,19 @@ end
 local function BuildStatus()
 	local kind, _, entry, name = GameEditor_GetSelection();
 
+	if ( GameObject.templateEntry ) then
+		local data = GameObject.GetTemplateData();
+		local cells = { format("Template %s (%d)", data and data.name or "loading", GameObject.templateEntry), "No spawn, edits go to the template rows" };
+
+		if ( Inspector.HasChanges() ) then
+			table.insert(cells, "|cffffcc00Unsaved changes|r");
+		end
+
+		return cells;
+	end
+
 	if ( kind ~= "gameobject" ) then
-		return { "No gameobject selected", "Click a gameobject to select it, Ctrl+N spawns one" };
+		return { "No gameobject selected", "Click a gameobject to select it, Ctrl+N spawns one, Ctrl+F finds a template" };
 	end
 
 	local cells = { format("%s (%d)", name or "?", entry or 0), "Gizmo: "..(GameEditor_GetGizmo() or "off") };
@@ -217,7 +336,9 @@ GameEditor_RegisterWorkspace({
 	viewItems = VIEW_ITEMS,
 	keys = KEYS,
 	onActivate = function()
-		if ( GameObject.GetSelectedGuid() and not GameObject.GetData() ) then
+		if ( GameObject.templateEntry and not GameObject.GetTemplateData() ) then
+			GameObject.Request();
+		elseif ( not GameObject.templateEntry and GameObject.GetSelectedGuid() and not GameObject.GetData() ) then
 			GameObject.Request();
 		end
 

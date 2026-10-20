@@ -8,6 +8,7 @@
 #include "HoT/Editor/Dbc/DbcEditor.h"
 #include "HoT/Editor/FreeCam.h"
 #include "HoT/Editor/GobEditor.h"
+#include "HoT/Editor/Light/LightEditor.h"
 #include "HoT/Editor/Map/Map.h"
 #include "HoT/Editor/Mode.h"
 #include "HoT/Editor/MouseFunctions.h"
@@ -49,6 +50,7 @@ void BeforeWorldRender(CGWorldFrame* frame, C3Vector& decalPosition, float& deca
 
 void AfterWorldRender(CGWorldFrame* frame) {
     CreatureEditor::OnWorldRender(frame);
+    LightEditor::OnWorldRender(frame);
     Mode::OnWorldRender(frame);
 }
 
@@ -77,6 +79,7 @@ class EditorModule : public Module {
         MouseFunctions::RegisterScripts();
         Mode::RegisterScripts();
         Dbc::Apply();
+        LightEditor::Apply();
         SpellPreview::Apply();
         WorldTables::Apply();
         TemplateSearch::Apply();
@@ -111,6 +114,7 @@ class EditorModule : public Module {
         FreeCam::OnGameDestroy();
         SpellPreview::OnGameDestroy();
         Dbc::OnGameDestroy();
+        LightEditor::OnGameDestroy();
         WorldTables::OnGameDestroy();
         TemplateSearch::OnGameDestroy();
     }

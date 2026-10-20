@@ -1,6 +1,7 @@
 #include "HoT/Editor/CreatureEditor.h"
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -117,6 +118,8 @@ struct Snapshot {
 };
 
 static Snapshot s_data;
+static Snapshot s_template;
+static uint32_t s_templateEntry;
 static bool s_drawPath;
 static uint32_t s_nodeDelay;
 static uint8_t s_nodeMoveType;
@@ -341,6 +344,13 @@ static int32_t Packet_SMSG_CREATURE_EDITOR_DATA(void* param, NETMESSAGE msgId, u
 
     data.m_valid = true;
 
+    // A zero guid is a template snapshot, it never touches the selection.
+    if (!data.m_guid) {
+        s_template = std::move(data);
+        Lua::SignalEvent("HOT_CREATURE_EDITOR_DATA", "%d", 1);
+        return 1;
+    }
+
     uint64_t previous = s_data.m_valid ? s_data.m_guid : 0;
     bool sameSpawn = previous && data.m_spawnId && data.m_spawnId == s_data.m_spawnId;
     s_data = std::move(data);
@@ -351,7 +361,7 @@ static int32_t Packet_SMSG_CREATURE_EDITOR_DATA(void* param, NETMESSAGE msgId, u
 
     Selection::OnCreatureSnapshot(s_data.m_guid);
 
-    Lua::SignalEvent("HOT_CREATURE_EDITOR_DATA", nullptr);
+    Lua::SignalEvent("HOT_CREATURE_EDITOR_DATA", "%d", 0);
     return 1;
 }
 
@@ -369,8 +379,26 @@ static int32_t Packet_SMSG_CREATURE_EDITOR_RESULT(void* param, NETMESSAGE msgId,
     return 1;
 }
 
-static uint8_t FieldTypeFor(uint8_t scope, const std::string& key) {
-    const std::vector<Field>& fields = scope == 1 ? s_data.m_spawnFields : s_data.m_templateFields;
+// Snapshot that edits target, the template while template mode is on.
+static const Snapshot* EditTarget() {
+    if (s_templateEntry) {
+        return s_template.m_valid && s_template.m_entry == s_templateEntry ? &s_template : nullptr;
+    }
+
+    return s_data.m_valid ? &s_data : nullptr;
+}
+
+// A zero guid tells the server that the template entry follows.
+static void PutTarget(Net::Packet& packet, const Snapshot& target) {
+    packet.PutUInt64(target.m_guid);
+
+    if (!target.m_guid) {
+        packet.PutUInt32(target.m_entry);
+    }
+}
+
+static uint8_t FieldTypeFor(const Snapshot& target, uint8_t scope, const std::string& key) {
+    const std::vector<Field>& fields = scope == 1 ? target.m_spawnFields : target.m_templateFields;
 
     for (const Field& field : fields) {
         if (field.m_key == key) {
@@ -458,10 +486,43 @@ static int32_t Script_Request(lua_State* L) {
     return 1;
 }
 
-static int32_t Script_GetData(lua_State* L) {
-    const Snapshot& data = s_data;
+// CreatureEditor_RequestTemplate(entry) asks for the template snapshot of the entry, no creature needed.
+static int32_t Script_RequestTemplate(lua_State* L) {
+    uint32_t entry = lua_isnumber(L, 1) ? ToUInt32(lua_tonumber(L, 1)) : 0;
 
-    if (!data.m_valid) {
+    if (!entry) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Net::Packet(Net::CMSG_GAME_EDITOR_CREATURE_REQUEST).PutUInt64(0).PutUInt32(entry).PutUInt32(0).Send();
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// CreatureEditor_SetTemplateMode(entry or 0), while on GetData returns the template and edits go to it.
+static int32_t Script_SetTemplateMode(lua_State* L) {
+    s_templateEntry = lua_isnumber(L, 1) ? ToUInt32(lua_tonumber(L, 1)) : 0;
+    return 0;
+}
+
+static int32_t Script_GetTemplateMode(lua_State* L) {
+    if (!s_templateEntry) {
+        return 0;
+    }
+
+    lua_pushnumber(L, s_templateEntry);
+    return 1;
+}
+
+// CreatureEditor_GetData(["template" | "selection"]), without an argument it follows the template mode.
+static int32_t Script_GetData(lua_State* L) {
+    const char* which = lua_type(L, 1) == LUA_TSTRING ? lua_tostring(L, 1) : nullptr;
+    bool useTemplate = which ? std::strcmp(which, "template") == 0 : s_templateEntry != 0;
+    const Snapshot& data = useTemplate ? s_template : s_data;
+
+    if (!data.m_valid || (useTemplate && s_templateEntry && data.m_entry != s_templateEntry)) {
         lua_pushnil(L);
         return 1;
     }
@@ -574,7 +635,9 @@ static int32_t Script_GetData(lua_State* L) {
 
 // CreatureEditor_SetFields(scope, { key = value }), scope 0 is the template and 1 the spawn.
 static int32_t Script_SetFields(lua_State* L) {
-    if (!s_data.m_valid || lua_type(L, 2) != LUA_TTABLE) {
+    const Snapshot* target = EditTarget();
+
+    if (!target || lua_type(L, 2) != LUA_TTABLE) {
         lua_pushboolean(L, 0);
         return 1;
     }
@@ -598,7 +661,7 @@ static int32_t Script_SetFields(lua_State* L) {
         if (lua_type(L, -2) == LUA_TSTRING) {
             Pending entry;
             entry.m_key = lua_tostring(L, -2);
-            entry.m_type = FieldTypeFor(scope, entry.m_key);
+            entry.m_type = FieldTypeFor(*target, scope, entry.m_key);
             entry.m_number = 0.0;
 
             if (valueType == LUA_TNUMBER) {
@@ -634,7 +697,7 @@ static int32_t Script_SetFields(lua_State* L) {
     }
 
     Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_SET_FIELDS);
-    packet.PutUInt64(s_data.m_guid);
+    PutTarget(packet, *target);
     packet.PutUInt8(scope);
     packet.PutUInt16(static_cast<uint16_t>(pending.size()));
 
@@ -672,7 +735,9 @@ static int32_t Script_SetFields(lua_State* L) {
 
 // CreatureEditor_SetAddon(scope, mode, { path_id, mount, standState, ..., auras = { spellId } }).
 static int32_t Script_SetAddon(lua_State* L) {
-    if (!s_data.m_valid || lua_type(L, 3) != LUA_TTABLE) {
+    const Snapshot* target = EditTarget();
+
+    if (!target || lua_type(L, 3) != LUA_TTABLE) {
         lua_pushboolean(L, 0);
         return 1;
     }
@@ -683,7 +748,7 @@ static int32_t Script_SetAddon(lua_State* L) {
     std::vector<uint32_t> auras = TableNumberArray(L, tableIdx, "auras");
 
     Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_SET_ADDON);
-    packet.PutUInt64(s_data.m_guid);
+    PutTarget(packet, *target);
     packet.PutUInt8(scope);
     packet.PutUInt8(mode);
     packet.PutUInt32(ToUInt32(TableNumber(L, tableIdx, "path_id")));
@@ -799,13 +864,15 @@ static int32_t Script_Waypoint(lua_State* L) {
 
 // CreatureEditor_Equipment(op, setId, [item1], [item2], [item3]).
 static int32_t Script_Equipment(lua_State* L) {
-    if (!s_data.m_valid) {
+    const Snapshot* target = EditTarget();
+
+    if (!target) {
         lua_pushboolean(L, 0);
         return 1;
     }
 
     Net::Packet packet(Net::CMSG_GAME_EDITOR_CREATURE_EQUIPMENT);
-    packet.PutUInt64(s_data.m_guid);
+    PutTarget(packet, *target);
     packet.PutUInt8(static_cast<uint8_t>(lua_tonumber(L, 1)));
     packet.PutUInt8(static_cast<uint8_t>(lua_tonumber(L, 2)));
 
@@ -970,6 +1037,8 @@ void OnWorldRender(CGWorldFrame* frame) {
 
 void OnGameDestroy() {
     s_data = Snapshot();
+    s_template = Snapshot();
+    s_templateEntry = 0;
     s_drawPath = false;
     s_pathForced = false;
     s_selectedPoint = 0;
@@ -1121,6 +1190,9 @@ void Apply() {
     Net::RegisterWorldHandler(Net::SMSG_GAME_EDITOR_CREATURE_RESULT, Packet_SMSG_CREATURE_EDITOR_RESULT);
 
     Lua::RegisterFunction("CreatureEditor_Request", Gated<Script_Request>);
+    Lua::RegisterFunction("CreatureEditor_RequestTemplate", Gated<Script_RequestTemplate>);
+    Lua::RegisterFunction("CreatureEditor_SetTemplateMode", Gated<Script_SetTemplateMode>);
+    Lua::RegisterFunction("CreatureEditor_GetTemplateMode", Gated<Script_GetTemplateMode>);
     Lua::RegisterFunction("CreatureEditor_GetData", Gated<Script_GetData>);
     Lua::RegisterFunction("CreatureEditor_SetFields", Gated<Script_SetFields>);
     Lua::RegisterFunction("CreatureEditor_SetAddon", Gated<Script_SetAddon>);

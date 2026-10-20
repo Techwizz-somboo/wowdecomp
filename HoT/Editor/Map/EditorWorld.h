@@ -17,7 +17,8 @@ bool GetFog();
 void SetFog(bool enabled);
 
 uint32_t TimeOfDay();
-void SetTimeOfDay(uint32_t minutes);
+void SetTimeOfDay(float minutes);
+bool HasTimeOfDay();
 void ClearTimeOfDay();
 void ApplyTimeOfDay();
 

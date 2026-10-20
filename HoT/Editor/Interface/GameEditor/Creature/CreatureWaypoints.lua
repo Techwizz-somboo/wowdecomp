@@ -37,7 +37,7 @@ local function MoveTypeName(value)
 end
 
 local function Data()
-	return Creature.GetData();
+	return Creature.GetSelectionData();
 end
 
 local function FindNode(data, point)

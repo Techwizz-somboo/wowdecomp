@@ -1,6 +1,7 @@
 #include "HoT/Editor/GobEditor.h"
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 #include "HoT/Editor/Quat.h"
@@ -61,6 +62,8 @@ struct Snapshot {
 };
 
 static Snapshot s_data;
+static Snapshot s_template;
+static uint32_t s_templateEntry;
 
 DecodedGuid DecodeGuid(uint64_t full) {
     DecodedGuid guid{};
@@ -180,6 +183,13 @@ static int32_t Packet_SMSG_GOB_EDITOR_DATA(void* param, NETMESSAGE msgId, uint32
 
     data.m_valid = true;
 
+    // A zero guid is a template snapshot, it never touches the selection.
+    if (!data.m_guid) {
+        s_template = std::move(data);
+        Lua::SignalEvent("HOT_GOB_EDITOR_DATA", "%d", 1);
+        return 1;
+    }
+
     uint64_t previous = s_data.m_valid ? s_data.m_guid : 0;
     bool sameSpawn = previous && data.m_spawnId && data.m_spawnId == s_data.m_spawnId;
     s_data = std::move(data);
@@ -190,7 +200,7 @@ static int32_t Packet_SMSG_GOB_EDITOR_DATA(void* param, NETMESSAGE msgId, uint32
 
     Selection::OnGameObjectSnapshot(s_data.m_guid);
 
-    Lua::SignalEvent("HOT_GOB_EDITOR_DATA", nullptr);
+    Lua::SignalEvent("HOT_GOB_EDITOR_DATA", "%d", 0);
     return 1;
 }
 
@@ -269,10 +279,52 @@ static int32_t Script_Request(lua_State* L) {
     return 1;
 }
 
-static int32_t Script_GetData(lua_State* L) {
-    const Snapshot& data = s_data;
+static uint32_t EntryArgument(lua_State* L, int index) {
+    if (!lua_isnumber(L, index)) {
+        return 0;
+    }
 
-    if (!data.m_valid) {
+    double value = lua_tonumber(L, index);
+    return value <= 0.0 || value >= 4294967295.0 ? 0 : static_cast<uint32_t>(value);
+}
+
+// GobEditor_RequestTemplate(entry) asks for the template snapshot of the entry, no gameobject needed.
+static int32_t Script_RequestTemplate(lua_State* L) {
+    uint32_t entry = EntryArgument(L, 1);
+
+    if (!entry) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+
+    Net::Packet(Net::CMSG_GOB_EDITOR_REQUEST).PutUInt64(0).PutUInt32(entry).Send();
+
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+// GobEditor_SetTemplateMode(entry or 0), while on GetData returns the template and edits go to it.
+static int32_t Script_SetTemplateMode(lua_State* L) {
+    s_templateEntry = EntryArgument(L, 1);
+    return 0;
+}
+
+static int32_t Script_GetTemplateMode(lua_State* L) {
+    if (!s_templateEntry) {
+        return 0;
+    }
+
+    lua_pushnumber(L, s_templateEntry);
+    return 1;
+}
+
+// GobEditor_GetData(["template" | "selection"]), without an argument it follows the template mode.
+static int32_t Script_GetData(lua_State* L) {
+    const char* which = lua_type(L, 1) == LUA_TSTRING ? lua_tostring(L, 1) : nullptr;
+    bool useTemplate = which ? std::strcmp(which, "template") == 0 : s_templateEntry != 0;
+    const Snapshot& data = useTemplate ? s_template : s_data;
+
+    if (!data.m_valid || (useTemplate && s_templateEntry && data.m_entry != s_templateEntry)) {
         lua_pushnil(L);
         return 1;
     }
@@ -321,12 +373,21 @@ static int32_t Script_GetData(lua_State* L) {
     return 1;
 }
 
-static uint8_t FieldTypeFor(uint8_t scope, const std::string& key) {
+// Snapshot that edits target, the template while template mode is on.
+static const Snapshot* EditTarget() {
+    if (s_templateEntry) {
+        return s_template.m_valid && s_template.m_entry == s_templateEntry ? &s_template : nullptr;
+    }
+
+    return s_data.m_valid ? &s_data : nullptr;
+}
+
+static uint8_t FieldTypeFor(const Snapshot& target, uint8_t scope, const std::string& key) {
     if (scope >= SCOPE_COUNT) {
         return 0xFF;
     }
 
-    for (const Field& field : s_data.m_fields[scope]) {
+    for (const Field& field : target.m_fields[scope]) {
         if (field.m_key == key) {
             return field.m_type;
         }
@@ -337,7 +398,9 @@ static uint8_t FieldTypeFor(uint8_t scope, const std::string& key) {
 
 // GobEditor_SetFields(scope, { key = value }), scopes are template, spawn, template addon and spawn addon.
 static int32_t Script_SetFields(lua_State* L) {
-    if (!s_data.m_valid || lua_type(L, 2) != LUA_TTABLE) {
+    const Snapshot* target = EditTarget();
+
+    if (!target || lua_type(L, 2) != LUA_TTABLE) {
         lua_pushboolean(L, 0);
         return 1;
     }
@@ -357,7 +420,7 @@ static int32_t Script_SetFields(lua_State* L) {
             int valueType = lua_type(L, -1);
             Field field;
             field.m_key = lua_tostring(L, -2);
-            field.m_type = FieldTypeFor(scope, field.m_key);
+            field.m_type = FieldTypeFor(*target, scope, field.m_key);
 
             if (valueType == LUA_TNUMBER) {
                 field.m_number = lua_tonumber(L, -1);
@@ -392,7 +455,13 @@ static int32_t Script_SetFields(lua_State* L) {
     }
 
     Net::Packet packet(Net::CMSG_GOB_EDITOR_SET_FIELDS);
-    packet.PutUInt64(s_data.m_guid);
+    packet.PutUInt64(target->m_guid);
+
+    // A zero guid tells the server that the template entry follows.
+    if (!target->m_guid) {
+        packet.PutUInt32(target->m_entry);
+    }
+
     packet.PutUInt8(scope);
     packet.PutUInt16(static_cast<uint16_t>(pending.size()));
 
@@ -515,6 +584,9 @@ void Apply() {
     Net::RegisterWorldHandler(Net::SMSG_GOB_EDITOR_RESULT, Packet_SMSG_GOB_EDITOR_RESULT);
 
     Lua::RegisterFunction("GobEditor_Request", Gated<Script_Request>);
+    Lua::RegisterFunction("GobEditor_RequestTemplate", Gated<Script_RequestTemplate>);
+    Lua::RegisterFunction("GobEditor_SetTemplateMode", Gated<Script_SetTemplateMode>);
+    Lua::RegisterFunction("GobEditor_GetTemplateMode", Gated<Script_GetTemplateMode>);
     Lua::RegisterFunction("GobEditor_GetData", Gated<Script_GetData>);
     Lua::RegisterFunction("GobEditor_SetFields", Gated<Script_SetFields>);
     Lua::RegisterFunction("GobEditor_Commit", Gated<Script_Commit>);
@@ -522,6 +594,8 @@ void Apply() {
 
 void OnGameDestroy() {
     s_data = Snapshot();
+    s_template = Snapshot();
+    s_templateEntry = 0;
 }
 
 }

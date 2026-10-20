@@ -202,7 +202,11 @@ function Creature.CreateEquipmentPage(parent)
 			NoggitSpinBox_SetValue(self.spawnSet, tonumber(data.spawn.equipment_id) or 0, true);
 		end
 
-		self.liveText:SetText(format("The creature shows set %d right now. -1 picks a random set on spawn, 0 shows no weapons.%s", data and data.equipmentId or 0, isSpawn and "" or " This creature is not a database spawn."));
+		if ( data and data.isTemplate ) then
+			self.liveText:SetText("Template mode, saving or deleting a set updates every live creature of the entry that shows it. On a spawn -1 picks a random set, 0 shows no weapons.");
+		else
+			self.liveText:SetText(format("The creature shows set %d right now. -1 picks a random set on spawn, 0 shows no weapons.%s", data and data.equipmentId or 0, isSpawn and "" or " This creature is not a database spawn."));
+		end
 	end;
 
 	return page;

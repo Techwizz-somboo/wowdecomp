@@ -14,6 +14,7 @@
 #include "HoT/DB/Custom.h"
 #include "HoT/Editor/Dbc/Schema.h"
 #include "HoT/Editor/Dbc/Store.h"
+#include "HoT/Editor/Light/LightEditor.h"
 #include "HoT/Game/Session.h"
 #include "HoT/Lua/Script.h"
 #include "HoT/Net/Handlers.h"
@@ -40,9 +41,21 @@ struct Value {
 
 using Row = std::vector<Value>;
 
+// Tables whose loaded record differs from the file row, rows for Lua and the server always hold the file values.
+struct Codec {
+    const char* stem;
+    void (*toFile)(uint8_t* record);
+    void (*toClient)(uint8_t* record);
+};
+
+static const Codec s_codecs[] = {
+    { "Light", LightEditor::RecordToDbc, LightEditor::RecordToWorld },
+};
+
 struct Table {
     const Store* store;
     const Schema* schema;
+    const Codec* codec = nullptr;
 };
 
 // Full rows as the server last sent them, they carry the columns the loaded record drops.
@@ -100,7 +113,39 @@ static bool Resolve(const char* name, Table& table) {
         return false;
     }
 
-    table = { store, schema };
+    const Codec* codec = nullptr;
+
+    for (const Codec& entry : s_codecs) {
+        if (_stricmp(entry.stem, store->stem) == 0) {
+            codec = &entry;
+        }
+    }
+
+    table = { store, schema, codec };
+    return true;
+}
+
+static bool ReadRecord(const Table& table, int32_t id, uint8_t* out) {
+    if (!table.store->read(id, out)) {
+        return false;
+    }
+
+    if (table.codec) {
+        table.codec->toFile(out);
+    }
+
+    return true;
+}
+
+static bool ReadRecordIndex(const Table& table, int32_t index, uint8_t* out) {
+    if (!table.store->readIndex(index, out)) {
+        return false;
+    }
+
+    if (table.codec) {
+        table.codec->toFile(out);
+    }
+
     return true;
 }
 
@@ -169,7 +214,7 @@ static void RecordToRow(const Table& table, int32_t id, const uint8_t* record, R
 static bool ReadRow(const Table& table, int32_t id, Row& row) {
     std::vector<uint8_t> record(table.store->recordSize);
 
-    if (!table.store->read(id, record.data())) {
+    if (!ReadRecord(table, id, record.data())) {
         return false;
     }
 
@@ -215,6 +260,8 @@ static void OnRowWritten(const Store& store, int32_t id, bool inserted) {
         s_modelAttachDirty = true;
     } else if (stem == "SpellVisualEffectName") {
         s_effectNamesDirty = true;
+    } else if (stem == "Light") {
+        LightEditor::OnLightWritten();
     }
 }
 
@@ -228,7 +275,7 @@ static bool EncodeRow(const Table& table, int32_t id, const Row& row, std::vecto
 
     record.assign(table.store->recordSize, 0);
 
-    if (!table.store->read(id, record.data())) {
+    if (!ReadRecord(table, id, record.data())) {
         const char* empty = Intern("");
 
         for (const Column& column : schema.columns) {
@@ -258,6 +305,11 @@ static bool EncodeRow(const Table& table, int32_t id, const Row& row, std::vecto
 
     int32_t recordId = id;
     memcpy(record.data(), &recordId, sizeof(recordId));
+
+    if (table.codec) {
+        table.codec->toClient(record.data());
+    }
+
     return true;
 }
 
@@ -698,7 +750,7 @@ static int32_t Script_Find(lua_State* L) {
     int32_t pinned = 0;
     bool hasPinned = false;
 
-    if (column < 0 && numeric && table.store->read(queryId, record.data())) {
+    if (column < 0 && numeric && ReadRecord(table, queryId, record.data())) {
         push(queryId, record.data());
         pinned = queryId;
         hasPinned = true;
@@ -707,7 +759,7 @@ static int32_t Script_Find(lua_State* L) {
     int32_t total = table.store->db->m_numRecords;
 
     for (int32_t index = 0; index < total && found < limit; index++) {
-        if (!table.store->readIndex(index, record.data())) {
+        if (!ReadRecordIndex(table, index, record.data())) {
             continue;
         }
 

@@ -2,6 +2,7 @@
 #include "Engine/Source/Base/CDataStore.h"
 #include "Engine/Source/ConsoleBase/IConsole.h"
 #include "Engine/Source/Storm/H/storm.h"
+#include "HoT/Editor/Map/WorldHooks.h"
 #include "WoW/Source/Game/GameTime.h"
 #include "WoW/Source/Net/Types.h"
 #include "WoW/Source/WorldClient/DayNight.h"
@@ -18,6 +19,8 @@ static void UpdateTime() {
     info->m_timeOfDay = g_clientGameTime.GetHourAndMinutes();
     info->m_dayProgression = g_clientGameTime.GameTimeGetDayProgression();
     info->m_day = static_cast<float>(g_clientGameTime.GetDaysSinceEpoch());
+    // HoT: a server time sync must not break a frozen editor time of day.
+    HoT::Editor::Map::ApplyTimeOverride();
     DayNight::Update(1, nullptr);
 
     for (uint32_t i = 0; i < sizeof(s_timeCallbacks) / sizeof(s_timeCallbacks[0]); i++) {

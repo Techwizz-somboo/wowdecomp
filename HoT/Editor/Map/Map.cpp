@@ -522,6 +522,10 @@ void AfterPrepareUpdate() {
     EditorWorld::ApplyTimeOfDay();
 }
 
+void ApplyTimeOverride() {
+    EditorWorld::ApplyTimeOfDay();
+}
+
 void OnWorldUnload() {
     s_handler.OnWorldUnloaded();
     TerrainEdit::Reset();

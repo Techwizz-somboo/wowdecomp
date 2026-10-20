@@ -181,6 +181,8 @@ function Creature.CreateAddonPage(parent, scope, onDirty)
 		Common.SetEnabled(self.save, self.available);
 		Common.SetEnabled(self.revert, dirty);
 		Common.SetEnabled(self.delete, self.available and self.exists);
+		Common.SetEnabled(self.preview, self.available and not self.isTemplate);
+		Common.SetEnabled(self.live, self.available and not self.isTemplate);
 		Common.SetEnabled(self.pick, Common.CanSearchSpells());
 
 		if ( onDirty ) then
@@ -271,7 +273,7 @@ function Creature.CreateAddonPage(parent, scope, onDirty)
 	page.LoadLive = function(self)
 		local data = Creature.GetData();
 
-		if ( not data or not self.available ) then
+		if ( not data or not self.available or data.isTemplate ) then
 			return;
 		end
 
@@ -323,6 +325,14 @@ function Creature.CreateAddonPage(parent, scope, onDirty)
 
 	page.Load = function(self, data, keepEdits)
 		local stored = data and (self.scope == 0 and data.templateAddon or data.spawnAddon);
+		self.isTemplate = data and data.isTemplate or false;
+
+		if ( self.scope == 1 and self.isTemplate ) then
+			self:SetAvailable(false, "A template has no spawn addon. Close the template and select a creature in the world to edit its creature_addon row.");
+			self.exists = false;
+			self:UpdateState();
+			return;
+		end
 
 		if ( self.scope == 1 and (not data or (data.spawnId or 0) == 0) ) then
 			self:SetAvailable(false, "This creature is not a database spawn, so it can not have a spawn addon. Use the template Addon tab instead.");

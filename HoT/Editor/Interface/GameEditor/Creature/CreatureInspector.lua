@@ -43,7 +43,7 @@ local function UpdateDirty()
 		end
 	end
 
-	if ( Common.HasUnsavedMove() ) then
+	if ( Common.HasUnsavedMove() and not Creature.templateEntry ) then
 		table.insert(names, 1, "Position");
 	end
 
@@ -127,6 +127,7 @@ local function BuildLivePage(container)
 	local intro = Common.Paragraph(page, "What the creature shows right now, including previews that are not saved.");
 	intro:SetPoint("TOPLEFT", page, "TOPLEFT", 2, -2);
 	intro:SetPoint("TOPRIGHT", page, "TOPRIGHT", -2, -2);
+	page.parts = { intro };
 
 	for index, row in ipairs(LIVE_ROWS) do
 		local y = -24 - (index - 1) * 18;
@@ -137,6 +138,8 @@ local function BuildLivePage(container)
 		value:SetPoint("TOPRIGHT", page, "TOPRIGHT", -2, y);
 		value:SetHeight(16);
 		page.values[index] = value;
+		table.insert(page.parts, key);
+		table.insert(page.parts, value);
 	end
 
 	local auraTop = -24 - #LIVE_ROWS * 18 - 6;
@@ -192,6 +195,32 @@ local function BuildLivePage(container)
 	page.auras:SetPoint("TOPLEFT", auraTitle, "BOTTOMLEFT", -2, -4);
 	page.auras:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", 0, 6);
 
+	table.insert(page.parts, auraTitle);
+	table.insert(page.parts, bar);
+	table.insert(page.parts, page.auras);
+
+	page.unavailable = Common.Paragraph(page, "");
+	page.unavailable:SetPoint("TOPLEFT", page, "TOPLEFT", 4, -8);
+	page.unavailable:SetPoint("TOPRIGHT", page, "TOPRIGHT", -4, -8);
+	page.unavailable:Hide();
+
+	page.SetAvailable = function(self, available, text)
+		for _, part in ipairs(self.parts) do
+			if ( available ) then
+				part:Show();
+			else
+				part:Hide();
+			end
+		end
+
+		if ( available ) then
+			self.unavailable:Hide();
+		else
+			self.unavailable:SetText(text or "");
+			self.unavailable:Show();
+		end
+	end;
+
 	page.Load = function(self, data)
 		for index, row in ipairs(LIVE_ROWS) do
 			local ok, text = pcall(row[2], data);
@@ -218,6 +247,15 @@ local function Build(parent)
 	header:AddButton("Reload", 56, function() Creature.Request(); end, "Ask the server for a fresh snapshot (F5)");
 	header:AddButton("To ground", 70, function() GameEditor_SnapToGround(); end, "Drop the creature onto the ground below it (G)");
 	Common.AddMoveButtons(header, UpdateDirty);
+
+	header.close = Common.Button(header, "Close", 56, function() Creature.CloseTemplate(); end, "Stop editing the template and go back to the selection");
+	header.close:SetHeight(20);
+	header.close:SetPoint("TOPRIGHT", header, "TOPRIGHT", -6, -6);
+	header.close:Hide();
+	header.templateReload = Common.Button(header, "Reload", 56, function() Creature.Request(); end, "Ask the server for a fresh copy of the template (F5)");
+	header.templateReload:SetHeight(20);
+	header.templateReload:SetPoint("RIGHT", header.close, "LEFT", -4, 0);
+	header.templateReload:Hide();
 
 	local container = CreateFrame("Frame", "GameEditorCreatureInspectorPages", body);
 	container:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -30);
@@ -269,7 +307,7 @@ function Inspector.HasChanges()
 end
 
 function Inspector.SaveAll()
-	local saved = Common.SaveAllMoves();
+	local saved = Creature.templateEntry and 0 or Common.SaveAllMoves();
 
 	for index = 1, #TAB_NAMES do
 		local page = pages[index];
@@ -299,8 +337,53 @@ local function SetEmpty(state)
 	empty:Set(state);
 end
 
+-- Template mode swaps the selection buttons for Close and hides everything that moves a spawn.
+local function SetTemplateLook(isTemplate)
+	for _, button in ipairs(header.buttons) do
+		if ( isTemplate ) then
+			button:Hide();
+		else
+			button:Show();
+		end
+	end
+
+	if ( isTemplate ) then
+		header.close:Show();
+		header.templateReload:Show();
+		header.name:SetPoint("TOPRIGHT", header.templateReload, "TOPLEFT", -6, 0);
+	else
+		header.close:Hide();
+		header.templateReload:Hide();
+		header.name:SetPoint("TOPRIGHT", header.buttons[#header.buttons], "TOPLEFT", -6, 0);
+	end
+
+	header.hideMove = isTemplate;
+	header:UpdateMove();
+end
+
+local ShowData;
+
 function Inspector.Refresh()
 	if ( not frame ) then
+		return;
+	end
+
+	if ( Creature.templateEntry ) then
+		local data = Creature.GetTemplateData();
+
+		if ( not data ) then
+			local entry = Creature.templateEntry;
+			SetEmpty({
+				title = format("Loading %s...", Common.NameOf("creature", entry) or "creature template"),
+				text = format("Waiting for the server to send creature template %d. Editing needs GM level 3 on the server.", entry),
+				primary = "Ask again", onPrimary = function() Creature.Request(); end,
+				secondary = "Close", onSecondary = Creature.CloseTemplate,
+				help = Creature.HELP,
+			});
+			return;
+		end
+
+		ShowData(data);
 		return;
 	end
 
@@ -309,8 +392,9 @@ function Inspector.Refresh()
 	if ( kind == "gameobject" ) then
 		SetEmpty({
 			title = "A gameobject is selected",
-			text = "The Objects workspace edits gameobjects. Click a creature to edit it here.",
+			text = "The Objects workspace edits gameobjects. Click a creature to edit it here, or find a creature template to edit it without a spawn.",
 			primary = "Open in Objects", onPrimary = function() GameEditor_SetWorkspace("gameobject", "select"); end,
+			secondary = "Find template...", onSecondary = Creature.FindTemplate,
 			help = Creature.HELP,
 		});
 		return;
@@ -319,9 +403,10 @@ function Inspector.Refresh()
 	if ( kind ~= "creature" ) then
 		SetEmpty({
 			title = "No creature selected",
-			text = "Select a creature to edit its template, spawn, addons, equipment and waypoints.",
+			text = "Select a creature to edit its template, spawn, addons, equipment and waypoints. Find template edits a template by name or entry without a spawn.",
 			primary = "Spawn creature...", onPrimary = function() Common.ShowSpawnWindow("creature"); end,
-			secondary = "Select my target", onSecondary = Common.SelectTarget,
+			secondary = "Find template...", onSecondary = Creature.FindTemplate,
+			third = "Select my target", onThird = Common.SelectTarget,
 			help = Creature.HELP,
 		});
 		return;
@@ -339,10 +424,17 @@ function Inspector.Refresh()
 		return;
 	end
 
+	ShowData(data);
+end
+
+ShowData = function(data)
+	local isTemplate = data.isTemplate and true or false;
+
 	empty:Hide();
 	body:Show();
+	SetTemplateLook(isTemplate);
 
-	local spawnKey = (data.spawnId or 0) > 0 and data.spawnId or ("temp"..tostring(data.guid));
+	local spawnKey = isTemplate and ("template"..tostring(data.entry)) or ((data.spawnId or 0) > 0 and data.spawnId or ("temp"..tostring(data.guid)));
 	local sameEntry = shownEntry == data.entry;
 	local sameSpawn = shownSpawn == spawnKey;
 
@@ -351,7 +443,13 @@ function Inspector.Refresh()
 	end
 
 	header.name:SetText(data.name ~= "" and data.name or "Creature");
-	header.info:SetText(format("Entry %d    Spawn %s    Level %d    Guid %s", data.entry or 0, (data.spawnId or 0) > 0 and tostring(data.spawnId) or "none", data.level or 0, tostring(data.guid)));
+
+	if ( isTemplate ) then
+		header.info:SetText(format("Template    Entry %d    No spawn selected", data.entry or 0));
+		header.position:SetText("Template mode, Close or a click on a creature goes back to the selection.");
+	else
+		header.info:SetText(format("Entry %d    Spawn %s    Level %d    Guid %s", data.entry or 0, (data.spawnId or 0) > 0 and tostring(data.spawnId) or "none", data.level or 0, tostring(data.guid)));
+	end
 
 	pages[TEMPLATE]:Load(data.template, sameEntry);
 	pages[TEMPLATE].note:SetText(format("Changes apply to every creature of entry %d.", data.entry or 0));
@@ -362,6 +460,8 @@ function Inspector.Refresh()
 		spawn:SetAvailable(true);
 		spawn:Load(data.spawn, sameSpawn);
 		spawn.stored:SetText(format("Stored spawn point: %s  %s  %s   Map %s", Common.Float(data.spawn.position_x), Common.Float(data.spawn.position_y), Common.Float(data.spawn.position_z), tostring(data.spawn.map or "?")));
+	elseif ( isTemplate ) then
+		spawn:SetAvailable(false, "A template has no spawn row. Close the template and select a creature in the world to edit its spawn.");
 	else
 		spawn:SetAvailable(false, "This creature is not a database spawn (a summon or a temporary creature), so it has no creature row and can not be moved or saved. Edit the template instead.");
 	end
@@ -377,7 +477,13 @@ function Inspector.Refresh()
 	pages[TEMPLATE_ADDON]:Load(data, sameEntry);
 	pages[SPAWN_ADDON]:Load(data, sameSpawn);
 	pages[EQUIPMENT]:Load(data);
-	pages[LIVE]:Load(data);
+
+	if ( isTemplate ) then
+		pages[LIVE]:SetAvailable(false, "A template has no live creature. Close the template and select a creature in the world to see what it shows right now.");
+	else
+		pages[LIVE]:SetAvailable(true);
+		pages[LIVE]:Load(data);
+	end
 
 	shownEntry = data.entry;
 	shownSpawn = spawnKey;
@@ -386,7 +492,7 @@ function Inspector.Refresh()
 end
 
 function Inspector.Update(elapsed)
-	if ( not frame or not body:IsVisible() ) then
+	if ( not frame or not body:IsVisible() or Creature.templateEntry ) then
 		return;
 	end
 

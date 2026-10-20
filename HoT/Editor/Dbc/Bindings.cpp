@@ -7,6 +7,11 @@
 #include "WoW/Source/DB/Rec/CreatureDisplayInfoExtraRec.h"
 #include "WoW/Source/DB/Rec/CreatureModelDataRec.h"
 #include "WoW/Source/DB/Rec/GameObjectDisplayInfoRec.h"
+#include "WoW/Source/DB/Rec/LightRec.h"
+#include "WoW/Source/DB/Rec/LightFloatBandRec.h"
+#include "WoW/Source/DB/Rec/LightIntBandRec.h"
+#include "WoW/Source/DB/Rec/LightParamsRec.h"
+#include "WoW/Source/DB/Rec/LightSkyboxRec.h"
 #include "WoW/Source/DB/Rec/SkillLineAbilityRec.h"
 #include "WoW/Source/DB/Rec/SoundEntriesRec.h"
 #include "WoW/Source/DB/Rec/SpellRec.h"
@@ -146,6 +151,121 @@ static void BindGameObjectDisplayInfo(Builder& builder) {
     DBC_VALUE(m_geoBoxMax[1]);
     DBC_VALUE(m_geoBoxMax[2]);
     DBC_VALUE(m_objectEffectPackageID);
+}
+
+static void BindLight(Builder& builder) {
+    using Rec = LightRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_continentID);
+    DBC_VALUE(m_gameCoords[0]);
+    DBC_VALUE(m_gameCoords[1]);
+    DBC_VALUE(m_gameCoords[2]);
+    DBC_VALUE(m_gameFalloffStart);
+    DBC_VALUE(m_gameFalloffEnd);
+    DBC_VALUE(m_lightParamsID[0]);
+    DBC_VALUE(m_lightParamsID[1]);
+    DBC_VALUE(m_lightParamsID[2]);
+    DBC_VALUE(m_lightParamsID[3]);
+    DBC_VALUE(m_lightParamsID[4]);
+    DBC_VALUE(m_lightParamsID[5]);
+    DBC_VALUE(m_lightParamsID[6]);
+    DBC_VALUE(m_lightParamsID[7]);
+}
+
+static void BindLightFloatBand(Builder& builder) {
+    using Rec = LightFloatBandRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_num);
+    DBC_VALUE(m_time[0]);
+    DBC_VALUE(m_time[1]);
+    DBC_VALUE(m_time[2]);
+    DBC_VALUE(m_time[3]);
+    DBC_VALUE(m_time[4]);
+    DBC_VALUE(m_time[5]);
+    DBC_VALUE(m_time[6]);
+    DBC_VALUE(m_time[7]);
+    DBC_VALUE(m_time[8]);
+    DBC_VALUE(m_time[9]);
+    DBC_VALUE(m_time[10]);
+    DBC_VALUE(m_time[11]);
+    DBC_VALUE(m_time[12]);
+    DBC_VALUE(m_time[13]);
+    DBC_VALUE(m_time[14]);
+    DBC_VALUE(m_time[15]);
+    DBC_VALUE(m_data[0]);
+    DBC_VALUE(m_data[1]);
+    DBC_VALUE(m_data[2]);
+    DBC_VALUE(m_data[3]);
+    DBC_VALUE(m_data[4]);
+    DBC_VALUE(m_data[5]);
+    DBC_VALUE(m_data[6]);
+    DBC_VALUE(m_data[7]);
+    DBC_VALUE(m_data[8]);
+    DBC_VALUE(m_data[9]);
+    DBC_VALUE(m_data[10]);
+    DBC_VALUE(m_data[11]);
+    DBC_VALUE(m_data[12]);
+    DBC_VALUE(m_data[13]);
+    DBC_VALUE(m_data[14]);
+    DBC_VALUE(m_data[15]);
+}
+
+static void BindLightIntBand(Builder& builder) {
+    using Rec = LightIntBandRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_num);
+    DBC_VALUE(m_time[0]);
+    DBC_VALUE(m_time[1]);
+    DBC_VALUE(m_time[2]);
+    DBC_VALUE(m_time[3]);
+    DBC_VALUE(m_time[4]);
+    DBC_VALUE(m_time[5]);
+    DBC_VALUE(m_time[6]);
+    DBC_VALUE(m_time[7]);
+    DBC_VALUE(m_time[8]);
+    DBC_VALUE(m_time[9]);
+    DBC_VALUE(m_time[10]);
+    DBC_VALUE(m_time[11]);
+    DBC_VALUE(m_time[12]);
+    DBC_VALUE(m_time[13]);
+    DBC_VALUE(m_time[14]);
+    DBC_VALUE(m_time[15]);
+    DBC_VALUE(m_data[0]);
+    DBC_VALUE(m_data[1]);
+    DBC_VALUE(m_data[2]);
+    DBC_VALUE(m_data[3]);
+    DBC_VALUE(m_data[4]);
+    DBC_VALUE(m_data[5]);
+    DBC_VALUE(m_data[6]);
+    DBC_VALUE(m_data[7]);
+    DBC_VALUE(m_data[8]);
+    DBC_VALUE(m_data[9]);
+    DBC_VALUE(m_data[10]);
+    DBC_VALUE(m_data[11]);
+    DBC_VALUE(m_data[12]);
+    DBC_VALUE(m_data[13]);
+    DBC_VALUE(m_data[14]);
+    DBC_VALUE(m_data[15]);
+}
+
+static void BindLightParams(Builder& builder) {
+    using Rec = LightParamsRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_highlightSky);
+    DBC_VALUE(m_lightSkyboxID);
+    DBC_VALUE(m_cloudTypeID);
+    DBC_VALUE(m_glow);
+    DBC_VALUE(m_waterShallowAlpha);
+    DBC_VALUE(m_waterDeepAlpha);
+    DBC_VALUE(m_oceanShallowAlpha);
+    DBC_VALUE(m_oceanDeepAlpha);
+}
+
+static void BindLightSkybox(Builder& builder) {
+    using Rec = LightSkyboxRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_name);
+    DBC_VALUE(m_flags);
 }
 
 static void BindSkillLineAbility(Builder& builder) {
@@ -744,6 +864,11 @@ static const Binding s_bindings[] = {
     { "CreatureDisplayInfoExtra", sizeof(CreatureDisplayInfoExtraRec), BindCreatureDisplayInfoExtra },
     { "CreatureModelData", sizeof(CreatureModelDataRec), BindCreatureModelData },
     { "GameObjectDisplayInfo", sizeof(GameObjectDisplayInfoRec), BindGameObjectDisplayInfo },
+    { "Light", sizeof(LightRec), BindLight },
+    { "LightFloatBand", sizeof(LightFloatBandRec), BindLightFloatBand },
+    { "LightIntBand", sizeof(LightIntBandRec), BindLightIntBand },
+    { "LightParams", sizeof(LightParamsRec), BindLightParams },
+    { "LightSkybox", sizeof(LightSkyboxRec), BindLightSkybox },
     { "SkillLineAbility", sizeof(SkillLineAbilityRec), BindSkillLineAbility },
     { "SoundEntries", sizeof(SoundEntriesRec), BindSoundEntries },
     { "Spell", sizeof(SpellRec), BindSpell },

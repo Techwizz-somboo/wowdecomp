@@ -89,7 +89,7 @@ local function UpdateDirty()
 		end
 	end
 
-	if ( Common.HasUnsavedMove() ) then
+	if ( Common.HasUnsavedMove() and not GameObject.templateEntry ) then
 		table.insert(names, 1, "Position");
 	end
 
@@ -284,6 +284,15 @@ local function Build(parent)
 	header:AddButton("To ground", 70, function() GameEditor_SnapToGround(); end, "Drop the gameobject onto the ground below it (G)");
 	Common.AddMoveButtons(header, UpdateDirty);
 
+	header.close = Common.Button(header, "Close", 56, function() GameObject.CloseTemplate(); end, "Stop editing the template and go back to the selection");
+	header.close:SetHeight(20);
+	header.close:SetPoint("TOPRIGHT", header, "TOPRIGHT", -6, -6);
+	header.close:Hide();
+	header.templateReload = Common.Button(header, "Reload", 56, function() GameObject.Request(); end, "Ask the server for a fresh copy of the template (F5)");
+	header.templateReload:SetHeight(20);
+	header.templateReload:SetPoint("RIGHT", header.close, "LEFT", -4, 0);
+	header.templateReload:Hide();
+
 	local container = CreateFrame("Frame", "GameEditorGameObjectInspectorPages", body);
 	container:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -30);
 	container:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -6, 6);
@@ -332,7 +341,7 @@ function Inspector.HasChanges()
 end
 
 function Inspector.SaveAll()
-	local saved = Common.SaveAllMoves();
+	local saved = GameObject.templateEntry and 0 or Common.SaveAllMoves();
 
 	for index = 1, #TAB_NAMES do
 		local page = pages[index];
@@ -364,8 +373,53 @@ local function TypeText(data)
 	return Common.EnumText("GameObjectType", data.type);
 end
 
+-- Template mode swaps the selection buttons for Close and hides everything that moves a spawn.
+local function SetTemplateLook(isTemplate)
+	for _, button in ipairs(header.buttons) do
+		if ( isTemplate ) then
+			button:Hide();
+		else
+			button:Show();
+		end
+	end
+
+	if ( isTemplate ) then
+		header.close:Show();
+		header.templateReload:Show();
+		header.name:SetPoint("TOPRIGHT", header.templateReload, "TOPLEFT", -6, 0);
+	else
+		header.close:Hide();
+		header.templateReload:Hide();
+		header.name:SetPoint("TOPRIGHT", header.buttons[#header.buttons], "TOPLEFT", -6, 0);
+	end
+
+	header.hideMove = isTemplate;
+	header:UpdateMove();
+end
+
+local ShowData;
+
 function Inspector.Refresh()
 	if ( not frame ) then
+		return;
+	end
+
+	if ( GameObject.templateEntry ) then
+		local data = GameObject.GetTemplateData();
+
+		if ( not data ) then
+			local entry = GameObject.templateEntry;
+			SetEmpty({
+				title = format("Loading %s...", Common.NameOf("gameobject", entry) or "gameobject template"),
+				text = format("Waiting for the server to send gameobject template %d. Editing needs GM level 3 on the server.", entry),
+				primary = "Ask again", onPrimary = function() GameObject.Request(); end,
+				secondary = "Close", onSecondary = GameObject.CloseTemplate,
+				help = GameObject.HELP,
+			});
+			return;
+		end
+
+		ShowData(data);
 		return;
 	end
 
@@ -374,8 +428,9 @@ function Inspector.Refresh()
 	if ( kind == "creature" ) then
 		SetEmpty({
 			title = "A creature is selected",
-			text = "The Creatures workspace edits creatures. Click a gameobject to edit it here.",
+			text = "The Creatures workspace edits creatures. Click a gameobject to edit it here, or find a gameobject template to edit it without a spawn.",
 			primary = "Open in Creatures", onPrimary = function() GameEditor_SetWorkspace("creature", "select"); end,
+			secondary = "Find template...", onSecondary = GameObject.FindTemplate,
 			help = GameObject.HELP,
 		});
 		return;
@@ -384,8 +439,9 @@ function Inspector.Refresh()
 	if ( kind ~= "gameobject" ) then
 		SetEmpty({
 			title = "No gameobject selected",
-			text = "Select a gameobject to edit its template, spawn, rotation and addons.",
+			text = "Select a gameobject to edit its template, spawn, rotation and addons. Find template edits a template by name or entry without a spawn.",
 			primary = "Spawn gameobject...", onPrimary = function() Common.ShowSpawnWindow("gameobject"); end,
+			secondary = "Find template...", onSecondary = GameObject.FindTemplate,
 			help = GameObject.HELP,
 		});
 		return;
@@ -403,10 +459,17 @@ function Inspector.Refresh()
 		return;
 	end
 
+	ShowData(data);
+end
+
+ShowData = function(data)
+	local isTemplate = data.isTemplate and true or false;
+
 	empty:Hide();
 	body:Show();
+	SetTemplateLook(isTemplate);
 
-	local spawnKey = (data.spawnId or 0) > 0 and data.spawnId or ("temp"..tostring(data.guid));
+	local spawnKey = isTemplate and ("template"..tostring(data.entry)) or ((data.spawnId or 0) > 0 and data.spawnId or ("temp"..tostring(data.guid)));
 	local sameEntry = shownEntry == data.entry;
 	local sameSpawn = shownSpawn == spawnKey;
 
@@ -416,7 +479,13 @@ function Inspector.Refresh()
 
 	local rotation = data.rotation or {};
 	header.name:SetText(data.name ~= "" and data.name or "Gameobject");
-	header.info:SetText(format("Entry %d    Spawn %s    %s    Display %d    State %s", data.entry or 0, (data.spawnId or 0) > 0 and tostring(data.spawnId) or "none", TypeText(data), data.displayId or 0, Common.EnumText("GOState", data.state)));
+
+	if ( isTemplate ) then
+		header.info:SetText(format("Template    Entry %d    %s    Display %d", data.entry or 0, TypeText(data), data.displayId or 0));
+		header.position:SetText("Template mode, Close or a click on a gameobject goes back to the selection.");
+	else
+		header.info:SetText(format("Entry %d    Spawn %s    %s    Display %d    State %s", data.entry or 0, (data.spawnId or 0) > 0 and tostring(data.spawnId) or "none", TypeText(data), data.displayId or 0, Common.EnumText("GOState", data.state)));
+	end
 
 	pages[TEMPLATE]:Load(data.template, sameEntry);
 	pages[TEMPLATE].note:SetText(format("Changes apply to every gameobject of entry %d.", data.entry or 0));
@@ -428,6 +497,8 @@ function Inspector.Refresh()
 		spawn:Load(data.spawn, sameSpawn);
 		spawn.stored:SetText(format("Stored: %s  %s  %s   Map %s   Rotation %s %s %s %s", Common.Float(data.spawn.position_x), Common.Float(data.spawn.position_y), Common.Float(data.spawn.position_z), tostring(data.spawn.map or "?"),
 			Common.Float(rotation.x, 3), Common.Float(rotation.y, 3), Common.Float(rotation.z, 3), Common.Float(rotation.w, 3)));
+	elseif ( isTemplate ) then
+		spawn:SetAvailable(false, "A template has no spawn row. Close the template and select a gameobject in the world to edit its spawn.");
 	else
 		spawn:SetAvailable(false, "This gameobject is not a database spawn (a summon or a temporary object), so it has no gameobject row. Edit the template instead.");
 	end
@@ -445,6 +516,9 @@ function Inspector.Refresh()
 	if ( data.spawn ) then
 		pages[SPAWN_ADDON]:SetAvailable(true);
 		pages[SPAWN_ADDON]:LoadRow(data.spawnAddon, format("spawn %d", data.spawnId or 0), sameSpawn);
+	elseif ( isTemplate ) then
+		pages[SPAWN_ADDON]:SetAvailable(false, "A template has no spawn addon. Close the template and select a gameobject in the world to edit its gameobject_addon row.");
+		pages[SPAWN_ADDON].state:SetText("");
 	else
 		pages[SPAWN_ADDON]:SetAvailable(false, "This gameobject is not a database spawn, so it can not have a gameobject_addon row.");
 		pages[SPAWN_ADDON].state:SetText("");
@@ -457,7 +531,7 @@ function Inspector.Refresh()
 end
 
 function Inspector.Update(elapsed)
-	if ( not frame or not body:IsVisible() ) then
+	if ( not frame or not body:IsVisible() or GameObject.templateEntry ) then
 		return;
 	end
 

@@ -11,7 +11,8 @@
 namespace HoT::Editor::TemplateSearch {
 
 static constexpr int8_t kRequiredSecurityLevel = 3;
-static constexpr uint8_t kKinds = 2;
+static constexpr uint8_t kKinds = 3;
+static const char* const kKindNames[kKinds] = { "creature", "gameobject", "quest" };
 
 struct Hit {
     uint32_t m_entry = 0;
@@ -36,7 +37,7 @@ static std::string s_pendingQuery[kKinds];
 static uint32_t s_nextRequestId = 1;
 
 static const char* KindName(uint8_t kind) {
-    return kind == 0 ? "creature" : "gameobject";
+    return kind < kKinds ? kKindNames[kind] : "";
 }
 
 static int KindFromLua(lua_State* L, int index) {
@@ -46,12 +47,10 @@ static int KindFromLua(lua_State* L, int index) {
         return -1;
     }
 
-    if (!std::strcmp(name, "creature")) {
-        return 0;
-    }
-
-    if (!std::strcmp(name, "gameobject")) {
-        return 1;
+    for (uint8_t kind = 0; kind < kKinds; kind++) {
+        if (!std::strcmp(name, kKindNames[kind])) {
+            return kind;
+        }
     }
 
     return -1;
@@ -96,7 +95,7 @@ static int32_t Packet_SMSG_EDITOR_TEMPLATE_RESULTS(void* param, NETMESSAGE msgId
     return 1;
 }
 
-// TemplateSearch_Query("creature" | "gameobject", query [, limit]) returns the request id, an entry number matches exactly.
+// TemplateSearch_Query("creature" | "gameobject" | "quest", query [, limit]) returns the request id, an entry number matches exactly.
 static int32_t Script_Query(lua_State* L) {
     int kind = KindFromLua(L, 1);
     const char* query = lua_tostring(L, 2);

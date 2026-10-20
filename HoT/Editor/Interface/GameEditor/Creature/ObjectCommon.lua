@@ -10,6 +10,8 @@ local LOOKUP_TIME = 3;
 
 Common.names = { creature = {}, gameobject = {} };
 Common.recent = { creature = {}, gameobject = {} };
+Common.edited = { creature = {}, gameobject = {} };
+Common.templateEditors = Common.templateEditors or {};
 
 local NOUN = { creature = "creature", gameobject = "gameobject" };
 
@@ -336,8 +338,8 @@ end
 
 -- Spawning and deleting ------------------------------------------------------------------------------------
 
-local function Remember(kind, entry)
-	local recent = Common.recent[kind];
+local function Remember(kind, entry, store)
+	local recent = (store or Common.recent)[kind];
 
 	for index = #recent, 1, -1 do
 		if ( recent[index] == entry ) then
@@ -423,7 +425,27 @@ function Common.SelectTarget()
 	end
 end
 
--- Spawn window ---------------------------------------------------------------------------------------------
+-- Opens the template of the entry in its workspace, no spawn needed.
+function Common.EditTemplate(kind, entry)
+	entry = tonumber(entry);
+
+	if ( not entry or entry <= 0 ) then
+		GameEditor_Notify("Enter the entry to edit first", "info");
+		return false;
+	end
+
+	local editor = Common.templateEditors[kind];
+
+	if ( not editor ) then
+		return false;
+	end
+
+	Remember(kind, entry, Common.edited);
+	editor(entry);
+	return true;
+end
+
+-- Template browser, spawns or edits the templates found by name or entry -----------------------------------
 
 local spawnWindow;
 
@@ -443,8 +465,10 @@ local function SpawnItems()
 	end
 
 	if ( text == "" ) then
-		for _, entry in ipairs(Common.recent[kind]) do
-			Add(entry, nil, "recent");
+		local recent = window.editMode and Common.edited[kind] or Common.recent[kind];
+
+		for _, entry in ipairs(recent) do
+			Add(entry, nil, window.editMode and "edited" or "spawned");
 		end
 
 		return items;
@@ -475,7 +499,7 @@ local function SpawnRefresh(keepSelection)
 	local text = strtrim(spawnWindow.search:GetText() or "");
 
 	if ( text == "" ) then
-		spawnWindow.status:SetText(#items > 0 and "Recently spawned" or "Type a name or an entry");
+		spawnWindow.status:SetText(#items > 0 and (spawnWindow.editMode and "Recently edited" or "Recently spawned") or "Type a name or an entry");
 	elseif ( spawnWindow.searching ) then
 		spawnWindow.status:SetText(format("Searching the server... %d found", #items));
 	else
@@ -506,15 +530,44 @@ local function SpawnSearch()
 	SpawnRefresh();
 end
 
-local function SpawnSelected()
+local function SelectedEntry()
 	local list = spawnWindow.list;
 	local item = list.items[list.selected or 0];
-	local entry = item and item.value or tonumber(strtrim(spawnWindow.search:GetText() or ""));
-	Common.Spawn(spawnWindow.kind, entry, spawnWindow.atCharacter);
+	return item and item.value or tonumber(strtrim(spawnWindow.search:GetText() or ""));
+end
+
+local function SpawnSelected()
+	Common.Spawn(spawnWindow.kind, SelectedEntry(), spawnWindow.atCharacter);
+end
+
+local function EditSelected()
+	Common.EditTemplate(spawnWindow.kind, SelectedEntry());
+end
+
+local function UseEntry(entry)
+	if ( spawnWindow.editMode ) then
+		Common.EditTemplate(spawnWindow.kind, entry);
+	else
+		Common.Spawn(spawnWindow.kind, entry, spawnWindow.atCharacter);
+	end
+end
+
+local HINT_SPAWN = "Type part of a name and press Enter to search the server, or type an entry number and press Enter to spawn it. Double click a row to spawn it.";
+local HINT_EDIT = "Type part of a name and press Enter to search the server, or type an entry number and press Enter to edit its template. Double click a row to edit it, no spawn is needed.";
+
+local function SetEditMode(editMode)
+	spawnWindow.editMode = editMode and true or false;
+	NoggitCheckBox_SetChecked(spawnWindow.spawnMode, not spawnWindow.editMode);
+	NoggitCheckBox_SetChecked(spawnWindow.editModeBox, spawnWindow.editMode);
+	spawnWindow.hint:SetText(spawnWindow.editMode and HINT_EDIT or HINT_SPAWN);
+
+	local noun = spawnWindow.kind == "gameobject" and "gameobject" or "creature";
+	spawnWindow:SetTitle(spawnWindow.editMode and format("Find %s template", noun) or format("Spawn %s", noun));
+	SpawnRefresh(true);
 end
 
 local function CreateSpawnWindow()
-	spawnWindow = GameEditor_CreateWindow("GameEditorSpawnWindow", "Spawn", 400, 460, true);
+	spawnWindow = GameEditor_CreateWindow("GameEditorSpawnWindow", "Spawn", 400, 480, true);
 	local content = spawnWindow.content;
 
 	local searchButton = Common.Button(content, "Search", 70, SpawnSearch, "Ask the server for every template whose name contains the text");
@@ -529,7 +582,7 @@ local function CreateSpawnWindow()
 		local text = strtrim(self:GetText() or "");
 
 		if ( tonumber(text) ) then
-			SpawnSelected();
+			UseEntry(tonumber(text));
 		else
 			SpawnSearch();
 		end
@@ -540,12 +593,13 @@ local function CreateSpawnWindow()
 		SpawnRefresh();
 	end);
 
-	local hint = Common.Paragraph(content, "Type part of a name and press Enter to search the server, or type an entry number and press Enter to spawn it. Double click a row to spawn it.");
+	local hint = Common.Paragraph(content, HINT_SPAWN);
 	hint:SetPoint("TOPLEFT", spawnWindow.search, "BOTTOMLEFT", 0, -6);
 	hint:SetPoint("TOPRIGHT", searchButton, "BOTTOMRIGHT", 0, -6);
+	spawnWindow.hint = hint;
 
 	local bottom = CreateFrame("Frame", "GameEditorSpawnWindowBottom", content);
-	bottom:SetHeight(52);
+	bottom:SetHeight(76);
 	bottom:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 0, 0);
 	bottom:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", 0, 0);
 
@@ -555,11 +609,20 @@ local function CreateSpawnWindow()
 	spawnWindow.character = NoggitCheckBox_Create(bottom, "At my character", false, function() spawnWindow.atCharacter = true; end, group);
 	spawnWindow.character:SetPoint("LEFT", spawnWindow.camera, "RIGHT", 16, 0);
 
+	local modeGroup = {};
+	spawnWindow.spawnMode = NoggitCheckBox_Create(bottom, "Double click spawns", true, function() SetEditMode(false); end, modeGroup);
+	spawnWindow.spawnMode:SetPoint("TOPLEFT", spawnWindow.camera, "BOTTOMLEFT", 0, -4);
+	spawnWindow.editModeBox = NoggitCheckBox_Create(bottom, "Double click edits the template", false, function() SetEditMode(true); end, modeGroup);
+	spawnWindow.editModeBox:SetPoint("LEFT", spawnWindow.spawnMode, "RIGHT", 16, 0);
+
 	spawnWindow.status = Common.Label(bottom, "", nil, NOGGIT_COLOR_DISABLED);
 	spawnWindow.status:SetPoint("BOTTOMLEFT", bottom, "BOTTOMLEFT", 2, 6);
 
-	local spawnButton = Common.Button(bottom, "Spawn", 90, SpawnSelected, "Spawn the selected entry, it is saved to the database and becomes the selection");
+	local spawnButton = Common.Button(bottom, "Spawn", 70, SpawnSelected, "Spawn the selected entry, it is saved to the database and becomes the selection");
 	spawnButton:SetPoint("BOTTOMRIGHT", bottom, "BOTTOMRIGHT", 0, 0);
+
+	local editButton = Common.Button(bottom, "Edit template", 100, EditSelected, "Edit the template rows of the selected entry in the inspector, no spawn is needed");
+	editButton:SetPoint("RIGHT", spawnButton, "LEFT", -4, 0);
 
 	spawnWindow.list = NoggitListBox_Create(content, 20, function(row)
 		row.entry = NoggitUI_FontString(row, "");
@@ -580,7 +643,7 @@ local function CreateSpawnWindow()
 	spawnWindow.list:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -6);
 	spawnWindow.list:SetPoint("BOTTOMRIGHT", bottom, "TOPRIGHT", 0, 6);
 	spawnWindow.list.onDoubleClick = function(item)
-		Common.Spawn(spawnWindow.kind, item.value, spawnWindow.atCharacter);
+		UseEntry(item.value);
 	end;
 
 	spawnWindow:SetScript("OnUpdate", function(self)
@@ -591,7 +654,7 @@ local function CreateSpawnWindow()
 	end);
 end
 
-function Common.ShowSpawnWindow(kind)
+local function ShowTemplateWindow(kind, editMode)
 	if ( not spawnWindow ) then
 		CreateSpawnWindow();
 	end
@@ -602,10 +665,18 @@ function Common.ShowSpawnWindow(kind)
 		spawnWindow.search:SetText("");
 	end
 
-	spawnWindow:SetTitle(kind == "gameobject" and "Spawn gameobject" or "Spawn creature");
 	GameEditor_ShowWindow(spawnWindow);
-	SpawnRefresh();
+	SetEditMode(editMode);
 	spawnWindow.search:SetFocus();
+end
+
+function Common.ShowSpawnWindow(kind)
+	ShowTemplateWindow(kind, false);
+end
+
+-- The same window with double click and Enter editing the template instead of spawning.
+function Common.ShowTemplateBrowser(kind)
+	ShowTemplateWindow(kind, true);
 end
 
 -- Layout pieces ----------------------------------------------------------------------------------------------
@@ -682,7 +753,7 @@ function Common.AddMoveButtons(header, onChange)
 		self.unsaved:ClearAllPoints();
 		self.unsaved:SetPoint("TOPLEFT", self, "TOPLEFT", 8, -60);
 
-		if ( Common.HasUnsavedMove() ) then
+		if ( Common.HasUnsavedMove() and not self.hideMove ) then
 			self.saveMove:Show();
 			self.revertMove:Show();
 			self.unsaved:SetPoint("TOPRIGHT", self.revertMove, "TOPLEFT", -6, -3);
@@ -956,6 +1027,13 @@ function Common.CreateEmptyState(parent)
 	end);
 	frame.secondary:SetPoint("LEFT", frame.primary, "RIGHT", 6, 0);
 
+	frame.third = Common.Button(frame, "", 150, function()
+		if ( frame.onThird ) then
+			frame.onThird();
+		end
+	end);
+	frame.third:SetPoint("LEFT", frame.secondary, "RIGHT", 6, 0);
+
 	frame.help = Common.Paragraph(frame, "");
 	frame.help:SetPoint("TOPLEFT", frame.primary, "BOTTOMLEFT", 0, -16);
 	frame.help:SetPoint("TOPRIGHT", frame.text, "BOTTOMRIGHT", 0, -50);
@@ -966,6 +1044,7 @@ function Common.CreateEmptyState(parent)
 		self.help:SetText(state.help or "");
 		self.onPrimary = state.onPrimary;
 		self.onSecondary = state.onSecondary;
+		self.onThird = state.onThird;
 
 		if ( state.primary ) then
 			self.primary:SetText(state.primary);
@@ -981,6 +1060,14 @@ function Common.CreateEmptyState(parent)
 			self.secondary:Show();
 		else
 			self.secondary:Hide();
+		end
+
+		if ( state.third ) then
+			self.third:SetText(state.third);
+			self.third:SetWidth(max(110, self.third:GetFontString():GetStringWidth() + 24));
+			self.third:Show();
+		else
+			self.third:Hide();
 		end
 
 		self:Show();

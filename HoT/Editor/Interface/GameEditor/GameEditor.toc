@@ -18,4 +18,6 @@ Map\Map.xml
 Creature\Creature.xml
 GameObject\GameObject.xml
 Spell\Spell.xml
+Quest\Quest.xml
+Light\Light.xml
 GameEditor.xml

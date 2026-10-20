@@ -8,6 +8,9 @@ namespace HoT::Editor::Map {
 void BeforePrepareUpdate(bool all = false);
 void AfterPrepareUpdate();
 
+// Puts the editor time of day back after the game time writes the server time.
+void ApplyTimeOverride();
+
 // Called from World::UnloadMap before CMap is torn down.
 void OnWorldUnload();
 
