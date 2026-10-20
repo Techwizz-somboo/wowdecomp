@@ -92,6 +92,8 @@ static const char* s_events[] = {
     "WORLD_TABLE_RESULT",
     "WORLD_SCRIPT_NAMES",
     "EDITOR_TEMPLATE_RESULTS",
+    "MODEL_EDITOR_CHANGED",
+    "MODEL_EDITOR_SAVED",
     "HOT_MINIGAME_VALUE",
     "HOT_MINIGAME_TEXT",
 };

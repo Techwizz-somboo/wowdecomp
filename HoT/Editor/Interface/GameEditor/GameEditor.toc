@@ -20,4 +20,6 @@ GameObject\GameObject.xml
 Spell\Spell.xml
 Quest\Quest.xml
 Light\Light.xml
+Model\Model.xml
+Item\Item.xml
 GameEditor.xml

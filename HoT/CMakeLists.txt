@@ -75,6 +75,15 @@ if (TARGET msdfgen::msdfgen-ext)
     )
 endif ()
 
+# The model editor decodes imported images through WIC.
+if (WIN32)
+    target_link_libraries(HoT
+        PUBLIC
+            windowscodecs
+            ole32
+    )
+endif ()
+
 option(AUTO_UPDATER_IGNORES_EXE "Background downloader leaves the running client exe and discord_game_sdk_64.dll alone" OFF)
 if (AUTO_UPDATER_IGNORES_EXE)
     target_compile_definitions(HoT PRIVATE AUTO_UPDATER_IGNORES_EXE)

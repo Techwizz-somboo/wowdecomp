@@ -2,8 +2,10 @@
 #include <windows.h>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 #include <string>
 #include <vector>
+#include "Engine/Source/BlizzardCore/SFile2-Core.h"
 #include "Engine/Source/BlizzardCore/Source/System/Memory/MemoryStorm.h"
 
 namespace HoT::Editor::Resources {
@@ -164,9 +166,180 @@ static const std::vector<uint8_t>* LoadSystemFont(const SystemFont& font) {
     return s_cache[slot].empty() ? nullptr : &s_cache[slot];
 }
 
+const char* const kPreviewPrefix = "HoTEditor\\Preview\\";
+
+struct PreviewFile {
+    std::string name;
+    std::shared_ptr<const std::vector<uint8_t>> data;
+    std::string source;
+};
+
+struct PreviewRedirect {
+    std::string prefix;
+    std::string target;
+};
+
+static std::mutex s_previewLock;
+static std::vector<PreviewFile> s_previewFiles;
+static std::vector<PreviewRedirect> s_previewRedirects;
+static thread_local int32_t s_redirectDepth = 0;
+
+static bool IsDigits(const char* text, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        if (text[i] < '0' || text[i] > '9') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Only the skin and anim names Model2 builds from the model name are redirected.
+static bool IsSideFileSuffix(const char* rest) {
+    size_t length = strlen(rest);
+
+    if (length == 7 && IsDigits(rest, 2) && SamePath(rest + 2, ".skin")) {
+        return true;
+    }
+
+    return length == 12 && IsDigits(rest, 4) && rest[4] == '-' && IsDigits(rest + 5, 2) && SamePath(rest + 7, ".anim");
+}
+
+// Finds the preview bytes or the redirect target for a name, false when the name is not a preview.
+static bool FindPreview(const char* name, std::shared_ptr<const std::vector<uint8_t>>& data, std::string& target) {
+    if (!name || !StartsWith(name, kPreviewPrefix)) {
+        return false;
+    }
+
+    std::lock_guard<std::mutex> lock(s_previewLock);
+
+    for (const PreviewFile& file : s_previewFiles) {
+        if (SamePath(file.name.c_str(), name)) {
+            data = file.data;
+            return true;
+        }
+    }
+
+    size_t length = strlen(name);
+
+    for (const PreviewRedirect& redirect : s_previewRedirects) {
+        if (length > redirect.prefix.size() && StartsWith(name, redirect.prefix.c_str()) && IsSideFileSuffix(name + redirect.prefix.size())) {
+            target = redirect.target + (name + redirect.prefix.size());
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void AddPreviewFile(const std::string& name, std::shared_ptr<const std::vector<uint8_t>> data, const std::string& source) {
+    std::lock_guard<std::mutex> lock(s_previewLock);
+    s_previewFiles.push_back({ name, std::move(data), source });
+}
+
+std::string PreviewSource(const char* name) {
+    if (!name || !StartsWith(name, kPreviewPrefix)) {
+        return std::string();
+    }
+
+    std::lock_guard<std::mutex> lock(s_previewLock);
+
+    for (const PreviewFile& file : s_previewFiles) {
+        if (SamePath(file.name.c_str(), name)) {
+            return file.source;
+        }
+    }
+
+    return std::string();
+}
+
+void AddPreviewRedirect(const std::string& prefix, const std::string& target) {
+    std::lock_guard<std::mutex> lock(s_previewLock);
+    s_previewRedirects.push_back({ prefix, target });
+}
+
+void RemovePreviews(const std::string& prefix) {
+    std::lock_guard<std::mutex> lock(s_previewLock);
+
+    for (size_t i = s_previewFiles.size(); i-- > 0;) {
+        if (StartsWith(s_previewFiles[i].name.c_str(), prefix.c_str())) {
+            s_previewFiles.erase(s_previewFiles.begin() + i);
+        }
+    }
+
+    for (size_t i = s_previewRedirects.size(); i-- > 0;) {
+        if (StartsWith(s_previewRedirects[i].prefix.c_str(), prefix.c_str())) {
+            s_previewRedirects.erase(s_previewRedirects.begin() + i);
+        }
+    }
+}
+
+static bool PreviewExists(const char* name) {
+    std::shared_ptr<const std::vector<uint8_t>> data;
+    std::string target;
+
+    if (!FindPreview(name, data, target)) {
+        return false;
+    }
+
+    if (data) {
+        return true;
+    }
+
+    if (s_redirectDepth) {
+        return false;
+    }
+
+    s_redirectDepth++;
+    bool exists = SFile::FileExistsEx(target.c_str(), 0) != 0;
+    s_redirectDepth--;
+    return exists;
+}
+
+static bool LoadPreview(const char* name, uint8_t*& out, uint32_t& size) {
+    std::shared_ptr<const std::vector<uint8_t>> data;
+    std::string target;
+
+    if (!FindPreview(name, data, target)) {
+        return false;
+    }
+
+    if (data) {
+        out = static_cast<uint8_t*>(Blizzard::Memory::Allocate(static_cast<uint32_t>(data->size() ? data->size() : 1), 0, __FILE__, __LINE__));
+        memcpy(out, data->data(), data->size());
+        size = static_cast<uint32_t>(data->size());
+        return true;
+    }
+
+    if (s_redirectDepth) {
+        return false;
+    }
+
+    s_redirectDepth++;
+    SFileImpl* file = nullptr;
+    bool ok = SFile::OpenEx(nullptr, target.c_str(), 0, &file) && file;
+
+    if (ok) {
+        uint32_t length = SFileGetFileSize(file, nullptr);
+        uint8_t* buffer = static_cast<uint8_t*>(Blizzard::Memory::Allocate(length ? length : 1, 0, __FILE__, __LINE__));
+        ok = !length || SFileReadFile(file, buffer, length, nullptr, nullptr, 0);
+        SFileCloseFile(file);
+
+        if (ok) {
+            out = buffer;
+            size = length;
+        } else {
+            Blizzard::Memory::Free(buffer);
+        }
+    }
+
+    s_redirectDepth--;
+    return ok;
+}
+
 bool Exists(const char* name) {
     if (!HasPrefix(name)) {
-        return false;
+        return PreviewExists(name);
     }
 
     if (FindEmbedded(name)) {
@@ -180,7 +353,7 @@ bool Exists(const char* name) {
 
 bool Load(const char* name, uint8_t*& data, uint32_t& size) {
     if (!HasPrefix(name)) {
-        return false;
+        return LoadPreview(name, data, size);
     }
 
     const uint8_t* source = nullptr;

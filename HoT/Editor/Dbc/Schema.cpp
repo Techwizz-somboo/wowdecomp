@@ -3,6 +3,7 @@
 #include <cstring>
 #include <memory>
 #include <unordered_map>
+#include <utility>
 #include "HoT/Core/Log.h"
 #include "HoT/Editor/Dbc/Binding.h"
 #include "WoW/Source/Client.h"
@@ -91,7 +92,27 @@ const Schema* GetSchema(const char* table) {
         Builder builder(*schema);
         binding->bind(builder);
 
-        for (size_t i = 0; i < schema->columns.size(); i++) {
+        // Tables whose first string column is a file or folder name rather than what players see.
+        static const std::pair<const char*, const char*> kNameColumns[] = {
+            { "map", "m_mapName" },
+            { "itemdisplayinfo", "m_inventoryIcon" },
+        };
+        const char* preferred = nullptr;
+
+        for (const auto& [name, member] : kNameColumns) {
+            if (key == name) {
+                preferred = member;
+            }
+        }
+
+        for (size_t i = 0; i < schema->columns.size() && preferred; i++) {
+            if (IsStringField(schema->columns[i]) && schema->columns[i].name.rfind(preferred, 0) == 0) {
+                schema->nameColumn = static_cast<int32_t>(i);
+                break;
+            }
+        }
+
+        for (size_t i = 0; i < schema->columns.size() && schema->nameColumn < 0; i++) {
             if (IsStringField(schema->columns[i])) {
                 schema->nameColumn = static_cast<int32_t>(i);
                 break;

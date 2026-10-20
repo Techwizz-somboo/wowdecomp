@@ -612,7 +612,7 @@ static int32_t Script_GetTables(lua_State* L) {
     return 1;
 }
 
-// DbcEditor_GetSchema(table) -> { { name, type, stored }, ... } in column order.
+// DbcEditor_GetSchema(table) -> { { name, type, stored, isName }, ... } in column order.
 static int32_t Script_GetSchema(lua_State* L) {
     Table table;
 
@@ -634,6 +634,11 @@ static int32_t Script_GetSchema(lua_State* L) {
         lua_setfield(L, -2, "type");
         lua_pushboolean(L, column.slot != Slot::Dropped);
         lua_setfield(L, -2, "stored");
+
+        if (static_cast<int32_t>(i) == schema.nameColumn) {
+            lua_pushboolean(L, true);
+            lua_setfield(L, -2, "isName");
+        }
 
         if (column.slot == Slot::Value && column.size == 1) {
             lua_pushnumber(L, 1);

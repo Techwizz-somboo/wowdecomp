@@ -3,6 +3,7 @@
 	<Script file="ObjectCommon.lua"/>
 	<Script file="CreatureAddon.lua"/>
 	<Script file="CreatureEquipment.lua"/>
+	<Script file="CreatureVendor.lua"/>
 	<Script file="CreatureInspector.lua"/>
 	<Script file="CreatureWaypoints.lua"/>
 	<Script file="CreatureWorkspace.lua"/>

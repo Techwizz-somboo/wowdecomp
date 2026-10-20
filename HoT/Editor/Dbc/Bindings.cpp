@@ -3,15 +3,40 @@
 #include <cstring>
 #include "HoT/DB/Custom.h"
 #include "WoW/Source/DB/Rec/AnimationDataRec.h"
+#include "WoW/Source/DB/Rec/AreaGroupRec.h"
+#include "WoW/Source/DB/Rec/AreaTableRec.h"
+#include "WoW/Source/DB/Rec/AuctionHouseRec.h"
+#include "WoW/Source/DB/Rec/CharTitlesRec.h"
+#include "WoW/Source/DB/Rec/CinematicCameraRec.h"
 #include "WoW/Source/DB/Rec/CreatureDisplayInfoRec.h"
 #include "WoW/Source/DB/Rec/CreatureDisplayInfoExtraRec.h"
 #include "WoW/Source/DB/Rec/CreatureModelDataRec.h"
+#include "WoW/Source/DB/Rec/CreatureSpellDataRec.h"
+#include "WoW/Source/DB/Rec/FactionRec.h"
+#include "WoW/Source/DB/Rec/FactionTemplateRec.h"
+#include "WoW/Source/DB/Rec/GameObjectArtKitRec.h"
 #include "WoW/Source/DB/Rec/GameObjectDisplayInfoRec.h"
+#include "WoW/Source/DB/Rec/GemPropertiesRec.h"
+#include "WoW/Source/DB/Rec/HolidayNamesRec.h"
+#include "WoW/Source/DB/Rec/HolidaysRec.h"
+#include "WoW/Source/DB/Rec/ItemDisplayInfoRec.h"
+#include "WoW/Source/DB/Rec/ItemLimitCategoryRec.h"
+#include "WoW/Source/DB/Rec/ItemPetFoodRec.h"
+#include "WoW/Source/DB/Rec/ItemRandomPropertiesRec.h"
+#include "WoW/Source/DB/Rec/ItemRandomSuffixRec.h"
+#include "WoW/Source/DB/Rec/ItemSetRec.h"
+#include "WoW/Source/DB/Rec/LanguagesRec.h"
 #include "WoW/Source/DB/Rec/LightRec.h"
 #include "WoW/Source/DB/Rec/LightFloatBandRec.h"
 #include "WoW/Source/DB/Rec/LightIntBandRec.h"
 #include "WoW/Source/DB/Rec/LightParamsRec.h"
 #include "WoW/Source/DB/Rec/LightSkyboxRec.h"
+#include "WoW/Source/DB/Rec/LockRec.h"
+#include "WoW/Source/DB/Rec/MailTemplateRec.h"
+#include "WoW/Source/DB/Rec/MapRec.h"
+#include "WoW/Source/DB/Rec/PageTextMaterialRec.h"
+#include "WoW/Source/DB/Rec/PowerDisplayRec.h"
+#include "WoW/Source/DB/Rec/SkillLineRec.h"
 #include "WoW/Source/DB/Rec/SkillLineAbilityRec.h"
 #include "WoW/Source/DB/Rec/SoundEntriesRec.h"
 #include "WoW/Source/DB/Rec/SpellRec.h"
@@ -38,6 +63,9 @@
 #include "WoW/Source/DB/Rec/SpellVisualKitRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualKitAreaModelRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualKitModelAttachRec.h"
+#include "WoW/Source/DB/Rec/TaxiPathRec.h"
+#include "WoW/Source/DB/Rec/TotemCategoryRec.h"
+#include "WoW/Source/DB/Rec/VehicleRec.h"
 
 namespace HoT::Editor::Dbc {
 
@@ -858,6 +886,490 @@ static void BindSpellVisualKitModelAttach(Builder& builder) {
     DBC_VALUE(m_roll);
 }
 
+static void BindAreaGroup(Builder& builder) {
+    using Rec = AreaGroupRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_areaID[0]);
+    DBC_VALUE(m_areaID[1]);
+    DBC_VALUE(m_areaID[2]);
+    DBC_VALUE(m_areaID[3]);
+    DBC_VALUE(m_areaID[4]);
+    DBC_VALUE(m_areaID[5]);
+    DBC_VALUE(m_nextAreaID);
+}
+
+static void BindAreaTable(Builder& builder) {
+    using Rec = AreaTableRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_continentID);
+    DBC_VALUE(m_parentAreaID);
+    DBC_VALUE(m_areaBit);
+    DBC_VALUE(m_flags);
+    DBC_VALUE(m_soundProviderPref);
+    DBC_VALUE(m_soundProviderPrefUnderwater);
+    DBC_VALUE(m_ambienceID);
+    DBC_VALUE(m_zoneMusic);
+    DBC_VALUE(m_introSound);
+    DBC_VALUE(m_explorationLevel);
+    DBC_LOCALE(m_areaName);
+    DBC_VALUE(m_factionGroupMask);
+    DBC_VALUE(m_liquidTypeID[0]);
+    DBC_VALUE(m_liquidTypeID[1]);
+    DBC_VALUE(m_liquidTypeID[2]);
+    DBC_VALUE(m_liquidTypeID[3]);
+    DBC_VALUE(m_minElevation);
+    DBC_VALUE(m_ambientMultiplier);
+    DBC_VALUE(m_lightID);
+}
+
+static void BindAuctionHouse(Builder& builder) {
+    using Rec = AuctionHouseRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_factionID);
+    DBC_VALUE(m_depositRate);
+    DBC_VALUE(m_consignmentRate);
+    DBC_LOCALE(m_name);
+}
+
+static void BindCharTitles(Builder& builder) {
+    using Rec = CharTitlesRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_conditionID);
+    DBC_LOCALE(m_name);
+    DBC_LOCALE(m_name1);
+    DBC_VALUE(m_maskID);
+}
+
+static void BindCinematicCamera(Builder& builder) {
+    using Rec = CinematicCameraRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_model);
+    DBC_VALUE(m_soundID);
+    DBC_VALUE(m_origin[0]);
+    DBC_VALUE(m_origin[1]);
+    DBC_VALUE(m_origin[2]);
+    DBC_VALUE(m_originFacing);
+}
+
+static void BindCreatureSpellData(Builder& builder) {
+    using Rec = CreatureSpellDataRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_spells[0]);
+    DBC_VALUE(m_spells[1]);
+    DBC_VALUE(m_spells[2]);
+    DBC_VALUE(m_spells[3]);
+    DBC_VALUE(m_availability[0]);
+    DBC_VALUE(m_availability[1]);
+    DBC_VALUE(m_availability[2]);
+    DBC_VALUE(m_availability[3]);
+}
+
+static void BindFaction(Builder& builder) {
+    using Rec = FactionRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_reputationIndex);
+    DBC_VALUE(m_reputationRaceMask[0]);
+    DBC_VALUE(m_reputationRaceMask[1]);
+    DBC_VALUE(m_reputationRaceMask[2]);
+    DBC_VALUE(m_reputationRaceMask[3]);
+    DBC_VALUE(m_reputationClassMask[0]);
+    DBC_VALUE(m_reputationClassMask[1]);
+    DBC_VALUE(m_reputationClassMask[2]);
+    DBC_VALUE(m_reputationClassMask[3]);
+    DBC_VALUE(m_reputationBase[0]);
+    DBC_VALUE(m_reputationBase[1]);
+    DBC_VALUE(m_reputationBase[2]);
+    DBC_VALUE(m_reputationBase[3]);
+    DBC_VALUE(m_reputationFlags[0]);
+    DBC_VALUE(m_reputationFlags[1]);
+    DBC_VALUE(m_reputationFlags[2]);
+    DBC_VALUE(m_reputationFlags[3]);
+    DBC_VALUE(m_parentFactionID);
+    DBC_VALUE(m_parentFactionMod[0]);
+    DBC_VALUE(m_parentFactionMod[1]);
+    DBC_VALUE(m_parentFactionCap[0]);
+    DBC_VALUE(m_parentFactionCap[1]);
+    DBC_LOCALE(m_name);
+    DBC_LOCALE(m_description);
+}
+
+static void BindFactionTemplate(Builder& builder) {
+    using Rec = FactionTemplateRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_faction);
+    DBC_VALUE(m_flags);
+    DBC_VALUE(m_factionGroup);
+    DBC_VALUE(m_friendGroup);
+    DBC_VALUE(m_enemyGroup);
+    DBC_VALUE(m_enemies[0]);
+    DBC_VALUE(m_enemies[1]);
+    DBC_VALUE(m_enemies[2]);
+    DBC_VALUE(m_enemies[3]);
+    DBC_VALUE(m_friend[0]);
+    DBC_VALUE(m_friend[1]);
+    DBC_VALUE(m_friend[2]);
+    DBC_VALUE(m_friend[3]);
+}
+
+static void BindGameObjectArtKit(Builder& builder) {
+    using Rec = GameObjectArtKitRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_textureVariation[0]);
+    DBC_VALUE(m_textureVariation[1]);
+    DBC_VALUE(m_textureVariation[2]);
+    DBC_VALUE(m_attachModel[0]);
+    DBC_VALUE(m_attachModel[1]);
+    DBC_VALUE(m_attachModel[2]);
+    DBC_VALUE(m_attachModel[3]);
+}
+
+static void BindGemProperties(Builder& builder) {
+    using Rec = GemPropertiesRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_enchantID);
+    DBC_VALUE(m_maxcountInv);
+    DBC_VALUE(m_maxcountItem);
+    DBC_VALUE(m_type);
+}
+
+static void BindHolidayNames(Builder& builder) {
+    using Rec = HolidayNamesRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+}
+
+static void BindHolidays(Builder& builder) {
+    using Rec = HolidaysRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_duration[0]);
+    DBC_VALUE(m_duration[1]);
+    DBC_VALUE(m_duration[2]);
+    DBC_VALUE(m_duration[3]);
+    DBC_VALUE(m_duration[4]);
+    DBC_VALUE(m_duration[5]);
+    DBC_VALUE(m_duration[6]);
+    DBC_VALUE(m_duration[7]);
+    DBC_VALUE(m_duration[8]);
+    DBC_VALUE(m_duration[9]);
+    DBC_VALUE(m_date[0]);
+    DBC_VALUE(m_date[1]);
+    DBC_VALUE(m_date[2]);
+    DBC_VALUE(m_date[3]);
+    DBC_VALUE(m_date[4]);
+    DBC_VALUE(m_date[5]);
+    DBC_VALUE(m_date[6]);
+    DBC_VALUE(m_date[7]);
+    DBC_VALUE(m_date[8]);
+    DBC_VALUE(m_date[9]);
+    DBC_VALUE(m_date[10]);
+    DBC_VALUE(m_date[11]);
+    DBC_VALUE(m_date[12]);
+    DBC_VALUE(m_date[13]);
+    DBC_VALUE(m_date[14]);
+    DBC_VALUE(m_date[15]);
+    DBC_VALUE(m_date[16]);
+    DBC_VALUE(m_date[17]);
+    DBC_VALUE(m_date[18]);
+    DBC_VALUE(m_date[19]);
+    DBC_VALUE(m_date[20]);
+    DBC_VALUE(m_date[21]);
+    DBC_VALUE(m_date[22]);
+    DBC_VALUE(m_date[23]);
+    DBC_VALUE(m_date[24]);
+    DBC_VALUE(m_date[25]);
+    DBC_VALUE(m_region);
+    DBC_VALUE(m_looping);
+    DBC_VALUE(m_calendarFlags[0]);
+    DBC_VALUE(m_calendarFlags[1]);
+    DBC_VALUE(m_calendarFlags[2]);
+    DBC_VALUE(m_calendarFlags[3]);
+    DBC_VALUE(m_calendarFlags[4]);
+    DBC_VALUE(m_calendarFlags[5]);
+    DBC_VALUE(m_calendarFlags[6]);
+    DBC_VALUE(m_calendarFlags[7]);
+    DBC_VALUE(m_calendarFlags[8]);
+    DBC_VALUE(m_calendarFlags[9]);
+    DBC_VALUE(m_holidayNameID);
+    DBC_VALUE(m_holidayDescriptionID);
+    DBC_VALUE(m_textureFileName);
+    DBC_VALUE(m_priority);
+    DBC_VALUE(m_calendarFilterType);
+    DBC_VALUE(m_flags);
+}
+
+static void BindItemDisplayInfo(Builder& builder) {
+    using Rec = ItemDisplayInfoRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_modelName[0]);
+    DBC_VALUE(m_modelName[1]);
+    DBC_VALUE(m_modelTexture[0]);
+    DBC_VALUE(m_modelTexture[1]);
+    DBC_VALUE(m_inventoryIcon[0]);
+    DBC_VALUE(m_inventoryIcon[1]);
+    DBC_VALUE(m_geosetGroup[0]);
+    DBC_VALUE(m_geosetGroup[1]);
+    DBC_VALUE(m_geosetGroup[2]);
+    DBC_VALUE(m_flags);
+    DBC_VALUE(m_spellVisualID);
+    DBC_VALUE(m_groupSoundIndex);
+    DBC_VALUE(m_helmetGeosetVisID[0]);
+    DBC_VALUE(m_helmetGeosetVisID[1]);
+    DBC_VALUE(m_texture[0]);
+    DBC_VALUE(m_texture[1]);
+    DBC_VALUE(m_texture[2]);
+    DBC_VALUE(m_texture[3]);
+    DBC_VALUE(m_texture[4]);
+    DBC_VALUE(m_texture[5]);
+    DBC_VALUE(m_texture[6]);
+    DBC_VALUE(m_texture[7]);
+    DBC_VALUE(m_itemVisual);
+    DBC_VALUE(m_particleColorID);
+}
+
+static void BindItemLimitCategory(Builder& builder) {
+    using Rec = ItemLimitCategoryRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+    DBC_VALUE(m_quantity);
+    DBC_VALUE(m_flags);
+}
+
+static void BindItemPetFood(Builder& builder) {
+    using Rec = ItemPetFoodRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+}
+
+static void BindItemRandomProperties(Builder& builder) {
+    using Rec = ItemRandomPropertiesRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_name);
+    DBC_VALUE(m_enchantment[0]);
+    DBC_VALUE(m_enchantment[1]);
+    DBC_VALUE(m_enchantment[2]);
+    DBC_VALUE(m_enchantment[3]);
+    DBC_VALUE(m_enchantment[4]);
+    DBC_LOCALE(m_nameLang);
+}
+
+static void BindItemRandomSuffix(Builder& builder) {
+    using Rec = ItemRandomSuffixRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+    DBC_VALUE(m_internalName);
+    DBC_VALUE(m_enchantment[0]);
+    DBC_VALUE(m_enchantment[1]);
+    DBC_VALUE(m_enchantment[2]);
+    DBC_VALUE(m_enchantment[3]);
+    DBC_VALUE(m_enchantment[4]);
+    DBC_VALUE(m_allocationPct[0]);
+    DBC_VALUE(m_allocationPct[1]);
+    DBC_VALUE(m_allocationPct[2]);
+    DBC_VALUE(m_allocationPct[3]);
+    DBC_VALUE(m_allocationPct[4]);
+}
+
+static void BindItemSet(Builder& builder) {
+    using Rec = ItemSetRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+    DBC_VALUE(m_itemID[0]);
+    DBC_VALUE(m_itemID[1]);
+    DBC_VALUE(m_itemID[2]);
+    DBC_VALUE(m_itemID[3]);
+    DBC_VALUE(m_itemID[4]);
+    DBC_VALUE(m_itemID[5]);
+    DBC_VALUE(m_itemID[6]);
+    DBC_VALUE(m_itemID[7]);
+    DBC_VALUE(m_itemID[8]);
+    DBC_VALUE(m_itemID[9]);
+    DBC_VALUE(m_itemID[10]);
+    DBC_VALUE(m_itemID[11]);
+    DBC_VALUE(m_itemID[12]);
+    DBC_VALUE(m_itemID[13]);
+    DBC_VALUE(m_itemID[14]);
+    DBC_VALUE(m_itemID[15]);
+    DBC_VALUE(m_itemID[16]);
+    DBC_VALUE(m_setSpellID[0]);
+    DBC_VALUE(m_setSpellID[1]);
+    DBC_VALUE(m_setSpellID[2]);
+    DBC_VALUE(m_setSpellID[3]);
+    DBC_VALUE(m_setSpellID[4]);
+    DBC_VALUE(m_setSpellID[5]);
+    DBC_VALUE(m_setSpellID[6]);
+    DBC_VALUE(m_setSpellID[7]);
+    DBC_VALUE(m_setThreshold[0]);
+    DBC_VALUE(m_setThreshold[1]);
+    DBC_VALUE(m_setThreshold[2]);
+    DBC_VALUE(m_setThreshold[3]);
+    DBC_VALUE(m_setThreshold[4]);
+    DBC_VALUE(m_setThreshold[5]);
+    DBC_VALUE(m_setThreshold[6]);
+    DBC_VALUE(m_setThreshold[7]);
+    DBC_VALUE(m_requiredSkill);
+    DBC_VALUE(m_requiredSkillRank);
+}
+
+static void BindLanguages(Builder& builder) {
+    using Rec = LanguagesRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+}
+
+static void BindLock(Builder& builder) {
+    using Rec = LockRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_type[0]);
+    DBC_VALUE(m_type[1]);
+    DBC_VALUE(m_type[2]);
+    DBC_VALUE(m_type[3]);
+    DBC_VALUE(m_type[4]);
+    DBC_VALUE(m_type[5]);
+    DBC_VALUE(m_type[6]);
+    DBC_VALUE(m_type[7]);
+    DBC_VALUE(m_index[0]);
+    DBC_VALUE(m_index[1]);
+    DBC_VALUE(m_index[2]);
+    DBC_VALUE(m_index[3]);
+    DBC_VALUE(m_index[4]);
+    DBC_VALUE(m_index[5]);
+    DBC_VALUE(m_index[6]);
+    DBC_VALUE(m_index[7]);
+    DBC_VALUE(m_skill[0]);
+    DBC_VALUE(m_skill[1]);
+    DBC_VALUE(m_skill[2]);
+    DBC_VALUE(m_skill[3]);
+    DBC_VALUE(m_skill[4]);
+    DBC_VALUE(m_skill[5]);
+    DBC_VALUE(m_skill[6]);
+    DBC_VALUE(m_skill[7]);
+    DBC_VALUE(m_action[0]);
+    DBC_VALUE(m_action[1]);
+    DBC_VALUE(m_action[2]);
+    DBC_VALUE(m_action[3]);
+    DBC_VALUE(m_action[4]);
+    DBC_VALUE(m_action[5]);
+    DBC_VALUE(m_action[6]);
+    DBC_VALUE(m_action[7]);
+}
+
+static void BindMailTemplate(Builder& builder) {
+    using Rec = MailTemplateRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_subject);
+    DBC_LOCALE(m_body);
+}
+
+static void BindMap(Builder& builder) {
+    using Rec = MapRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_directory);
+    DBC_VALUE(m_instanceType);
+    DBC_VALUE(m_flags);
+    DBC_VALUE(m_pvp);
+    DBC_LOCALE(m_mapName);
+    DBC_VALUE(m_areaTableID);
+    DBC_LOCALE(m_mapDescription0);
+    DBC_LOCALE(m_mapDescription1);
+    DBC_VALUE(m_loadingScreenID);
+    DBC_VALUE(m_minimapIconScale);
+    DBC_VALUE(m_corpseMapID);
+    DBC_VALUE(m_corpse[0]);
+    DBC_VALUE(m_corpse[1]);
+    DBC_VALUE(m_timeOfDayOverride);
+    DBC_VALUE(m_expansionID);
+    DBC_VALUE(m_raidOffset);
+    DBC_VALUE(m_maxPlayers);
+}
+
+static void BindPageTextMaterial(Builder& builder) {
+    using Rec = PageTextMaterialRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_name);
+}
+
+static void BindPowerDisplay(Builder& builder) {
+    using Rec = PowerDisplayRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_actualType);
+    DBC_VALUE(m_globalStringBaseTag);
+    DBC_VALUE(m_red);
+    DBC_VALUE(m_green);
+    DBC_VALUE(m_blue);
+}
+
+static void BindSkillLine(Builder& builder) {
+    using Rec = SkillLineRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_categoryID);
+    DBC_VALUE(m_skillCostsID);
+    DBC_LOCALE(m_displayName);
+    DBC_LOCALE(m_description);
+    DBC_VALUE(m_spellIconID);
+    DBC_LOCALE(m_alternateVerb);
+    DBC_VALUE(m_canLink);
+}
+
+static void BindTaxiPath(Builder& builder) {
+    using Rec = TaxiPathRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_fromTaxiNode);
+    DBC_VALUE(m_toTaxiNode);
+    DBC_VALUE(m_cost);
+}
+
+static void BindTotemCategory(Builder& builder) {
+    using Rec = TotemCategoryRec;
+    DBC_VALUE(m_id);
+    DBC_LOCALE(m_name);
+    DBC_VALUE(m_totemCategoryType);
+    DBC_VALUE(m_totemCategoryMask);
+}
+
+static void BindVehicle(Builder& builder) {
+    using Rec = VehicleRec;
+    DBC_VALUE(m_id);
+    DBC_VALUE(m_flags);
+    DBC_VALUE(m_turnSpeed);
+    DBC_VALUE(m_pitchSpeed);
+    DBC_VALUE(m_pitchMin);
+    DBC_VALUE(m_pitchMax);
+    DBC_VALUE(m_seatID[0]);
+    DBC_VALUE(m_seatID[1]);
+    DBC_VALUE(m_seatID[2]);
+    DBC_VALUE(m_seatID[3]);
+    DBC_VALUE(m_seatID[4]);
+    DBC_VALUE(m_seatID[5]);
+    DBC_VALUE(m_seatID[6]);
+    DBC_VALUE(m_seatID[7]);
+    DBC_VALUE(m_mouseLookOffsetPitch);
+    DBC_VALUE(m_cameraFadeDistScalarMin);
+    DBC_VALUE(m_cameraFadeDistScalarMax);
+    DBC_VALUE(m_cameraPitchOffset);
+    DBC_VALUE(m_facingLimitRight);
+    DBC_VALUE(m_facingLimitLeft);
+    DBC_VALUE(m_msslTrgtTurnLingering);
+    DBC_VALUE(m_msslTrgtPitchLingering);
+    DBC_VALUE(m_msslTrgtMouseLingering);
+    DBC_VALUE(m_msslTrgtEndOpacity);
+    DBC_VALUE(m_msslTrgtArcSpeed);
+    DBC_VALUE(m_msslTrgtArcRepeat);
+    DBC_VALUE(m_msslTrgtArcWidth);
+    DBC_VALUE(m_msslTrgtImpactRadius[0]);
+    DBC_VALUE(m_msslTrgtImpactRadius[1]);
+    DBC_VALUE(m_msslTrgtArcTexture);
+    DBC_VALUE(m_msslTrgtImpactTexture);
+    DBC_VALUE(m_msslTrgtImpactModel[0]);
+    DBC_VALUE(m_msslTrgtImpactModel[1]);
+    DBC_VALUE(m_cameraYawOffset);
+    DBC_VALUE(m_uiLocomotionType);
+    DBC_VALUE(m_msslTrgtImpactTexRadius);
+    DBC_VALUE(m_vehicleUiindicatorID);
+    DBC_VALUE(m_powerDisplayID[0]);
+    DBC_VALUE(m_powerDisplayID[1]);
+    DBC_VALUE(m_powerDisplayID[2]);
+}
+
 static const Binding s_bindings[] = {
     { "AnimationData", sizeof(AnimationDataRec), BindAnimationData },
     { "CreatureDisplayInfo", sizeof(CreatureDisplayInfoRec), BindCreatureDisplayInfo },
@@ -897,6 +1409,34 @@ static const Binding s_bindings[] = {
     { "SpellVisualKit", sizeof(SpellVisualKitRec), BindSpellVisualKit },
     { "SpellVisualKitAreaModel", sizeof(SpellVisualKitAreaModelRec), BindSpellVisualKitAreaModel },
     { "SpellVisualKitModelAttach", sizeof(SpellVisualKitModelAttachRec), BindSpellVisualKitModelAttach },
+    { "AreaGroup", sizeof(AreaGroupRec), BindAreaGroup },
+    { "AreaTable", sizeof(AreaTableRec), BindAreaTable },
+    { "AuctionHouse", sizeof(AuctionHouseRec), BindAuctionHouse },
+    { "CharTitles", sizeof(CharTitlesRec), BindCharTitles },
+    { "CinematicCamera", sizeof(CinematicCameraRec), BindCinematicCamera },
+    { "CreatureSpellData", sizeof(CreatureSpellDataRec), BindCreatureSpellData },
+    { "Faction", sizeof(FactionRec), BindFaction },
+    { "FactionTemplate", sizeof(FactionTemplateRec), BindFactionTemplate },
+    { "GameObjectArtKit", sizeof(GameObjectArtKitRec), BindGameObjectArtKit },
+    { "GemProperties", sizeof(GemPropertiesRec), BindGemProperties },
+    { "HolidayNames", sizeof(HolidayNamesRec), BindHolidayNames },
+    { "Holidays", sizeof(HolidaysRec), BindHolidays },
+    { "ItemDisplayInfo", sizeof(ItemDisplayInfoRec), BindItemDisplayInfo },
+    { "ItemLimitCategory", sizeof(ItemLimitCategoryRec), BindItemLimitCategory },
+    { "ItemPetFood", sizeof(ItemPetFoodRec), BindItemPetFood },
+    { "ItemRandomProperties", sizeof(ItemRandomPropertiesRec), BindItemRandomProperties },
+    { "ItemRandomSuffix", sizeof(ItemRandomSuffixRec), BindItemRandomSuffix },
+    { "ItemSet", sizeof(ItemSetRec), BindItemSet },
+    { "Languages", sizeof(LanguagesRec), BindLanguages },
+    { "Lock", sizeof(LockRec), BindLock },
+    { "MailTemplate", sizeof(MailTemplateRec), BindMailTemplate },
+    { "Map", sizeof(MapRec), BindMap },
+    { "PageTextMaterial", sizeof(PageTextMaterialRec), BindPageTextMaterial },
+    { "PowerDisplay", sizeof(PowerDisplayRec), BindPowerDisplay },
+    { "SkillLine", sizeof(SkillLineRec), BindSkillLine },
+    { "TaxiPath", sizeof(TaxiPathRec), BindTaxiPath },
+    { "TotemCategory", sizeof(TotemCategoryRec), BindTotemCategory },
+    { "Vehicle", sizeof(VehicleRec), BindVehicle },
 };
 
 const Binding* FindBinding(const char* table) {

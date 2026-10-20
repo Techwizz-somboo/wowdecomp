@@ -351,7 +351,7 @@ GameEditor_RegisterWorkspace({
 	key = "creature",
 	title = "Creatures",
 	order = 2,
-	dockWidth = 440,
+	dockWidth = 490,
 	tools = {
 		{ key = "select", name = "Select and move", icon = 0xF8DB, build = Inspector.Build },
 		{ key = "move", name = "Move gizmo", icon = 0xF8C9, build = Inspector.Build },

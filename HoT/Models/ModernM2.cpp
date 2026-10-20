@@ -13,6 +13,7 @@
 #include "Engine/Source/Os/OsMemory.h"
 #include "HoT/Core/Log.h"
 #include "HoT/Core/Modules.h"
+#include "HoT/Editor/Resources.h"
 #include "HoT/Models/FileDataId.h"
 
 namespace HoT::Models {
@@ -506,7 +507,9 @@ ModernModel* PrepareModel(M2Data* data, uint32_t& size, const char* fileName) {
     uint8_t* buf = reinterpret_cast<uint8_t*>(data);
     ModernModel* model = new ModernModel();
     model->m_name = fileName ? fileName : "";
-    model->m_extended = UsesExtendedIndexStart(model->m_name.c_str());
+    // An editor preview reads its skins the way the model it was made from does.
+    std::string source = HoT::Editor::Resources::PreviewSource(fileName);
+    model->m_extended = UsesExtendedIndexStart(source.empty() ? model->m_name.c_str() : source.c_str());
 
     Scan scan;
     const char* fail = nullptr;

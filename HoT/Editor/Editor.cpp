@@ -10,6 +10,7 @@
 #include "HoT/Editor/GobEditor.h"
 #include "HoT/Editor/Light/LightEditor.h"
 #include "HoT/Editor/Map/Map.h"
+#include "HoT/Editor/Model/ModelEditor.h"
 #include "HoT/Editor/Mode.h"
 #include "HoT/Editor/MouseFunctions.h"
 #include "HoT/Editor/Selection.h"
@@ -83,6 +84,7 @@ class EditorModule : public Module {
         SpellPreview::Apply();
         WorldTables::Apply();
         TemplateSearch::Apply();
+        ModelEditor::Apply();
     }
 
     void OnPlayerClientInitialize() override {
@@ -117,6 +119,7 @@ class EditorModule : public Module {
         LightEditor::OnGameDestroy();
         WorldTables::OnGameDestroy();
         TemplateSearch::OnGameDestroy();
+        ModelEditor::OnGameDestroy();
     }
 };
 

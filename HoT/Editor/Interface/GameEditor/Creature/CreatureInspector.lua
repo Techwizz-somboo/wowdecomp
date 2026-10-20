@@ -7,8 +7,8 @@ local Common = GameEditorObject;
 local Inspector = {};
 Creature.Inspector = Inspector;
 
-local TAB_NAMES = { "Template", "Spawn", "Addon", "Spawn Addon", "Equipment", "Live" };
-local TEMPLATE, SPAWN, TEMPLATE_ADDON, SPAWN_ADDON, EQUIPMENT, LIVE = 1, 2, 3, 4, 5, 6;
+local TAB_NAMES = { "Template", "Spawn", "Addon", "Spawn Addon", "Equipment", "Vendor", "Live" };
+local TEMPLATE, SPAWN, TEMPLATE_ADDON, SPAWN_ADDON, EQUIPMENT, VENDOR, LIVE = 1, 2, 3, 4, 5, 6, 7;
 
 local frame, body, empty, header, tabs;
 local pages = {};
@@ -281,6 +281,7 @@ local function Build(parent)
 	pages[TEMPLATE_ADDON] = Creature.CreateAddonPage(container, 0, UpdateDirty);
 	pages[SPAWN_ADDON] = Creature.CreateAddonPage(container, 1, UpdateDirty);
 	pages[EQUIPMENT] = Creature.CreateEquipmentPage(container);
+	pages[VENDOR] = Creature.CreateVendorPage(container, UpdateDirty);
 	pages[LIVE] = BuildLivePage(container);
 
 	for _, page in pairs(pages) do
@@ -477,6 +478,7 @@ ShowData = function(data)
 	pages[TEMPLATE_ADDON]:Load(data, sameEntry);
 	pages[SPAWN_ADDON]:Load(data, sameSpawn);
 	pages[EQUIPMENT]:Load(data);
+	pages[VENDOR]:Load(data);
 
 	if ( isTemplate ) then
 		pages[LIVE]:SetAvailable(false, "A template has no live creature. Close the template and select a creature in the world to see what it shows right now.");

@@ -38,6 +38,12 @@ local function DbcNameColumn(tableName)
 	end
 
 	for _, column in ipairs(schema) do
+		if ( column.isName ) then
+			return column.name;
+		end
+	end
+
+	for _, column in ipairs(schema) do
 		if ( column.type == "string" ) then
 			return column.name;
 		end
@@ -115,6 +121,81 @@ end
 
 function GameEditor_CanSearchRef(ref)
 	return ref and (GameEditor_RefSearchers[ref] ~= nil or (string.find(ref, "^dbc:") ~= nil and DbcEditor_Find ~= nil));
+end
+
+-- Tables with no name of their own borrow one from the table a column points at.
+local DERIVED_REFS = {
+	FactionTemplate = { column = "m_faction", target = "Faction" },
+	GemProperties = { column = "m_enchantID", target = "SpellItemEnchantment" },
+	Holidays = { column = "m_holidayNameID", target = "HolidayNames" },
+};
+
+local derivedLists = {};
+
+local function DerivedList(tableName, info)
+	if ( derivedLists[tableName] ) then
+		return derivedLists[tableName];
+	end
+
+	local items = {};
+	local maxId = min(DbcEditor_GetMaxId and DbcEditor_GetMaxId(tableName) or 0, 100000);
+
+	for id = 1, maxId do
+		local row = DbcEditor_GetRow(tableName, id);
+
+		if ( type(row) == "table" ) then
+			local target = tonumber(row[info.column]) or 0;
+			local text = target ~= 0 and ResolveDbc(info.target, target) or nil;
+			table.insert(items, { value = id, text = text and text ~= "exists" and text or "" });
+		end
+	end
+
+	derivedLists[tableName] = items;
+	return items;
+end
+
+local derivedWatcher = CreateFrame("Frame");
+derivedWatcher:RegisterEvent("DBC_RECORD_UPDATED");
+derivedWatcher:SetScript("OnEvent", function(_, _, tableName)
+	derivedLists = {};
+end);
+
+for tableName, info in pairs(DERIVED_REFS) do
+	local ref = "dbc:"..tableName;
+
+	GameEditor_RefResolvers[ref] = GameEditor_RefResolvers[ref] or function(value)
+		local row = DbcEditor_GetRow and DbcEditor_GetRow(tableName, value);
+
+		if ( type(row) ~= "table" ) then
+			return;
+		end
+
+		local target = tonumber(row[info.column]) or 0;
+		local text = target ~= 0 and ResolveDbc(info.target, target) or nil;
+		return text or "exists";
+	end;
+
+	GameEditor_RefSearchers[ref] = GameEditor_RefSearchers[ref] or function(text)
+		if ( not DbcEditor_GetRow ) then
+			return {};
+		end
+
+		text = string.lower(strtrim(text or ""));
+		local number = tonumber(text);
+		local result = {};
+
+		for _, item in ipairs(DerivedList(tableName, info)) do
+			if ( text == "" or item.value == number or string.find(string.lower(item.text), text, 1, true) ) then
+				table.insert(result, item);
+
+				if ( #result >= 200 ) then
+					break;
+				end
+			end
+		end
+
+		return result;
+	end;
 end
 
 -- Number parsing that understands 0x hex and keeps unsigned 32 bit values.
