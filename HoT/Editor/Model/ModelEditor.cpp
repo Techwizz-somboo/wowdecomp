@@ -12,7 +12,14 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "Engine/Source/Base/Coordinate.h"
+#include "Engine/Source/Base/Handle.h"
+#include "Engine/Source/Frame/CScriptObject.h"
+#include "Engine/Source/Frame/CSimpleModel.h"
 #include "Engine/Source/Model2/M2Cache.h"
+#include "Engine/Source/Model2/M2Model.h"
+#include "Engine/Source/Services/Camera.h"
+#include "Engine/Source/Services/CameraInt.h"
 #include "Engine/Source/Model2/M2Scene.h"
 #include "Engine/Source/Model2/M2Shared.h"
 #include "HoT/Core/Log.h"
@@ -711,7 +718,7 @@ static int32_t Script_GetInfo(lua_State* L) {
 
     for (uint32_t i = 0; i < count; i++) {
         uint32_t pos = doc.RecordPos(Model::HEADER_PARTICLES, doc.ParticleStride(), i);
-        uint32_t id = 0;
+        int32_t id = 0;
         uint32_t flags = 0;
         uint16_t bone = 0;
         uint16_t texture = 0;
@@ -740,7 +747,7 @@ static int32_t Script_GetInfo(lua_State* L) {
 
     for (uint32_t i = 0; i < count; i++) {
         uint32_t pos = doc.RecordPos(Model::HEADER_RIBBONS, Model::RIBBON_STRIDE, i);
-        uint32_t id = 0;
+        int32_t id = 0;
         uint16_t bone = 0;
         doc.Get(pos, id);
         doc.Get(pos + 4, bone);
@@ -1014,6 +1021,7 @@ static int32_t Script_SetMaterial(lua_State* L) {
 
 enum class Kind : uint8_t {
     U32,
+    I32,
     U16,
     I16,
     U8,
@@ -1057,7 +1065,7 @@ static const uint32_t PARTICLE_FLAGS = 0x04;
 static const uint32_t PARTICLE_TEXTURE = 0x16;
 
 static const Field s_particleFields[] = {
-    { "particleId", Kind::U32, 0x00, ValueType::Float, Check::None, false, false },
+    { "particleId", Kind::I32, 0x00, ValueType::Float, Check::None, false, false },
     { "flags", Kind::U32, 0x04, ValueType::Float, Check::None, false, false },
     { "position", Kind::Vec3, 0x08, ValueType::Float, Check::None, false, false },
     { "boneIndex", Kind::U16, 0x14, ValueType::Float, Check::Bone, false, false },
@@ -1112,7 +1120,7 @@ static const Field s_particleFields[] = {
 };
 
 static const Field s_ribbonFields[] = {
-    { "ribbonId", Kind::U32, 0x00, ValueType::Float, Check::None, false, false },
+    { "ribbonId", Kind::I32, 0x00, ValueType::Float, Check::None, false, false },
     { "boneIndex", Kind::U16, 0x04, ValueType::Float, Check::Bone, false, false },
     { "position", Kind::Vec3, 0x08, ValueType::Float, Check::None, false, false },
     { "textureIndices", Kind::U16Array, 0x14, ValueType::Float, Check::TextureList, false, false },
@@ -1163,6 +1171,12 @@ static bool PushField(lua_State* L, const ModelDoc& doc, uint32_t pos, const Fie
         }
         case Kind::U16: {
             uint16_t v = 0;
+            doc.Get(at, v);
+            lua_pushnumber(L, v);
+            return true;
+        }
+        case Kind::I32: {
+            int32_t v = 0;
             doc.Get(at, v);
             lua_pushnumber(L, v);
             return true;
@@ -1402,6 +1416,10 @@ static bool IntegerRange(Kind kind, double& low, double& high) {
         case Kind::U16:
             low = 0;
             high = 65535;
+            return true;
+        case Kind::I32:
+            low = -2147483648.0;
+            high = 2147483647.0;
             return true;
         case Kind::I16:
             low = -32768;
@@ -1669,6 +1687,8 @@ static bool ApplyField(ModelDoc& doc, uint32_t pos, const std::string& owner, co
             return doc.Put(at, static_cast<uint32_t>(pending.number));
         case Kind::U16:
             return doc.Put(at, static_cast<uint16_t>(pending.number));
+        case Kind::I32:
+            return doc.Put(at, static_cast<int32_t>(pending.number));
         case Kind::I16:
             return doc.Put(at, static_cast<int16_t>(pending.number));
         case Kind::U8:
@@ -2264,6 +2284,91 @@ static int32_t Script_RemoveRibbon(lua_State* L) {
 // Preview.
 
 // ModelEditor_GetPreviewPath(doc) -> a virtual path of the current bytes, a new one per revision.
+static float OptFloat(lua_State* L, int32_t index, float fallback) {
+    return lua_isnumber(L, index) ? static_cast<float>(lua_tonumber(L, index)) : fallback;
+}
+
+// ModelEditor_SetPreviewView(modelFrame, yaw, pitch, zoom, panX, panY) -> true once the model is loaded and framed.
+// Orbits a perspective camera around the bounding box, the frame's own fallback is a flat screen projection.
+static int32_t Script_SetPreviewView(lua_State* L) {
+    CSimpleModel* frame = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
+    float yaw = OptFloat(L, 2, 0.0f);
+    float pitch = OptFloat(L, 3, 0.25f);
+    float zoom = OptFloat(L, 4, 1.0f);
+    float panX = OptFloat(L, 5, 0.0f);
+    float panY = OptFloat(L, 6, 0.0f);
+
+    if (!frame || !frame->m_model || !frame->m_model->IsLoaded(0, 0)) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    pitch = std::clamp(pitch, -1.5f, 1.5f);
+    zoom = std::clamp(zoom, 0.02f, 50.0f);
+
+    float scale = frame->m_modelScale * frame->m_layoutScale * NDCToDDCHeight(1.0f) * 1.6666666f;
+    CAaBox box = frame->m_model->GetBoundingBox();
+    C3Vector size(box.t.x - box.b.x, box.t.y - box.b.y, box.t.z - box.b.z);
+    float radius = 0.5f * sqrtf(size.x * size.x + size.y * size.y + size.z * size.z);
+
+    if (!(radius > 0.001f) || !std::isfinite(radius)) {
+        box.b = C3Vector(-1.0f, -1.0f, -1.0f);
+        box.t = C3Vector(1.0f, 1.0f, 1.0f);
+        radius = 1.732f;
+    }
+
+    radius *= scale;
+    float cosFacing = cosf(frame->m_facing);
+    float sinFacing = sinf(frame->m_facing);
+    C3Vector local((box.b.x + box.t.x) * 0.5f * scale, (box.b.y + box.t.y) * 0.5f * scale, (box.b.z + box.t.z) * 0.5f * scale);
+    C3Vector center(local.x * cosFacing - local.y * sinFacing + frame->m_position.x * frame->m_layoutScale,
+        local.x * sinFacing + local.y * cosFacing + frame->m_position.y * frame->m_layoutScale, local.z + frame->m_position.z * frame->m_layoutScale);
+
+    const float fov = 0.7853982f;
+    float distance = radius / sinf(fov * 0.5f) * zoom;
+    C3Vector forward(cosf(pitch) * cosf(yaw), cosf(pitch) * sinf(yaw), sinf(pitch));
+    C3Vector right(-sinf(yaw), cosf(yaw), 0.0f);
+    C3Vector up(-sinf(pitch) * cosf(yaw), -sinf(pitch) * sinf(yaw), cosf(pitch));
+    C3Vector target(center.x + (right.x * panX + up.x * panY) * radius, center.y + (right.y * panX + up.y * panY) * radius, center.z + (up.z * panY) * radius);
+    C3Vector eye(target.x + forward.x * distance, target.y + forward.y * distance, target.z + forward.z * distance);
+
+    static CCamera* s_camera = nullptr;
+
+    if (!s_camera) {
+        s_camera = CameraCreate();
+    }
+
+    if (!s_camera) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
+    if (frame->m_camera != s_camera) {
+        frame->SetCamera(s_camera);
+    }
+
+    CameraSetFloat(s_camera, 4, fov);
+    CameraSetFloat(s_camera, 3, std::max(distance * 0.02f, distance - radius * 4.0f));
+    CameraSetFloat(s_camera, 2, distance + radius * 8.0f);
+    CameraSetFloat(s_camera, 5, 0.0f);
+    CameraSetFloat(s_camera, 6, 0.0f);
+    CameraSetCoord(s_camera, 7, eye);
+    CameraSetCoord(s_camera, 8, target);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
+// ModelEditor_ClearPreviewView(modelFrame) drops the orbit camera so SetCamera(index) can take over.
+static int32_t Script_ClearPreviewView(lua_State* L) {
+    CSimpleModel* frame = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
+
+    if (frame && frame->m_camera) {
+        frame->SetCamera(nullptr);
+    }
+
+    return 0;
+}
+
 static int32_t Script_GetPreviewPath(lua_State* L) {
     Entry* entry = DocArg(L, 1);
 
@@ -2692,6 +2797,8 @@ static int32_t Gated(lua_State* L) {
 
 void Apply() {
     Lua::RegisterFunction("ModelEditor_Open", Gated<Script_Open>);
+    Lua::RegisterFunction("ModelEditor_SetPreviewView", Gated<Script_SetPreviewView>);
+    Lua::RegisterFunction("ModelEditor_ClearPreviewView", Gated<Script_ClearPreviewView>);
     Lua::RegisterFunction("ModelEditor_Close", Gated<Script_Close>);
     Lua::RegisterFunction("ModelEditor_GetInfo", Gated<Script_GetInfo>);
     Lua::RegisterFunction("ModelEditor_GetDocs", Gated<Script_GetDocs>);

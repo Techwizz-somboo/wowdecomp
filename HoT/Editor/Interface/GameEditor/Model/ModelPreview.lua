@@ -5,8 +5,11 @@ local Common = GameEditorObject;
 
 local RELOAD_DELAY = 0.4;
 local REAPPLY_DELAY = 0.3;
+local RETRY_DELAY = 0.1;
+local RETRY_LIMIT = 100;
 local ZOOM_STEP = 1.15;
 local ROTATE_SPEED = 0.012;
+local DEFAULT_PITCH = 0.25;
 
 local Num = ME.Num;
 
@@ -19,11 +22,12 @@ local seqButton;
 local timeSlider;
 local cameraBox;
 
-local view = { facing = 0, scale = 1, x = 0, y = 0, z = 0, modelCamera = false };
+local view = { yaw = 0, pitch = DEFAULT_PITCH, zoom = 1, panX = 0, panY = 0, modelCamera = false };
 local shownDoc;
 local shownPath;
 local reloadIn;
 local reapplyIn;
+local retries = 0;
 local drag;
 
 ME.previewSequence = nil;
@@ -64,11 +68,32 @@ local function ApplySequence()
 	end
 end
 
+-- The orbit camera only takes once the model is loaded, so this keeps retrying until it does.
+local function ApplyCamera()
+	if ( not model or not shownPath ) then
+		return;
+	end
+
+	if ( view.modelCamera ) then
+		ME.Call("ModelEditor_ClearPreviewView", model);
+		Try("SetCamera", 0);
+		return;
+	end
+
+	local framed = ME.Call("ModelEditor_SetPreviewView", model, view.yaw, view.pitch, view.zoom, view.panX, view.panY);
+
+	if ( not framed and retries < RETRY_LIMIT ) then
+		retries = retries + 1;
+		reapplyIn = RETRY_DELAY;
+	end
+end
+
 local function ApplyView()
-	Try("SetPosition", view.x, view.y, view.z);
-	Try("SetFacing", view.facing);
-	Try("SetModelScale", view.scale);
-	Try("SetCamera", view.modelCamera and 0 or 9999);
+	Try("SetPosition", 0, 0, 0);
+	Try("SetFacing", 0);
+	Try("SetModelScale", 1);
+	Try("SetLight", 1, 0, -0.5, 0.4, -0.75, 0.6, 1, 1, 1, 0.9, 1, 1, 1);
+	ApplyCamera();
 	ApplySequence();
 end
 
@@ -127,13 +152,15 @@ function ME.PreviewReload(force)
 
 	shownDoc, shownPath = doc, path;
 	SetMessage("");
+	retries = 0;
 	ApplyView();
 	reapplyIn = REAPPLY_DELAY;
 	RefreshControls();
 end
 
 function ME.PreviewResetCamera()
-	view.facing, view.scale, view.x, view.y, view.z = 0, 1, 0, 0, 0;
+	view.yaw, view.pitch, view.zoom, view.panX, view.panY = 0, DEFAULT_PITCH, 1, 0, 0;
+	retries = 0;
 	ApplyView();
 end
 
@@ -160,7 +187,7 @@ end
 
 local function OnMouseDown(self, button)
 	local x, y = NoggitUI_CursorIn(self);
-	drag = { button = button, x = x, y = y, facing = view.facing, py = view.y, pz = view.z, pan = button ~= "LeftButton" or IsShiftKeyDown() };
+	drag = { button = button, x = x, y = y, yaw = view.yaw, pitch = view.pitch, panX = view.panX, panY = view.panY, pan = button ~= "LeftButton" or IsShiftKeyDown() };
 end
 
 local function OnMouseUp()
@@ -178,14 +205,15 @@ local function OnUpdate(self, elapsed)
 			local dx, dy = x - drag.x, y - drag.y;
 
 			if ( drag.pan ) then
-				local unit = 2 / max(1, self:GetHeight()) / max(0.05, view.scale);
-				view.y = drag.py + dx * unit;
-				view.z = drag.pz + dy * unit;
-				Try("SetPosition", view.x, view.y, view.z);
+				local unit = 2.4 * view.zoom / max(1, self:GetHeight());
+				view.panX = drag.panX - dx * unit;
+				view.panY = drag.panY - dy * unit;
 			else
-				view.facing = drag.facing + dx * ROTATE_SPEED;
-				Try("SetFacing", view.facing);
+				view.yaw = drag.yaw - dx * ROTATE_SPEED;
+				view.pitch = max(-1.5, min(1.5, drag.pitch + dy * ROTATE_SPEED));
 			end
+
+			ApplyCamera();
 		end
 	end
 
@@ -273,11 +301,11 @@ function ME.CreatePreview(holder)
 	model:SetScript("OnMouseDown", OnMouseDown);
 	model:SetScript("OnMouseUp", OnMouseUp);
 	model:SetScript("OnMouseWheel", function(_, delta)
-		view.scale = max(0.01, min(200, view.scale * (delta > 0 and ZOOM_STEP or 1 / ZOOM_STEP)));
-		Try("SetModelScale", view.scale);
+		view.zoom = max(0.02, min(50, view.zoom * (delta > 0 and 1 / ZOOM_STEP or ZOOM_STEP)));
+		ApplyCamera();
 	end);
 	model:SetScript("OnUpdate", OnUpdate);
-	Common.Tooltip(model, "Drag to turn, Shift or right drag to move, wheel to zoom, F5 reloads");
+	Common.Tooltip(model, "Drag to orbit, Shift or right drag to pan, wheel to zoom, F5 reloads");
 
 	message = Common.Label(panel, "No model open", nil, NOGGIT_COLOR_DISABLED);
 	message:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8);

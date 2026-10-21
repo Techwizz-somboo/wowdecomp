@@ -49,6 +49,29 @@ local function TypedId()
 	return id;
 end
 
+local modelExists = {};
+
+-- DBC rows can name models the client does not have, those are left out of the browse list.
+local function ModelExists(path)
+	local key = string.lower(ME.CleanPath(path or ""));
+
+	if ( key == "" ) then
+		return false;
+	end
+
+	if ( modelExists[key] == nil ) then
+		modelExists[key] = ME.FileExists(ME.ToM2(path)) and true or false;
+	end
+
+	return modelExists[key];
+end
+
+local existsWatcher = CreateFrame("Frame");
+existsWatcher:RegisterEvent("MODEL_EDITOR_SAVED");
+existsWatcher:SetScript("OnEvent", function()
+	modelExists = {};
+end);
+
 local function BrowseModels()
 	GameEditor_PickValue("Models in the display DBCs", nil, nil, function(_, item)
 		if ( item and item.path ) then
@@ -62,12 +85,16 @@ local function BrowseModels()
 			return items;
 		end
 
-		for _, row in ipairs(ME.Find("CreatureModelData", nil, text, 120)) do
-			table.insert(items, { value = "M"..row.id, text = row.name or "", path = row.name, source = { kind = "creature", modelDataId = row.id } });
+		for _, row in ipairs(ME.Find("CreatureModelData", nil, text, 200)) do
+			if ( ModelExists(row.name) ) then
+				table.insert(items, { value = "M"..row.id, text = row.name or "", path = row.name, source = { kind = "creature", modelDataId = row.id } });
+			end
 		end
 
-		for _, row in ipairs(ME.Find("GameObjectDisplayInfo", nil, text, 120)) do
-			table.insert(items, { value = "G"..row.id, text = row.name or "", path = row.name, source = { kind = "gameobject", displayId = row.id } });
+		for _, row in ipairs(ME.Find("GameObjectDisplayInfo", nil, text, 200)) do
+			if ( ModelExists(row.name) ) then
+				table.insert(items, { value = "G"..row.id, text = row.name or "", path = row.name, source = { kind = "gameobject", displayId = row.id } });
+			end
 		end
 
 		return items;
