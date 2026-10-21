@@ -803,6 +803,153 @@ static int32_t Script_Find(lua_State* L) {
     return 1;
 }
 
+static constexpr int32_t kMaxFilterLimit = 200000;
+
+struct FilterCondition {
+    std::vector<std::pair<const Column*, uint32_t>> columns;
+};
+
+static uint32_t ReadRaw(const uint8_t* record, const Column& column) {
+    uint32_t raw = 0;
+
+    if (column.size == 1) {
+        raw = record[column.offset];
+    } else {
+        memcpy(&raw, record + column.offset, sizeof(raw));
+    }
+
+    return raw;
+}
+
+// DbcEditor_Filter(table, { text = "", where = { { columns = { ... }, value = v }, ... } } [, limit]) -> { { id, name }, ... }.
+// A row matches when its name holds the text and every condition has one of its columns equal to the value.
+static int32_t Script_Filter(lua_State* L) {
+    Table table;
+
+    if (!TableArgument(L, 1, table) || lua_type(L, 2) != LUA_TTABLE) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    const Schema& schema = *table.schema;
+    int32_t limit = lua_type(L, 3) == LUA_TNUMBER ? static_cast<int32_t>(lua_tonumber(L, 3)) : kMaxFilterLimit;
+    limit = std::clamp(limit, 1, kMaxFilterLimit);
+
+    lua_getfield(L, 2, "text");
+    const char* queryText = lua_type(L, -1) == LUA_TSTRING ? lua_tostring(L, -1) : "";
+    std::string needle = Lower(queryText ? queryText : "");
+    lua_pop(L, 1);
+
+    std::vector<FilterCondition> conditions;
+    lua_getfield(L, 2, "where");
+
+    if (lua_type(L, -1) == LUA_TTABLE) {
+        int where = lua_gettop(L);
+        int count = static_cast<int>(lua_objlen(L, where));
+
+        for (int i = 1; i <= count; i++) {
+            lua_rawgeti(L, where, i);
+            int entry = lua_gettop(L);
+
+            if (lua_type(L, entry) == LUA_TTABLE) {
+                FilterCondition condition;
+                lua_getfield(L, entry, "columns");
+                int columns = lua_gettop(L);
+                lua_getfield(L, entry, "value");
+                int value = lua_gettop(L);
+
+                if (lua_type(L, columns) == LUA_TTABLE) {
+                    int columnCount = static_cast<int>(lua_objlen(L, columns));
+
+                    for (int c = 1; c <= columnCount; c++) {
+                        lua_rawgeti(L, columns, c);
+                        int32_t index = lua_type(L, -1) == LUA_TSTRING ? FindColumn(schema, lua_tostring(L, -1)) : -1;
+                        lua_pop(L, 1);
+
+                        if (index < 0 || schema.columns[index].slot == Slot::Dropped || IsStringField(schema.columns[index])) {
+                            continue;
+                        }
+
+                        Value parsed;
+
+                        if (LuaToValue(L, value, schema.columns[index], parsed)) {
+                            condition.columns.emplace_back(&schema.columns[index], parsed.raw);
+                        }
+                    }
+                }
+
+                lua_settop(L, entry - 1);
+
+                // A condition on columns this table lacks can never match.
+                if (condition.columns.empty()) {
+                    lua_settop(L, where - 1);
+                    lua_newtable(L);
+                    return 1;
+                }
+
+                conditions.push_back(std::move(condition));
+            } else {
+                lua_pop(L, 1);
+            }
+        }
+    }
+
+    lua_settop(L, 3);
+
+    const Column* nameColumn = schema.nameColumn >= 0 ? &schema.columns[schema.nameColumn] : nullptr;
+    std::vector<uint8_t> record(table.store->recordSize);
+
+    lua_newtable(L);
+    int result = lua_gettop(L);
+    int found = 0;
+    int32_t total = table.store->db->m_numRecords;
+
+    for (int32_t index = 0; index < total && found < limit; index++) {
+        if (!ReadRecordIndex(table, index, record.data())) {
+            continue;
+        }
+
+        const char* name = nameColumn ? ReadPointer(record.data(), nameColumn->offset) : "";
+
+        if (!needle.empty() && !ContainsNoCase(name, needle)) {
+            continue;
+        }
+
+        bool match = true;
+
+        for (const FilterCondition& condition : conditions) {
+            bool any = false;
+
+            for (const auto& [column, raw] : condition.columns) {
+                if (ReadRaw(record.data(), *column) == raw) {
+                    any = true;
+                    break;
+                }
+            }
+
+            if (!any) {
+                match = false;
+                break;
+            }
+        }
+
+        if (!match) {
+            continue;
+        }
+
+        int32_t id;
+        memcpy(&id, record.data(), sizeof(id));
+        lua_createtable(L, 0, 2);
+        lua_pushnumber(L, id);
+        lua_setfield(L, -2, "id");
+        lua_pushstring(L, name ? name : "");
+        lua_setfield(L, -2, "name");
+        lua_rawseti(L, result, ++found);
+    }
+
+    return 1;
+}
+
 // DbcEditor_GetMaxId(table) -> the highest id in the loaded table, 0 when it is empty.
 static int32_t Script_GetMaxId(lua_State* L) {
     Table table;
@@ -1101,6 +1248,7 @@ void Apply() {
     Lua::RegisterFunction("DbcEditor_GetSchema", Gated<Script_GetSchema>);
     Lua::RegisterFunction("DbcEditor_GetRow", Gated<Script_GetRow>);
     Lua::RegisterFunction("DbcEditor_Find", Gated<Script_Find>);
+    Lua::RegisterFunction("DbcEditor_Filter", Gated<Script_Filter>);
     Lua::RegisterFunction("DbcEditor_GetMaxId", Gated<Script_GetMaxId>);
     Lua::RegisterFunction("DbcEditor_ApplyLocal", Gated<Script_ApplyLocal>);
     Lua::RegisterFunction("DbcEditor_RevertLocal", Gated<Script_RevertLocal>);

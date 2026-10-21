@@ -723,7 +723,7 @@ local function RefreshRow(grid, row)
 	else
 		row.edit:ClearAllPoints();
 		row.edit:SetPoint("LEFT", row, "LEFT", grid.labelWidth, 0);
-		row.edit:SetWidth(EDIT_WIDTH);
+		row.edit:SetWidth(grid.editWidth);
 		row.info:Show();
 	end
 end
@@ -811,7 +811,7 @@ local function CreateRow(grid, column)
 	row.label:SetWidth(grid.labelWidth - 12);
 	row.label:SetHeight(ROW_HEIGHT);
 
-	row.edit = NoggitLineEdit_Create(row, EDIT_WIDTH);
+	row.edit = NoggitLineEdit_Create(row, grid.editWidth);
 	row.edit:SetHeight(20);
 	row.edit:SetAutoFocus(false);
 	-- The line edit template stops at 128 letters, long strings would be cut on display.
@@ -1123,7 +1123,7 @@ end
 --   options.columns: plain column list instead of groups, options.fields: column -> field overrides
 --   options.readOnly / options.hidden: sets of columns, options.visible(column, values) hides rows
 --   options.onChange(grid, column, value, previous), options.onRowContext(grid, column)
---   options.labelWidth, options.filter (true adds a search box)
+--   options.labelWidth, options.editWidth, options.filter (true adds a search box)
 function GameEditor_CreatePropertyGrid(parent, options)
 	options = options or {};
 	local grid = setmetatable({}, Grid);
@@ -1135,6 +1135,7 @@ function GameEditor_CreatePropertyGrid(parent, options)
 	grid.onChange = options.onChange;
 	grid.onRowContext = options.onRowContext;
 	grid.labelWidth = options.labelWidth or 170;
+	grid.editWidth = options.editWidth or EDIT_WIDTH;
 	grid.values = {};
 	grid.original = {};
 	grid.rowsByColumn = {};

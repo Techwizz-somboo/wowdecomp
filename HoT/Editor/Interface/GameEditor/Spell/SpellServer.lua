@@ -326,11 +326,12 @@ local function BuildWorld(definition)
 	end;
 end
 
+SE.SERVER_SECTIONS = {};
+
 for _, definition in ipairs(WORLD_TABLES) do
-	SE.AddSection({
+	table.insert(SE.SERVER_SECTIONS, {
 		key = definition.key,
 		title = definition.title,
-		group = "server",
 		definition = definition,
 		build = BuildWorld(definition),
 		badge = function()
@@ -350,6 +351,121 @@ for _, definition in ipairs(WORLD_TABLES) do
 		end,
 	});
 end
+
+-- Server tab: the world tables keyed by the spell, one at a time with a list of them on the left.
+local SERVER_LIST_WIDTH = 140;
+local SERVER_ROW = 20;
+local serverTab;
+
+local function RefreshServerList()
+	if ( not serverTab ) then
+		return;
+	end
+
+	for _, button in ipairs(serverTab.buttons) do
+		local section = button.section;
+		button.badge:SetText(section.badge() or "");
+
+		if ( serverTab.active == section ) then
+			NoggitBox_Set(button, NOGGIT_COLOR_BASE, nil);
+			button.stripe:Show();
+			NoggitText_SetColor(button.text, NOGGIT_COLOR_WHITE);
+		else
+			NoggitBox_Set(button, button.hover and NOGGIT_COLOR_HOVER or NOGGIT_COLOR_DARK, nil);
+			button.stripe:Hide();
+			NoggitText_SetColor(button.text, NOGGIT_COLOR_TEXT);
+		end
+	end
+end
+
+function SE.SelectServerSection(key)
+	if ( not serverTab ) then
+		SE.lastServerSection = key;
+		return;
+	end
+
+	for _, section in ipairs(SE.SERVER_SECTIONS) do
+		if ( section.key == key ) then
+			if ( serverTab.active and serverTab.active ~= section ) then
+				serverTab.active.frame:Hide();
+			end
+
+			serverTab.active = section;
+			SE.lastServerSection = key;
+			section.frame:Show();
+		end
+	end
+
+	RefreshServerList();
+end
+
+local function BuildServerTab(parent)
+	local frame = CreateFrame("Frame", "GameEditorSpellServer", parent);
+	serverTab = frame;
+	frame.buttons = {};
+
+	local list = SE.Box(frame, "GameEditorSpellServerList", NOGGIT_COLOR_DARK, nil);
+	list:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0);
+	list:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 0);
+	list:SetWidth(SERVER_LIST_WIDTH);
+
+	local title = SE.Label(list, "SERVER TABLES", "NoggitFont10", NOGGIT_COLOR_DISABLED);
+	title:SetPoint("TOPLEFT", list, "TOPLEFT", 10, -6);
+
+	local body = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellServerBody"), frame);
+	body:SetPoint("TOPLEFT", list, "TOPRIGHT", 12, 0);
+	body:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+
+	for index, section in ipairs(SE.SERVER_SECTIONS) do
+		local button = CreateFrame("Button", NoggitUI_NewName("GameEditorSpellServerButton"), list, "NoggitBoxTemplate");
+		button:SetHeight(SERVER_ROW);
+		button:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -24 - (index - 1) * SERVER_ROW);
+		button:SetPoint("TOPRIGHT", list, "TOPRIGHT", 0, -24 - (index - 1) * SERVER_ROW);
+		button.section = section;
+		button.text = SE.Label(button, section.title);
+		button.text:SetPoint("LEFT", button, "LEFT", 12, 0);
+		button.badge = SE.Label(button, "", "NoggitFont10", nil, "RIGHT");
+		button.badge:SetPoint("RIGHT", button, "RIGHT", -8, 0);
+		button.stripe = NoggitUI_SolidTexture(button, "ARTWORK", NOGGIT_COLOR_ACCENT);
+		button.stripe:SetWidth(3);
+		button.stripe:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0);
+		button.stripe:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0);
+		button:SetScript("OnClick", function() SE.SelectServerSection(section.key); end);
+		button:SetScript("OnEnter", function(self) self.hover = true; RefreshServerList(); end);
+		button:SetScript("OnLeave", function(self) self.hover = false; RefreshServerList(); end);
+		SE.Tooltip(button, section.definition.table);
+		table.insert(frame.buttons, button);
+
+		section.frame = section.build(body);
+		section.frame:ClearAllPoints();
+		section.frame:SetAllPoints(body);
+		section.frame:Hide();
+	end
+
+	SE.SelectServerSection(SE.lastServerSection or SE.SERVER_SECTIONS[1].key);
+	SE.On("REFRESH", RefreshServerList);
+	return frame;
+end
+
+SE.AddSection({
+	key = "server",
+	title = "Server",
+	order = 100,
+	build = BuildServerTab,
+	badge = function()
+		local dirty = 0;
+
+		for _, section in ipairs(SE.SERVER_SECTIONS) do
+			local editor = section.definition.editor;
+
+			if ( editor and editor.key and editor:IsDirty() ) then
+				dirty = dirty + 1;
+			end
+		end
+
+		return dirty > 0 and format("|cffffcc00%d|r", dirty) or nil;
+	end,
+});
 
 SE.WORLD_TABLES = WORLD_TABLES;
 
@@ -527,10 +643,10 @@ function SE.UpdateWorldQueries(elapsed)
 	end
 end
 
--- Builds every server section so the sidebar can show row counts without visiting each tab.
+-- Builds the server tab up front so the tab badges and the world queries work without visiting it.
 function SE.BuildServerSections(builder)
 	for _, section in ipairs(SE.SECTIONS) do
-		if ( section.group == "server" ) then
+		if ( section.key == "server" ) then
 			builder(section);
 		end
 	end

@@ -1,4 +1,4 @@
--- Visuals (icons, SpellVisual, kits, missile), texts, items and the all fields grid.
+-- Visual tab (SpellVisual, kits, missile), the $ variable helpers of the description fields and the all fields grid.
 
 local SE = GameEditorSpell;
 local Data = GameEditorData or {};
@@ -116,66 +116,20 @@ end
 
 -- Visuals section -------------------------------------------------------------------------------------
 
-local function IconStrip(parent, column, label)
-	local holder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellIconStrip"), parent);
-	holder:SetHeight(48);
-
-	local frame = SE.Box(holder, "GameEditorSpellIconFrame", NOGGIT_COLOR_DARK, NOGGIT_COLOR_MID);
-	frame:SetWidth(46);
-	frame:SetHeight(46);
-	frame:SetPoint("LEFT", holder, "LEFT", 0, 0);
-	holder.icon = frame:CreateTexture(nil, "ARTWORK");
-	holder.icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3);
-	holder.icon:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3);
-	holder.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93);
-
-	holder.title = SE.Label(holder, label, "NoggitFontBold");
-	holder.title:SetPoint("TOPLEFT", frame, "TOPRIGHT", 8, -4);
-	holder.detail = SE.Label(holder, "", nil, NOGGIT_COLOR_DISABLED);
-	holder.detail:SetPoint("TOPLEFT", frame, "TOPRIGHT", 8, -22);
-	holder.detail:SetPoint("RIGHT", holder, "RIGHT", -4, 0);
-
-	local browse = SE.Button(holder, "Browse", 64, function()
-		SE.ShowIconBrowser(label, SE.GetValue(column), function(id)
-			SE.SetValue(column, id);
-		end);
-	end);
-	browse:SetPoint("LEFT", holder.title, "RIGHT", 10, 0);
-	holder.browse = browse;
-
-	holder.Refresh = function(self)
-		local id = SE.Number(SE.GetValue(column));
-
-		if ( id == 0 ) then
-			self.icon:SetTexture(0.1, 0.1, 0.1, 1);
-			self.detail:SetText("none");
-		else
-			local path = SE.IconPath(id);
-			self.icon:SetTexture(path);
-			self.detail:SetText(format("%d  %s", id, SE.IconShortName(path)));
-		end
-	end;
-
-	return holder;
-end
-
 local function BuildVisuals(parent)
 	local frame = CreateFrame("Frame", "GameEditorSpellVisuals", parent);
-	local y = SE.SectionTitle(frame, "Visuals", "Icons, the SpellVisual rows with their kits, and the missile. Visual rows save on their own, the spell only stores the ids.", 0);
+	local y = SE.SectionTitle(frame, "Visual", "The SpellVisual rows with their kits, and the missile. Visual rows save on their own, the spell only stores the ids.", 0);
 
-	local grid = SE.CreateSpellGrid(frame, SE.GroupsByTitle({ "Visuals" }), { labelWidth = 180 });
+	local grid = SE.FieldColumn(frame, {
+		{ "m_spellVisualID[0]", "Spell Visual 1" },
+		{ "m_spellVisualID[1]", "Spell Visual 2" },
+		{ "m_spellMissileID", "Spell Missile ID" },
+		{ "m_speed", "Speed" },
+	}, { labelWidth = 150, editWidth = 90 });
 	grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
 	grid.frame:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
-	grid.frame:SetHeight(186);
-	y = y - 192;
-
-	frame.icon = IconStrip(frame, "m_spellIconID", "Icon");
-	frame.icon:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
-	frame.icon:SetPoint("RIGHT", frame, "CENTER", -6, 0);
-	frame.activeIcon = IconStrip(frame, "m_activeIconID", "Active icon");
-	frame.activeIcon:SetPoint("TOPLEFT", frame, "TOP", 6, y);
-	frame.activeIcon:SetPoint("RIGHT", frame, "RIGHT", 0, 0);
-	y = y - 56;
+	grid.frame:SetHeight(4 * 24 + 6);
+	y = y - 4 * 24 - 12;
 
 	local separator = NoggitSeparator_Create(frame);
 	separator:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
@@ -272,8 +226,6 @@ local function BuildVisuals(parent)
 
 	frame.Refresh = function(self)
 		SE.SyncGrid(grid);
-		self.icon:Refresh();
-		self.activeIcon:Refresh();
 	end;
 
 	frame:SetScript("OnShow", function(self)
@@ -302,11 +254,6 @@ local function BuildVisuals(parent)
 		if ( column == "m_spellVisualID["..(frame.slot - 1).."]" ) then
 			frame:LoadVisual();
 		end
-
-		if ( frame:IsVisible() and (column == "m_spellIconID" or column == "m_activeIconID") ) then
-			frame.icon:Refresh();
-			frame.activeIcon:Refresh();
-		end
 	end);
 
 	frame:LoadVisual(true);
@@ -315,9 +262,9 @@ end
 
 SE.AddSection({
 	key = "visuals",
-	title = "Visuals",
-	group = "spell",
-	columns = SE.ColumnsOf(SE.GroupsByTitle({ "Visuals" })),
+	title = "Visual",
+	order = 90,
+	columns = { "m_spellVisualID[0]", "m_spellVisualID[1]", "m_spellMissileID", "m_speed" },
 	build = BuildVisuals,
 	badge = function()
 		if ( visualEditor and visualEditor:IsDirty() ) then
@@ -1025,290 +972,26 @@ SE.On("SPELL_LOADED", function() SE.HideTokenHelpers(); end);
 
 -- Texts section ---------------------------------------------------------------------------------------
 
-local TEXT_COLUMNS = { "m_name[0]", "m_nameSubtext[0]", "m_description[0]", "m_auraDescription[0]" };
+-- All fields ----------------------------------------------------------------------------------------------
 
-local function BuildTexts(parent)
-	local frame = CreateFrame("Frame", "GameEditorSpellTexts", parent);
-	local y = SE.SectionTitle(frame, "Texts", "Name, rank, the spellbook description and the buff tooltip. The preview resolves the $ variables with the current values.", 0);
+SE.AddSection({
+	key = "all",
+	title = "All Fields",
+	order = 110,
+	build = function(parent)
+		local groups = {};
 
-	local tabHolder = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextTabs"), frame);
-	tabHolder:SetHeight(24);
-	tabHolder:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
-	tabHolder:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, y);
-	y = y - 30;
-
-	local english = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextEnglish"), frame);
-	english:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
-	english:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
-
-	local locales = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellTextLocales"), frame);
-	locales:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y);
-	locales:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
-	locales:Hide();
-
-	local tabs = NoggitTabs_Create(tabHolder, { "English", "Other locales and masks" }, 1, function(index)
-		if ( index == 1 ) then
-			locales:Hide();
-			english:Show();
-		else
-			english:Hide();
-			locales:Show();
-		end
-	end);
-	tabs[1]:SetPoint("LEFT", tabHolder, "LEFT", 0, 0);
-
-	local help = SE.GlyphButton(tabHolder, 0xF059, SE.TOKEN_HELP, nil, 24);
-	help:SetPoint("RIGHT", tabHolder, "RIGHT", 0, 0);
-
-	local scroll, child = GameEditor_CreateScrollFrame(english);
-	scroll:SetAllPoints(english);
-	frame.fields = {};
-
-	local insertButton = SE.Button(tabHolder, "Insert variable", 100, function()
-		local edit = SE.LastTokenEdit();
-
-		if ( not edit or not edit:IsVisible() ) then
-			edit = frame.fields.SpellDescription0.edit;
+		for _, group in ipairs(Data.Groups and Data.Groups.Spell or {}) do
+			table.insert(groups, { title = group.title, columns = group.columns, collapsed = group.collapsed });
 		end
 
-		if ( not edit:IsVisible() ) then
-			GameEditor_Notify("Click into a description or tooltip field first.", "info");
-			return;
-		end
-
-		SE.ShowTokenPicker(edit);
-	end, "Pick a $ variable for the last description or tooltip you edited.\nTyping $ in a field lists them too.");
-	insertButton:SetHeight(20);
-	insertButton:SetPoint("RIGHT", help, "LEFT", -6, 0);
-
-	-- OnTextChanged runs a frame after SetText, only typed text counts as an edit.
-	local function LineField(column, label)
-		local title = SE.Label(child, label, "NoggitFontBold");
-		local edit = NoggitLineEdit_Create(child, 200);
-		edit:SetHeight(24);
-		edit:SetMaxLetters(255);
-		edit:SetScript("OnTextChanged", function(self, userInput)
-			local text = self:GetText();
-
-			if ( userInput and text ~= self.shownText ) then
-				self.shownText = text;
-				SE.SetValue(column, text, frame);
-			end
-		end);
-		edit.SetValue = function(self, text)
-			text = text or "";
-			self.shownText = text;
-
-			if ( self:GetText() == text ) then
-				return;
-			end
-
-			self:SetText(text);
-			self:SetCursorPosition(0);
-		end;
-		frame.fields[column] = edit;
-		return title, edit;
-	end
-
-	local function AreaField(column, label, shortName)
-		local title = SE.Label(child, label, "NoggitFontBold");
-		local area = SE.CreateTextArea(child, function(text)
-			SE.SetValue(column, text, frame);
-		end);
-		SE.AttachTokenHelper(area.edit, area);
-
-		local variables = SE.Button(child, "Variables", 76, function()
-			SE.ShowTokenPicker(area.edit, shortName);
-		end, "Lists every $ variable with its current value, a click inserts it at the cursor");
-		variables:SetHeight(18);
-		variables:SetPoint("BOTTOMRIGHT", area, "TOPRIGHT", 0, 1);
-
-		frame.fields[column] = area;
-		return title, area;
-	end
-
-	local function Preview()
-		local box = SE.Box(child, "GameEditorSpellTextPreview", { 0.05, 0.05, 0.07, 1 }, NOGGIT_COLOR_MID);
-		box.text = box:CreateFontString(nil, "ARTWORK", "GameTooltipText");
-		box.text:SetJustifyH("LEFT");
-		box.text:SetJustifyV("TOP");
-		box.text:SetPoint("TOPLEFT", box, "TOPLEFT", 8, -6);
-		return box;
-	end
-
-	local nameTitle, nameEdit = LineField("m_name[0]", "Name");
-	local rankTitle, rankEdit = LineField("m_nameSubtext[0]", "Rank");
-	local descriptionTitle, descriptionArea = AreaField("m_description[0]", "Description (spellbook and action bar tooltip)", "the description");
-	local descriptionPreview = Preview();
-	descriptionPreview.text:SetTextColor(1, 0.82, 0);
-	local auraTitle, auraArea = AreaField("m_auraDescription[0]", "Aura tooltip (shown on the buff or debuff)", "the aura tooltip");
-	local auraPreview = Preview();
-	auraPreview.text:SetTextColor(1, 1, 1);
-	local unresolved = SE.Label(child, "", nil, NOGGIT_COLOR_DISABLED);
-
-	frame.Layout = function(self)
-		scroll.UpdateRange();
-		local width = max(200, child:GetWidth());
-		local top = -2;
-
-		nameTitle:ClearAllPoints();
-		nameTitle:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
-		rankTitle:ClearAllPoints();
-		rankTitle:SetPoint("TOPLEFT", child, "TOPLEFT", floor(width * 0.62) + 2, top);
-		top = top - 18;
-		nameEdit:ClearAllPoints();
-		nameEdit:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
-		nameEdit:SetWidth(floor(width * 0.62) - 8);
-		rankEdit:ClearAllPoints();
-		rankEdit:SetPoint("TOPLEFT", child, "TOPLEFT", floor(width * 0.62), top);
-		rankEdit:SetPoint("RIGHT", child, "RIGHT", 0, 0);
-		top = top - 34;
-
-		local function Area(title, area, height, preview)
-			title:ClearAllPoints();
-			title:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
-			top = top - 18;
-			area:ClearAllPoints();
-			area:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
-			area:SetPoint("RIGHT", child, "RIGHT", 0, 0);
-			area:SetHeight(height);
-			top = top - height - 4;
-			preview:ClearAllPoints();
-			preview:SetPoint("TOPLEFT", child, "TOPLEFT", 0, top);
-			preview:SetPoint("RIGHT", child, "RIGHT", 0, 0);
-			preview.text:SetWidth(width - 16);
-			local textHeight = preview.text:GetText() and preview.text:GetText() ~= "" and preview.text:GetHeight() or 12;
-			preview:SetHeight(textHeight + 14);
-			top = top - textHeight - 14 - 12;
-		end
-
-		Area(descriptionTitle, descriptionArea, 120, descriptionPreview);
-		Area(auraTitle, auraArea, 76, auraPreview);
-		unresolved:ClearAllPoints();
-		unresolved:SetPoint("TOPLEFT", child, "TOPLEFT", 2, top);
-		unresolved:SetPoint("RIGHT", child, "RIGHT", 0, 0);
-		top = top - 20;
-		child:SetHeight(-top);
-		scroll.UpdateRange();
-	end;
-
-	frame.RefreshPreview = function(self)
-		local values = SE.cur and SE.cur.values or {};
-		local description = SE.ResolveText(values["m_description[0]"] or "", values, true);
-		local aura = SE.ResolveText(values["m_auraDescription[0]"] or "", values, true);
-		descriptionPreview.text:SetText(description ~= "" and description or "|cff8f8f8f(no description)|r");
-		auraPreview.text:SetText(aura ~= "" and aura or "|cff8f8f8f(no aura tooltip)|r");
-
-		local missing = 0;
-
-		for _ in string.gmatch(description..aura, "|cffff5050") do
-			missing = missing + 1;
-		end
-
-		unresolved:SetText(missing > 0 and format("|cffff5050%d variable%s could not be resolved.|r Hover the question mark for the supported ones.", missing, missing == 1 and "" or "s") or "All variables resolved.");
-		self:Layout();
-	end;
-
-	frame.Refresh = function(self)
-		local values = SE.cur and SE.cur.values or {};
-
-		for _, column in ipairs(TEXT_COLUMNS) do
-			self.fields[column]:SetValue(values[column] ~= nil and tostring(values[column]) or "");
-		end
-
-		self.stamp = SE.stamp;
-		self:RefreshPreview();
-	end;
-
-	local localeGroups = {
-		{ title = "Locale masks", columns = { "m_nameFlags", "m_nameSubtextFlags", "m_descriptionFlags", "m_auraDescriptionFlags" } },
-	};
-
-	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
-		table.insert(localeGroups, { title = "Other locales", columns = group.columns });
-	end
-
-	local localeGrid = SE.CreateSpellGrid(locales, localeGroups, { filter = true, labelWidth = 220 });
-	localeGrid.frame:SetAllPoints(locales);
-	SE.AttachTokenHelperToGrid(localeGrid);
-	locales:SetScript("OnShow", function() SE.SyncGrid(localeGrid); end);
-
-	english:SetScript("OnSizeChanged", function() frame:Layout(); end);
-	frame:SetScript("OnHide", function() SE.HideTokenHelpers(); end);
-	frame:SetScript("OnShow", function(self)
-		if ( self.stamp ~= SE.stamp ) then
-			self:Refresh();
-		else
-			self:Layout();
-		end
-	end);
-
-	SE.On("VALUE_CHANGED", function(_, source)
-		if ( frame:IsVisible() ) then
-			if ( source == frame ) then
-				frame.previewQueued = true;
-			else
-				frame:Refresh();
-			end
-		end
-	end);
-	SE.On("SPELL_LOADED", function()
-		if ( frame:IsVisible() ) then
-			frame:Refresh();
-		end
-	end);
-	SE.On("REFRESH", function()
-		if ( frame.previewQueued and frame:IsVisible() ) then
-			frame.previewQueued = false;
-			frame:RefreshPreview();
-		end
-	end);
-
-	frame.stamp = -1;
-	return frame;
-end
-
-do
-	local columns = { "m_name[0]", "m_nameSubtext[0]", "m_description[0]", "m_auraDescription[0]", "m_nameFlags", "m_nameSubtextFlags", "m_descriptionFlags", "m_auraDescriptionFlags" };
-
-	for _, group in ipairs(SE.GroupsByTitle({ "Texts (Other Locales)" })) do
-		for _, column in ipairs(group.columns) do
-			table.insert(columns, column);
-		end
-	end
-
-	SE.AddSection({ key = "texts", title = "Texts", group = "spell", columns = columns, build = BuildTexts });
-end
-
--- Items and all fields -----------------------------------------------------------------------------
-
-local function SimpleGridSection(key, title, description, groups, options)
-	SE.AddSection({
-		key = key,
-		title = title,
-		group = "spell",
-		columns = SE.ColumnsOf(groups),
-		build = function(parent)
-			local frame = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellSection"), parent);
-			local y = SE.SectionTitle(frame, title, description, 0);
-			local grid = SE.CreateSpellGrid(frame, groups, options);
-			SE.AttachTokenHelperToGrid(grid);
-			grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y - 2);
-			grid.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
-			frame:SetScript("OnShow", function() SE.SyncGrid(grid); end);
-			return frame;
-		end,
-	});
-end
-
-SimpleGridSection("items", "Items and Reagents", "Required equipment, totems and the reagents the cast consumes.", SE.GroupsByTitle({ "Items and Reagents" }));
-
-do
-	local groups = {};
-
-	for _, group in ipairs(Data.Groups and Data.Groups.Spell or {}) do
-		table.insert(groups, { title = group.title, columns = group.columns, collapsed = group.collapsed });
-	end
-
-	SimpleGridSection("all", "All fields", "Every column of the Spell row in one place. Type in the filter to find a field by label or column name.", groups, { filter = true });
-end
+		local frame = CreateFrame("Frame", "GameEditorSpellAllFields", parent);
+		local y = SE.SectionTitle(frame, "All Fields", "Every column of the Spell row in one place. Type in the filter to find a field by label or column name.", 0);
+		local grid = SE.CreateSpellGrid(frame, groups, { filter = true });
+		SE.AttachTokenHelperToGrid(grid);
+		grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, y - 2);
+		grid.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
+		frame:SetScript("OnShow", function() SE.SyncGrid(grid); end);
+		return frame;
+	end,
+});

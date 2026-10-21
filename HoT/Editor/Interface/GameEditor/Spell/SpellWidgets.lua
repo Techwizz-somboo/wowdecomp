@@ -491,7 +491,11 @@ function DbcRowEditor:UpdateHeader()
 		self.emptyText:SetText(self.id == 0 and (self.options.emptyText or "Nothing linked yet.") or self.options.missingText or format("There is no %s row %d in this client.", self.tableName, self.id));
 	else
 		self.titleText:SetText(format("%s %d", title, self.id));
-		self.grid.frame:Show();
+
+		if ( not self.options.hideGrid ) then
+			self.grid.frame:Show();
+		end
+
 		self.empty:Hide();
 
 		if ( self.pending ) then
@@ -731,7 +735,11 @@ function SE.CreateDbcEditor(parent, tableName, options)
 	editor.grid.frame:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -52);
 	editor.grid.frame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
 
-	editor.empty = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellDbcEmpty"), frame);
+	if ( options.hideGrid ) then
+		editor.grid.frame:Hide();
+	end
+
+	editor.empty =CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellDbcEmpty"), frame);
 	editor.empty:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -56);
 	editor.empty:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0);
 	editor.emptyText = SE.Label(editor.empty, "", nil, NOGGIT_COLOR_DISABLED);

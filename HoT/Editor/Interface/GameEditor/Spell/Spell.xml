@@ -3,8 +3,9 @@
 	<Script file="SpellCore.lua"/>
 	<Script file="SpellText.lua"/>
 	<Script file="SpellWidgets.lua"/>
-	<Script file="SpellBrowser.lua"/>
+	<Script file="SpellLayout.lua"/>
 	<Script file="SpellSections.lua"/>
+	<Script file="SpellBrowser.lua"/>
 	<Script file="SpellVisuals.lua"/>
 	<Script file="SpellServer.lua"/>
 	<Script file="SpellPreview.lua"/>

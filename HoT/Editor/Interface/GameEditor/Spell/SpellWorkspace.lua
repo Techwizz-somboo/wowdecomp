@@ -1,26 +1,28 @@
--- Spell workspace: main panel (spell list, header, section sidebar, content), menus, keys and registration.
+-- Spell workspace: main panel laid out like the Personal Spell Editor (command bar, spell tabs, main tab strip, content), menus, keys and registration.
 
 local SE = GameEditorSpell;
 
 local LEFT_OFFSET = 56;
-local BROWSER_WIDTH = 230;
-local SIDEBAR_WIDTH = 140;
-local HEADER_HEIGHT = 112;
-local SIDEBAR_ROW = 20;
-local MIN_WIDTH = 760;
+local HEADER_HEIGHT = 56;
+local MIN_WIDTH = 900;
 local COLLAPSED_WIDTH = 44;
 
 local root;
 local panel;
 local strip;
 local header;
-local sidebar;
+local mainTabs;
 local content;
 local emptyState;
 local hoverTooltip;
 local activeSection;
-local browserShown = true;
 local collapsed = false;
+
+local function SortSections()
+	table.sort(SE.SECTIONS, function(a, b)
+		return (a.order or 1000) < (b.order or 1000);
+	end);
+end
 
 local function Section(key)
 	for _, section in ipairs(SE.SECTIONS) do
@@ -43,41 +45,44 @@ local function BuildSection(section)
 	return section.frame;
 end
 
-local function RefreshSidebar()
-	if ( not sidebar ) then
+local function SectionBadge(section)
+	local badge;
+
+	if ( section.badge ) then
+		badge = section.badge();
+	end
+
+	if ( not badge and section.columns and SE.cur ) then
+		local changed = SE.ChangeCount(section.columns);
+		badge = changed > 0 and format("|cffffcc00%d|r", changed) or nil;
+	end
+
+	return badge;
+end
+
+local function RefreshMainTabs()
+	if ( not mainTabs ) then
 		return;
 	end
 
-	for _, button in ipairs(sidebar.buttons) do
-		local section = button.section;
-		local badge;
+	for _, tab in ipairs(mainTabs) do
+		local section = tab.section;
+		local badge = SectionBadge(section);
+		local text = section.title..(badge and ("  "..badge) or "");
 
-		if ( section.badge ) then
-			badge = section.badge();
+		if ( tab.shownText ~= text ) then
+			tab.shownText = text;
+			tab:SetText(text);
+			tab:SetWidth(max(55, tab:GetFontString():GetStringWidth() + 20) + 2);
 		end
 
-		if ( not badge and section.columns and SE.cur ) then
-			local changed = SE.ChangeCount(section.columns);
-			badge = changed > 0 and format("|cffffcc00%d|r", changed) or nil;
-		end
-
-		button.badge:SetText(badge or "");
-		local selected = activeSection == section;
-
-		if ( selected ) then
-			NoggitBox_Set(button, NOGGIT_COLOR_BASE, nil);
-			button.stripe:Show();
-			NoggitText_SetColor(button.text, NOGGIT_COLOR_WHITE);
-		else
-			NoggitBox_Set(button, button.hover and NOGGIT_COLOR_HOVER or NOGGIT_COLOR_DARK, nil);
-			button.stripe:Hide();
-			NoggitText_SetColor(button.text, NOGGIT_COLOR_TEXT);
-		end
+		tab.selected = activeSection == section;
+		NoggitTab_Refresh(tab);
 	end
 end
 
 function SE.SelectSection(key)
-	local section = Section(key);
+	local section = Section(key) or Section("select");
 
 	if ( not section or not content ) then
 		return;
@@ -88,9 +93,9 @@ function SE.SelectSection(key)
 	end
 
 	activeSection = section;
-	SE.lastSection = key;
+	SE.lastSection = section.key;
 
-	if ( SE.cur ) then
+	if ( SE.cur or section.noSpell ) then
 		emptyState:Hide();
 		BuildSection(section):Show();
 	else
@@ -101,7 +106,33 @@ function SE.SelectSection(key)
 		emptyState:Show();
 	end
 
-	RefreshSidebar();
+	RefreshMainTabs();
+end
+
+local function BuildMainTabs(parent)
+	local holder = CreateFrame("Frame", "GameEditorSpellMainTabs", parent);
+	holder:SetHeight(26);
+	local titles = {};
+
+	for _, section in ipairs(SE.SECTIONS) do
+		table.insert(titles, section.title);
+	end
+
+	mainTabs = NoggitTabs_Create(holder, titles, 1, function(index)
+		SE.SelectSection(SE.SECTIONS[index].key);
+	end);
+
+	for index, tab in ipairs(mainTabs) do
+		tab.section = SE.SECTIONS[index];
+	end
+
+	mainTabs[1]:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, 0);
+
+	local line = NoggitUI_SolidTexture(holder, "ARTWORK", NOGGIT_COLOR_MID);
+	line:SetHeight(1);
+	line:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, 0);
+	line:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, 0);
+	return holder;
 end
 
 -- Spell tabs ----------------------------------------------------------------------------------------------
@@ -455,17 +486,16 @@ local function BuildTabBar(parent)
 	return tabBar;
 end
 
--- Header -------------------------------------------------------------------------------------------------
+-- Command bar ----------------------------------------------------------------------------------------------
 
 local function RefreshHeader()
 	local cur = SE.cur;
 
 	if ( not cur ) then
 		header.icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark");
-		header.name:SetText("No spell open");
+		header.name:SetText("No spell selected");
 		header.rank:SetText("");
-		header.info:SetText("Search the list on the left or create a new spell.");
-		header.description:SetText("");
+		header.info:SetText("Pick a spell in Select Spell or insert a new one.");
 		header.state:SetText("");
 
 		for _, button in ipairs(header.spellButtons) do
@@ -501,8 +531,6 @@ local function RefreshHeader()
 	end
 
 	header.info:SetText(table.concat(info, "   |cff5f5f5f|||r   "));
-	local description = SE.ResolveText(values["m_description[0]"] or "", values, true);
-	header.description:SetText(description ~= "" and description or "|cff8f8f8fNo description.|r");
 
 	local state;
 	local changed = SE.ChangeCount();
@@ -532,6 +560,7 @@ local function RefreshHeader()
 	SE.SetEnabled(header.revert, dirty or cur.appliedLocal or cur.remoteChanged);
 	SE.SetEnabled(header.apply, true);
 	SE.SetEnabled(header.preview, true);
+	SE.SetEnabled(header.copy, true);
 end
 
 local function ShowHoverTooltip(owner)
@@ -562,105 +591,55 @@ local function BuildHeader(parent)
 
 	local iconFrame = CreateFrame("Button", "GameEditorSpellHeaderIcon", header, "NoggitBoxTemplate");
 	NoggitBox_Set(iconFrame, NOGGIT_COLOR_BASE, NOGGIT_COLOR_HOVER);
-	iconFrame:SetWidth(60);
-	iconFrame:SetHeight(60);
-	iconFrame:SetPoint("TOPLEFT", header, "TOPLEFT", 10, -10);
+	iconFrame:SetWidth(40);
+	iconFrame:SetHeight(40);
+	iconFrame:SetPoint("LEFT", header, "LEFT", 8, 0);
 	header.icon = iconFrame:CreateTexture(nil, "ARTWORK");
-	header.icon:SetPoint("TOPLEFT", iconFrame, "TOPLEFT", 3, -3);
-	header.icon:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -3, 3);
+	header.icon:SetPoint("TOPLEFT", iconFrame, "TOPLEFT", 2, -2);
+	header.icon:SetPoint("BOTTOMRIGHT", iconFrame, "BOTTOMRIGHT", -2, 2);
 	header.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93);
 	iconFrame:SetScript("OnEnter", function(self) ShowHoverTooltip(self); end);
 	iconFrame:SetScript("OnLeave", HideHoverTooltip);
 	iconFrame:SetScript("OnClick", function()
 		if ( SE.cur ) then
 			HideHoverTooltip();
-			SE.ShowIconBrowser("Spell icon", SE.GetValue("m_spellIconID"), function(id) SE.SetValue("m_spellIconID", id); end);
+			SE.SelectSection("icon");
 		end
 	end);
 
-	header.name = SE.Label(header, "", "NoggitFont18", NOGGIT_COLOR_WHITE);
-	header.name:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 12, -2);
-	header.rank = SE.Label(header, "", "NoggitFont15", NOGGIT_COLOR_DISABLED);
+	header.name = SE.Label(header, "", "NoggitFont16", NOGGIT_COLOR_WHITE);
+	header.name:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 10, -2);
+	header.rank = SE.Label(header, "", nil, NOGGIT_COLOR_DISABLED);
 	header.rank:SetPoint("BOTTOMLEFT", header.name, "BOTTOMRIGHT", 10, 1);
 
-	header.info = SE.Label(header, "");
-	header.info:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 12, -28);
-	header.info:SetPoint("RIGHT", header, "RIGHT", -300, 0);
-
-	header.description = header:CreateFontString(nil, "ARTWORK", "GameTooltipText");
-	header.description:SetJustifyH("LEFT");
-	header.description:SetJustifyV("TOP");
-	header.description:SetTextColor(1, 0.82, 0);
-	header.description:SetPoint("TOPLEFT", iconFrame, "TOPRIGHT", 12, -48);
-	header.description:SetPoint("RIGHT", header, "RIGHT", -300, 0);
-	header.description:SetHeight(44);
+	local collapse = SE.GlyphButton(header, 0xF100, "Collapse the editor to watch the world (Ctrl+E)", function() SE.SetCollapsed(true); end, 22);
+	collapse:SetPoint("TOPRIGHT", header, "TOPRIGHT", -6, -6);
 
 	header.state = SE.Label(header, "", nil, nil, "RIGHT");
-	header.state:SetPoint("TOPRIGHT", header, "TOPRIGHT", -40, -12);
+	header.state:SetPoint("RIGHT", collapse, "LEFT", -8, 0);
 
-	local collapse = SE.GlyphButton(header, 0xF100, "Collapse the editor to watch the world (Ctrl+E)", function() SE.SetCollapsed(true); end, 24);
-	collapse:SetPoint("TOPRIGHT", header, "TOPRIGHT", -8, -8);
-
-	header.save = SE.Button(header, "Save", 76, function() SE.Save(); end, "Write the spell to the dbc database, the server pushes it to every client (Ctrl+S saves everything)", true);
-	header.save:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -10, 12);
-	header.revert = SE.Button(header, "Revert", 70, function() SE.Revert(); end, "Back to the saved spell, also undoes Apply locally");
-	header.revert:SetPoint("RIGHT", header.save, "LEFT", -4, 0);
-	header.apply = SE.Button(header, "Apply locally", 96, function() SE.ApplyLocal(); end, "Patch this client only, for instant preview without saving (Ctrl+L)");
+	header.save = SE.Button(header, "Save Spell Changes", 130, function() SE.Save(); end, "Write the spell to the dbc database, the server pushes it to every client (Ctrl+S saves every tab)", true);
+	header.save:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -6, 6);
+	header.copy = SE.Button(header, "Copy Spell", 80, function() SE.CopySpell(); end, "Copy the open spell, unsaved edits included, to the next free id in a new tab (Ctrl+D)");
+	header.copy:SetPoint("RIGHT", header.save, "LEFT", -4, 0);
+	header.new = SE.Button(header, "New Spell", 76, function() SE.NewSpell(); end, "Insert a new spell record with the next free id. You can also right click spells in the list (Ctrl+N)");
+	header.new:SetPoint("RIGHT", header.copy, "LEFT", -4, 0);
+	header.revert = SE.Button(header, "Revert", 60, function() SE.Revert(); end, "Back to the saved spell, also undoes Apply Locally");
+	header.revert:SetPoint("RIGHT", header.new, "LEFT", -12, 0);
+	header.apply = SE.Button(header, "Apply Locally", 94, function() SE.ApplyLocal(); end, "Patch this client only, for an instant preview without saving (Ctrl+L)");
 	header.apply:SetPoint("RIGHT", header.revert, "LEFT", -4, 0);
-	header.preview = SE.Button(header, "Preview", 74, function()
+	header.preview = SE.Button(header, "Preview", 66, function()
 		GameEditor_SelectTool("select");
 		SE.PreviewCast();
 	end, "Cast the spell from your character on the target (F5), the dock on the right has the options");
-	header.preview:SetPoint("BOTTOMRIGHT", header.save, "TOPRIGHT", 0, 6);
-	header.spellButtons = { header.save, header.revert, header.apply, header.preview };
+	header.preview:SetPoint("RIGHT", header.apply, "LEFT", -4, 0);
+	header.spellButtons = { header.save, header.revert, header.apply, header.preview, header.copy };
+
+	header.info = SE.Label(header, "");
+	header.info:SetPoint("BOTTOMLEFT", iconFrame, "BOTTOMRIGHT", 10, 2);
+	header.info:SetPoint("RIGHT", header.preview, "LEFT", -12, 0);
 
 	return header;
-end
-
--- Sidebar ------------------------------------------------------------------------------------------------
-
-local function BuildSidebar(parent)
-	sidebar = SE.Box(parent, "GameEditorSpellSidebar", NOGGIT_COLOR_DARK, nil);
-	sidebar:SetWidth(SIDEBAR_WIDTH);
-	sidebar.buttons = {};
-
-	local y = -6;
-	local lastGroup;
-
-	for _, section in ipairs(SE.SECTIONS) do
-		if ( section.group ~= lastGroup ) then
-			lastGroup = section.group;
-			local title = SE.Label(sidebar, section.group == "server" and "SERVER" or "SPELL DBC", "NoggitFont10", NOGGIT_COLOR_DISABLED);
-			title:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 10, y - (#sidebar.buttons > 0 and 8 or 0));
-			y = y - (#sidebar.buttons > 0 and 26 or 18);
-		end
-
-		local button = CreateFrame("Button", NoggitUI_NewName("GameEditorSpellSidebarButton"), sidebar, "NoggitBoxTemplate");
-		button:SetHeight(SIDEBAR_ROW);
-		button:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 0, y);
-		button:SetPoint("TOPRIGHT", sidebar, "TOPRIGHT", 0, y);
-		button.section = section;
-		button.text = SE.Label(button, section.title);
-		button.text:SetPoint("LEFT", button, "LEFT", 12, 0);
-		button.badge = SE.Label(button, "", "NoggitFont10", nil, "RIGHT");
-		button.badge:SetPoint("RIGHT", button, "RIGHT", -8, 0);
-		button.stripe = NoggitUI_SolidTexture(button, "ARTWORK", NOGGIT_COLOR_ACCENT);
-		button.stripe:SetWidth(3);
-		button.stripe:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0);
-		button.stripe:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", 0, 0);
-		button:SetScript("OnClick", function() SE.SelectSection(section.key); end);
-		button:SetScript("OnEnter", function(self) self.hover = true; RefreshSidebar(); end);
-		button:SetScript("OnLeave", function(self) self.hover = false; RefreshSidebar(); end);
-
-		if ( section.definition ) then
-			SE.Tooltip(button, section.definition.table);
-		end
-
-		table.insert(sidebar.buttons, button);
-		y = y - SIDEBAR_ROW;
-	end
-
-	return sidebar;
 end
 
 -- Layout, collapse and resize ----------------------------------------------------------------------------
@@ -675,8 +654,7 @@ local function MaxWidth()
 end
 
 local function ApplyLayout()
-	local minimum = browserShown and MIN_WIDTH or (MIN_WIDTH - BROWSER_WIDTH);
-	SE.mainWidth = max(minimum, min(MaxWidth(), SE.mainWidth or 1080));
+	SE.mainWidth = max(MIN_WIDTH, min(MaxWidth(), SE.mainWidth or 1180));
 
 	if ( collapsed ) then
 		panel:Hide();
@@ -687,24 +665,6 @@ local function ApplyLayout()
 		panel:Show();
 		root:SetWidth(SE.mainWidth);
 	end
-
-	panel.browser:ClearAllPoints();
-	panel.editor:ClearAllPoints();
-
-	if ( browserShown ) then
-		panel.browser:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -4);
-		panel.browser:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 8, 6);
-		panel.browser:SetWidth(BROWSER_WIDTH - 16);
-		panel.browser:Show();
-		panel.divider:Show();
-		panel.editor:SetPoint("TOPLEFT", panel, "TOPLEFT", BROWSER_WIDTH, -8);
-	else
-		panel.browser:Hide();
-		panel.divider:Hide();
-		panel.editor:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8);
-	end
-
-	panel.editor:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -12, 8);
 end
 
 function SE.SetCollapsed(value)
@@ -716,11 +676,6 @@ end
 
 function SE.IsCollapsed()
 	return collapsed;
-end
-
-function SE.SetBrowserShown(value)
-	browserShown = value and true or false;
-	ApplyLayout();
 end
 
 local function BuildStrip(parent)
@@ -804,13 +759,15 @@ end
 local function BuildEmptyState(parent)
 	local frame = CreateFrame("Frame", "GameEditorSpellEmpty", parent);
 	frame:SetAllPoints(parent);
-	local title = SE.Label(frame, "No spell open", "NoggitFont18", NOGGIT_COLOR_WHITE);
+	local title = SE.Label(frame, "No spell selected", "NoggitFont18", NOGGIT_COLOR_WHITE);
 	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -10);
-	local text = SE.Label(frame, "Search a spell by name or id in the list on the left and click it, open one by id, or start a new spell.", nil, NOGGIT_COLOR_DISABLED);
+	local text = SE.Label(frame, "Pick a spell in the Select Spell tab, open one by id, or insert a new spell.", nil, NOGGIT_COLOR_DISABLED);
 	text:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -40);
 	text:SetPoint("RIGHT", frame, "RIGHT", -6, 0);
-	local new = SE.Button(frame, "New spell", 100, function() SE.NewSpell(); end, nil, true);
-	new:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -70);
+	local select = SE.Button(frame, "Select Spell", 100, function() SE.SelectSection("select"); end, nil, true);
+	select:SetPoint("TOPLEFT", frame, "TOPLEFT", 6, -70);
+	local new = SE.Button(frame, "New Spell", 100, function() SE.NewSpell(); end);
+	new:SetPoint("LEFT", select, "RIGHT", 6, 0);
 	local open = SE.Button(frame, "Open by id", 100, function()
 		SE.PickSpell("Open spell", function(id) SE.Open(id); end);
 	end);
@@ -819,6 +776,8 @@ local function BuildEmptyState(parent)
 end
 
 local function BuildMain(parent)
+	SortSections();
+
 	root = CreateFrame("Frame", "GameEditorSpellRoot", parent);
 	root:SetPoint("TOPLEFT", parent, "TOPLEFT", LEFT_OFFSET, -6);
 	root:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", LEFT_OFFSET, 6);
@@ -829,34 +788,31 @@ local function BuildMain(parent)
 	panel:EnableMouse(true);
 	panel:EnableMouseWheel(true);
 
-	panel.browser = SE.CreateBrowser(panel);
-	panel.divider = NoggitUI_SolidTexture(panel, "ARTWORK", NOGGIT_COLOR_MID);
-	panel.divider:SetWidth(1);
-	panel.divider:SetPoint("TOPLEFT", panel, "TOPLEFT", BROWSER_WIDTH - 5, -8);
-	panel.divider:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", BROWSER_WIDTH - 5, 8);
-
 	panel.editor = CreateFrame("Frame", "GameEditorSpellEditorArea", panel);
-	BuildTabBar(panel.editor);
-	tabBar:SetPoint("TOPLEFT", panel.editor, "TOPLEFT", 0, 0);
-	tabBar:SetPoint("TOPRIGHT", panel.editor, "TOPRIGHT", 0, 0);
+	panel.editor:SetPoint("TOPLEFT", panel, "TOPLEFT", 8, -8);
+	panel.editor:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -12, 8);
 
 	BuildHeader(panel.editor);
-	header:SetPoint("TOPLEFT", tabBar, "BOTTOMLEFT", 0, 0);
-	header:SetPoint("TOPRIGHT", tabBar, "BOTTOMRIGHT", 0, 0);
+	header:SetPoint("TOPLEFT", panel.editor, "TOPLEFT", 0, 0);
+	header:SetPoint("TOPRIGHT", panel.editor, "TOPRIGHT", 0, 0);
 
-	BuildSidebar(panel.editor);
-	sidebar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -8);
-	sidebar:SetPoint("BOTTOMLEFT", panel.editor, "BOTTOMLEFT", 0, 0);
+	BuildTabBar(panel.editor);
+	tabBar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4);
+	tabBar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", 0, -4);
+
+	local tabHolder = BuildMainTabs(panel.editor);
+	tabHolder:SetPoint("TOPLEFT", tabBar, "BOTTOMLEFT", 0, -6);
+	tabHolder:SetPoint("TOPRIGHT", tabBar, "BOTTOMRIGHT", 0, -6);
 
 	content = CreateFrame("Frame", "GameEditorSpellContent", panel.editor);
-	content:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 12, -2);
+	content:SetPoint("TOPLEFT", tabHolder, "BOTTOMLEFT", 0, -10);
 	content:SetPoint("BOTTOMRIGHT", panel.editor, "BOTTOMRIGHT", 0, 0);
 	emptyState = BuildEmptyState(content);
 
 	BuildResizeGrip(panel);
 	BuildStrip(root);
 
-	SE.mainWidth = min(1080, AreaWidth() - LEFT_OFFSET - 120);
+	SE.mainWidth = min(1180, AreaWidth() - LEFT_OFFSET - 120);
 	ApplyLayout();
 	EditorMainArea:HookScript("OnSizeChanged", function() ApplyLayout(); end);
 
@@ -866,7 +822,7 @@ local function BuildMain(parent)
 		SE.Fire("SPELL_LOADED", SE.cur);
 	end
 
-	SE.SelectSection(SE.lastSection or "general");
+	SE.SelectSection(SE.lastSection or "select");
 	RefreshHeader();
 	LayoutTabs();
 	return root;
@@ -880,7 +836,7 @@ SE.On("REFRESH", function()
 	end
 
 	RefreshHeader();
-	RefreshSidebar();
+	RefreshMainTabs();
 	LayoutTabs();
 	strip:Refresh();
 end);
@@ -900,19 +856,24 @@ end
 local function BuildMenus()
 	local separator = { separator = true };
 	local goTo = { title = "Go to" };
-	local lastGroup;
+	SortSections();
 
 	for _, section in ipairs(SE.SECTIONS) do
-		if ( lastGroup and section.group ~= lastGroup ) then
-			table.insert(goTo, separator);
-		end
-
-		lastGroup = section.group;
 		local key = section.key;
 		table.insert(goTo, {
 			text = section.title,
 			checked = function() return activeSection and activeSection.key == key; end,
 			onClick = function() SE.SetCollapsed(false); SE.SelectSection(key); end,
+		});
+	end
+
+	table.insert(goTo, separator);
+
+	for _, section in ipairs(SE.SERVER_SECTIONS or {}) do
+		local key = section.key;
+		table.insert(goTo, {
+			text = "Server: "..section.title,
+			onClick = function() SE.SetCollapsed(false); SE.SelectSection("server"); SE.SelectServerSection(key); end,
 		});
 	end
 
@@ -922,7 +883,7 @@ local function BuildMenus()
 			{ text = "New spell", shortcut = "Ctrl+N", onClick = function() SE.NewSpell(); end },
 			{ text = "Copy to a new id", shortcut = "Ctrl+D", onClick = SE.CopySpell },
 			{ text = "Open by id or name", shortcut = "Ctrl+O", onClick = OpenById },
-			{ text = "Find in the spell list", shortcut = "Ctrl+F", onClick = function() SE.SetCollapsed(false); SE.SetBrowserShown(true); SE.FocusSearch(); end },
+			{ text = "Find in the spell list", shortcut = "Ctrl+F", onClick = function() SE.SetCollapsed(false); SE.FocusSearch(); end },
 			separator,
 			{ text = "Close tab", shortcut = "Ctrl+W", onClick = function() SE.CloseDoc(); end },
 			{ text = "Close saved tabs", onClick = function() SE.CloseSavedDocs(); end },
@@ -938,14 +899,9 @@ local function BuildMenus()
 			{ text = "Preview on self", shortcut = "Shift+F5", onClick = function() SE.PreviewCast("self"); end },
 			{ text = "Stop preview", shortcut = "Ctrl+F5", onClick = SE.PreviewStop },
 			separator,
-			{ text = "Spell icon", onClick = function()
-				if ( SE.cur ) then
-					SE.ShowIconBrowser("Spell icon", SE.GetValue("m_spellIconID"), function(id) SE.SetValue("m_spellIconID", id); end);
-				end
-			end },
+			{ text = "Spell icon", onClick = function() SE.SetCollapsed(false); SE.SelectSection("icon"); end },
 			{ text = "Spell missile", onClick = SE.OpenMissile },
 			separator,
-			{ text = "Show the spell list", checked = function() return browserShown; end, onClick = function() SE.SetBrowserShown(not browserShown); end },
 			{ text = "Collapse the editor", shortcut = "Ctrl+E", checked = function() return collapsed; end, onClick = function() SE.SetCollapsed(not collapsed); end },
 		},
 		goTo,
@@ -959,7 +915,7 @@ local HOTKEYS = {
 	["CTRL-O"] = OpenById,
 	["CTRL-L"] = function() SE.ApplyLocal(); end,
 	["CTRL-E"] = function() SE.SetCollapsed(not collapsed); end,
-	["CTRL-F"] = function() SE.SetCollapsed(false); SE.SetBrowserShown(true); SE.FocusSearch(); end,
+	["CTRL-F"] = function() SE.SetCollapsed(false); SE.FocusSearch(); end,
 	["F5"] = function() SE.PreviewCast(); end,
 	["SHIFT-F5"] = function() SE.PreviewCast("self"); end,
 	["CTRL-F5"] = function() SE.PreviewStop(); end,
@@ -978,7 +934,7 @@ local KEYS = {
 	{ "Ctrl+Shift+Tab", "Previous spell tab" },
 	{ "Middle click a tab", "Close it, right click for more" },
 	{ "$ in a description", "Lists the variables, Up, Down and Enter or a click inserts one" },
-	{ "Ctrl+F", "Search the spell list" },
+	{ "Ctrl+F", "Filter the spell list by name in the Select Spell tab" },
 	{ "Ctrl+L", "Apply the spell to this client only" },
 	{ "Ctrl+E", "Collapse or expand the editor panel" },
 	{ "F5", "Preview the spell on the target" },

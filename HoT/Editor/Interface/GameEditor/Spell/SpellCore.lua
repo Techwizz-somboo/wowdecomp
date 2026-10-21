@@ -263,6 +263,21 @@ function SE.Find(tableName, text, limit)
 	return items;
 end
 
+-- Rows whose name holds text and that pass every where entry { columns = { ... }, value = v }, one column matching is enough.
+function SE.Filter(tableName, text, where, limit)
+	if ( not DbcEditor_Filter ) then
+		return {};
+	end
+
+	local ok, result = pcall(DbcEditor_Filter, tableName, { text = text or "", where = where or {} }, limit);
+
+	if ( not ok or type(result) ~= "table" ) then
+		return {};
+	end
+
+	return result;
+end
+
 function SE.MaxId(tableName)
 	local maxId = 0;
 
