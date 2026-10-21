@@ -84,6 +84,8 @@ typedef HINSTANCE HMODULE;
 #define INVALID_HANDLE_VALUE ((HANDLE)(intptr_t)-1)
 #define INFINITE 0xFFFFFFFF
 #define MAX_PATH 260
+#define CP_ACP 0
+#define CP_UTF8 65001
 
 typedef union _LARGE_INTEGER {
     struct {

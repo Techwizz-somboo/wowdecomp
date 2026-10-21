@@ -12,6 +12,8 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Tempest/C2iVector.h"
+#include "Controller/Controller.h"
+#include "HoT/Runtime/Display.h"
 
 // SDL events stand in for window messages (see OsSdl.h): OsWindowProc gets message = SDL event type and
 // lparam = const SDL_Event*, and turns them into the same OsQueuePut events the WM_* handlers produce. Mouse
@@ -769,6 +771,8 @@ int32_t OsInputGet(OSINPUT* id, int32_t* param0, int32_t* param1, int32_t* param
 
     if (s_queueHead == s_queueTail) {
         OsPollJoysticks(s_appActive);
+        // Controller: gamepads post their buttons into the queue here.
+        Controller::Poll(s_appActive);
 
         SDL_Event event;
 
@@ -913,11 +917,15 @@ static void PostText(const char* text) {
 
 static void HandleWindowEvent(SDL_Window* window, const SDL_WindowEvent& event) {
     switch (event.event) {
+        case SDL_WINDOWEVENT_DISPLAY_CHANGED:
+            // HoT: drop HoT's cached display modes when the display configuration changes.
+            HoT::Display::InvalidateMonitorModes();
+            [[fallthrough]];
+
         case SDL_WINDOWEVENT_SIZE_CHANGED:
         case SDL_WINDOWEVENT_RESIZED:
         case SDL_WINDOWEVENT_MAXIMIZED:
         case SDL_WINDOWEVENT_RESTORED:
-        case SDL_WINDOWEVENT_DISPLAY_CHANGED:
             // WM_SIZE / WM_DISPLAYCHANGE: OsInputGet reads the new size once the window is not minimized.
             s_windowSize = 1;
             break;

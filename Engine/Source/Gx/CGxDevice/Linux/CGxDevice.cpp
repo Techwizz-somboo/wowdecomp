@@ -7,6 +7,7 @@
 #include <cstring>
 #include <SDL.h>
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
+#include "HoT/Runtime/Display.h"
 
 static bool InitVideo() {
     return SDL_WasInit(SDL_INIT_VIDEO) || SDL_InitSubSystem(SDL_INIT_VIDEO) == 0;
@@ -262,6 +263,11 @@ int32_t CGxDevice::D3d9ExAdapterFormats(TSGrowableArray<CGxFormat>& formats) {
 }
 
 int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
+    // HoT: reuse the modes until the display changes, enumerating them is slow.
+    if (HoT::Display::GetCachedMonitorModes(modes)) {
+        return 1;
+    }
+
     modes.SetCount(0);
 
     if (!InitVideo()) {
@@ -289,6 +295,7 @@ int32_t CGxDevice::AdapterMonitorModes(TSGrowableArray<CGxMonitorMode>& modes) {
     }
 
     qsort(modes.Ptr(), modes.Count(), sizeof(CGxMonitorMode), CGxMonitorModeSort);
+    HoT::Display::CacheMonitorModes(modes);
 
     return modes.Count() != 0;
 }

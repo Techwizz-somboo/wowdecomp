@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
+#include <set>
 #include <sys/mman.h>
 #include <unistd.h>
 #include "Engine/Source/Os/OsMemory.h"
@@ -12,6 +14,9 @@
 
 static const uintptr_t s_nearRange = 0x60000000;
 static const uintptr_t s_granularity = 0x10000;
+
+static std::mutex s_blockLock;
+static std::set<uintptr_t> s_blocks;
 
 static void* MapAt(uintptr_t address, uintptr_t bytes, uintptr_t header) {
     void* ptr = mmap(reinterpret_cast<void*>(address), bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
@@ -28,7 +33,23 @@ static void* MapAt(uintptr_t address, uintptr_t bytes, uintptr_t header) {
 
     *static_cast<uintptr_t*>(ptr) = bytes;
 
-    return static_cast<uint8_t*>(ptr) + header;
+    uint8_t* block = static_cast<uint8_t*>(ptr) + header;
+
+    std::lock_guard<std::mutex> lock(s_blockLock);
+    s_blocks.insert(reinterpret_cast<uintptr_t>(block));
+
+    return block;
+}
+
+// No shared model region here yet, so model data takes the caller's A16 heap fallback as before HoT added it.
+void* OsAllocModel(size_t size) {
+    (void)size;
+    return nullptr;
+}
+
+bool OsIsNear(const void* ptr) {
+    std::lock_guard<std::mutex> lock(s_blockLock);
+    return s_blocks.count(reinterpret_cast<uintptr_t>(ptr)) != 0;
 }
 
 void* OsAllocNear(const void* anchor, size_t size) {
@@ -135,6 +156,11 @@ void* OsAllocNear(const void* anchor, size_t size) {
 
 void OsFreeNear(void* ptr) {
     if (ptr) {
+        {
+            std::lock_guard<std::mutex> lock(s_blockLock);
+            s_blocks.erase(reinterpret_cast<uintptr_t>(ptr));
+        }
+
         uintptr_t header = static_cast<uintptr_t>(sysconf(_SC_PAGESIZE));
         uint8_t* base = static_cast<uint8_t*>(ptr) - header;
         munmap(base, *reinterpret_cast<uintptr_t*>(base));
