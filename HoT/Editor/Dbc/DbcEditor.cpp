@@ -1203,6 +1203,97 @@ static int32_t Script_GetClassMaskNames(lua_State* L) {
     return 1;
 }
 
+// DbcEditor_GetClassMaskSpells(family, mask0, mask1, mask2[, limit]) -> { { id, name, extension } } for the spells a spell mod of that family and mask affects.
+static int32_t Script_GetClassMaskSpells(lua_State* L) {
+    int32_t family;
+
+    if (!IdArgument(L, 1, family) || family <= 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    uint32_t mask[3];
+
+    for (int i = 0; i < 3; i++) {
+        mask[i] = lua_type(L, 2 + i) == LUA_TNUMBER ? static_cast<uint32_t>(static_cast<int64_t>(lua_tonumber(L, 2 + i))) : 0;
+    }
+
+    int32_t limit = lua_type(L, 5) == LUA_TNUMBER ? static_cast<int32_t>(lua_tonumber(L, 5)) : 2000;
+    lua_newtable(L);
+    int result = lua_gettop(L);
+
+    if (!(mask[0] | mask[1] | mask[2])) {
+        return 1;
+    }
+
+    auto overlaps = [&](const int32_t* other) {
+        for (int i = 0; i < 3; i++) {
+            if (mask[i] & static_cast<uint32_t>(other[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    int count = 0;
+
+    auto push = [&](int32_t id, const char* name, bool extension) {
+        lua_createtable(L, 0, 3);
+        lua_pushnumber(L, id);
+        lua_setfield(L, -2, "id");
+        lua_pushstring(L, name ? name : "");
+        lua_setfield(L, -2, "name");
+        lua_pushboolean(L, extension);
+        lua_setfield(L, -2, "extension");
+        lua_rawseti(L, result, ++count);
+    };
+
+    Table spells;
+
+    if (!Resolve("Spell", spells)) {
+        return 1;
+    }
+
+    std::vector<uint8_t> record(spells.store->recordSize);
+    int32_t total = spells.store->db->m_numRecords;
+
+    for (int32_t index = 0; index < total && count < limit; index++) {
+        if (spells.store->readIndex(index, record.data())) {
+            const SpellRec* spell = reinterpret_cast<const SpellRec*>(record.data());
+
+            if (spell->m_spellClassSet == family && overlaps(spell->m_spellClassMask)) {
+                push(spell->m_id, spell->m_name, false);
+            }
+        }
+    }
+
+    Table extensions;
+
+    if (Resolve("SpellClassMaskExtension", extensions)) {
+        std::vector<uint8_t> row(extensions.store->recordSize);
+        int32_t rows = extensions.store->db->m_numRecords;
+
+        for (int32_t index = 0; index < rows && count < limit; index++) {
+            if (!extensions.store->readIndex(index, row.data())) {
+                continue;
+            }
+
+            const HoT::DB::SpellClassMaskExtensionRec* ext = reinterpret_cast<const HoT::DB::SpellClassMaskExtensionRec*>(row.data());
+
+            for (const auto& block : ext->m_blocks) {
+                if (block.m_spellClassSet == family && overlaps(block.m_spellClassMask)) {
+                    const char* name = spells.store->read(ext->m_id, record.data()) ? reinterpret_cast<const SpellRec*>(record.data())->m_name : nullptr;
+                    push(ext->m_id, name, true);
+                    break;
+                }
+            }
+        }
+    }
+
+    return 1;
+}
+
 // DbcEditor_Save(table, id, values) sends the full row, unspecified columns come from the current row or zero.
 static int32_t Script_Save(lua_State* L) {
     Table table;
@@ -1257,6 +1348,7 @@ void Apply() {
     Lua::RegisterFunction("DbcEditor_PatchSpellTooltip", Gated<Script_PatchSpellTooltip>);
     Lua::RegisterFunction("DbcEditor_UnpatchSpellTooltip", Gated<Script_UnpatchSpellTooltip>);
     Lua::RegisterFunction("DbcEditor_GetClassMaskNames", Gated<Script_GetClassMaskNames>);
+    Lua::RegisterFunction("DbcEditor_GetClassMaskSpells", Gated<Script_GetClassMaskSpells>);
 }
 
 void OnIdle() {

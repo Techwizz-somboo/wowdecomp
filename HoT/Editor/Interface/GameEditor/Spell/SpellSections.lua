@@ -391,7 +391,96 @@ local function EffectRight(index)
 		{ "m_effectMiscValueB["..e.."]", "Misc Value B" },
 		{ "m_effectChainAmplitude["..e.."]", "Damage Multiplier" },
 		{ "m_effectBonusCoefficient["..e.."]", "Effect Bonus Multiplier" },
+		{ "m_effectSpellClassMask"..CLASS_MASK_LETTERS[index].."[0]", "Class Mask 1" },
+		{ "m_effectSpellClassMask"..CLASS_MASK_LETTERS[index].."[1]", "Class Mask 2" },
+		{ "m_effectSpellClassMask"..CLASS_MASK_LETTERS[index].."[2]", "Class Mask 3" },
 	};
+end
+
+local familyWindows = {};
+
+-- Checkbox selection of one effect's class mask, the Edit Families button of the effect pages.
+local function OpenEffectFamilies(index)
+	local window = familyWindows[index];
+
+	if ( not window ) then
+		window = GameEditor_CreateWindow("GameEditorSpellEffectFamilies"..index, format("Effect %d class mask", index), 420, 520, true);
+		local masks = SE.CreateFlagList(window.content, {
+			title = "Spell Family Flags",
+			tooltip = "Spells of this spell family, or with a class mask extension block in it, that share a bit with the mask are affected",
+			words = SE.ClassMaskWords("m_effectSpellClassMask"..CLASS_MASK_LETTERS[index]),
+		});
+		masks:SetPoint("TOPLEFT", window.content, "TOPLEFT", 6, -6);
+		masks:SetPoint("BOTTOMRIGHT", window.content, "BOTTOMRIGHT", -6, 30);
+		local onlySet = NoggitCheckBox_Create(window.content, "Only checked", false, function(_, checked)
+			masks:SetFilter("", checked);
+		end);
+		onlySet:SetPoint("BOTTOMLEFT", window.content, "BOTTOMLEFT", 6, 6);
+		familyWindows[index] = window;
+	end
+
+	GameEditor_ShowWindow(window);
+end
+
+-- Spells the effect's class mask hits, SpellClassMaskExtension blocks included, with the Edit Families button.
+function SE.CreateClassMaskTargets(parent, index)
+	local letter = CLASS_MASK_LETTERS[index];
+	local frame = CreateFrame("Frame", NoggitUI_NewName("GameEditorSpellMaskTargets"), parent);
+	local title = SE.Label(frame, "Class Mask Target Spells", "NoggitFontBold", NOGGIT_COLOR_WHITE);
+	title:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, 0);
+	local count = SE.Label(frame, "", "NoggitFont10", NOGGIT_COLOR_DISABLED, "RIGHT");
+	count:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2);
+
+	local list = NoggitListBox_Create(frame, 18, function(row)
+		row.text = SE.Label(row, "", "NoggitFont10", NOGGIT_COLOR_WHITE);
+		row.text:SetPoint("LEFT", row, "LEFT", 4, 0);
+		row.text:SetPoint("RIGHT", row, "RIGHT", -4, 0);
+	end, function(row, item)
+		row.text:SetText(format("%d  %s%s", item.id, item.name ~= "" and item.name or "|cff8f8f8f(no name)|r", item.extension and "  |cff7fbfff(extension)|r" or ""));
+	end);
+	list:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, -18);
+	list:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 30);
+	list.onDoubleClick = function(item) SE.Open(item.id); end;
+
+	local edit = SE.Button(frame, "Edit Families", 110, function() OpenEffectFamilies(index); end,
+		"Pick the class mask bits with checkboxes, each bit named after the spells that carry it");
+	edit:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, 4);
+	local hint = SE.Label(frame, "Double click a spell to open it", "NoggitFont10", NOGGIT_COLOR_DISABLED);
+	hint:SetPoint("LEFT", edit, "RIGHT", 8, 0);
+
+	local function Refresh()
+		frame.dirty = false;
+		local family = SE.Number(SE.GetValue("m_spellClassSet"));
+		local items = {};
+
+		if ( SE.cur and DbcEditor_GetClassMaskSpells ) then
+			items = DbcEditor_GetClassMaskSpells(family,
+				SE.Number(SE.GetValue("m_effectSpellClassMask"..letter.."[0]")),
+				SE.Number(SE.GetValue("m_effectSpellClassMask"..letter.."[1]")),
+				SE.Number(SE.GetValue("m_effectSpellClassMask"..letter.."[2]"))) or {};
+		end
+
+		count:SetText(family == 0 and "spell has no family" or format("%d spells", #items));
+		NoggitListBox_SetItems(list, items);
+	end
+
+	local function MarkDirty(column)
+		if ( column and column ~= "m_spellClassSet" and not string.find(column, "m_effectSpellClassMask"..letter, 1, true) ) then
+			return;
+		end
+
+		if ( frame:IsVisible() ) then
+			Refresh();
+		else
+			frame.dirty = true;
+		end
+	end
+
+	frame:SetScript("OnShow", function() if ( frame.dirty ~= false ) then Refresh(); end end);
+	SE.On("VALUE_CHANGED", MarkDirty);
+	SE.On("SPELL_LOADED", function() MarkDirty(); end);
+	SE.On("SPELL_SAVED", function() MarkDirty(); end);
+	return frame;
 end
 
 local function MiscInfo(values, index)
@@ -618,17 +707,9 @@ local function BuildEffects(parent)
 		rightGrid.frame:SetPoint("TOPRIGHT", right, "TOPRIGHT", 0, 0);
 		rightGrid.frame:SetHeight(#rightSpec * 24 + 6);
 
-		local masks = SE.CreateFlagList(right, {
-			title = "Class Mask Target Spells",
-			tooltip = "Spells of the same family whose class mask shares a bit with this one are affected by the effect",
-			words = SE.ClassMaskWords("m_effectSpellClassMask"..CLASS_MASK_LETTERS[index]),
-		});
-		masks:SetPoint("TOPLEFT", rightGrid.frame, "BOTTOMLEFT", 0, -6);
-		masks:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", 0, 28);
-		local onlySet = NoggitCheckBox_Create(right, "Only checked", false, function(_, checked)
-			masks:SetFilter("", checked);
-		end);
-		onlySet:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 0, 4);
+		local targets = SE.CreateClassMaskTargets(right, index);
+		targets:SetPoint("TOPLEFT", rightGrid.frame, "BOTTOMLEFT", 0, -6);
+		targets:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", 0, 0);
 
 		SE.SideBySide(page, { { frame = left, weight = 1 }, { frame = right, weight = 1 } }, 16);
 		table.insert(frame.grids, leftGrid);

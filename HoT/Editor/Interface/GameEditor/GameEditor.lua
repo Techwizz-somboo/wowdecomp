@@ -301,6 +301,7 @@ function GameEditor_CreateScrollFrame(parent)
 
 	local track = CreateFrame("Frame", NoggitUI_NewName("GameEditorScrollTrack"), scroll);
 	track:SetWidth(8);
+	track:SetFrameLevel(child:GetFrameLevel() + 10);
 	track:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, 0);
 	track:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 0, 0);
 	track:EnableMouse(true);
@@ -346,21 +347,45 @@ function GameEditor_CreateScrollFrame(parent)
 	scroll:SetScript("OnSizeChanged", function() scroll.UpdateRange(); end);
 	scroll:SetScript("OnScrollRangeChanged", Refresh);
 
-	track:SetScript("OnMouseDown", function() track.dragging = true; end);
-	track:SetScript("OnMouseUp", function() track.dragging = false; end);
+	local function ThumbTop()
+		local range = scroll:GetVerticalScrollRange() or 0;
+		local free = track:GetHeight() - thumb:GetHeight();
+		return range > 0 and free * (scroll:GetVerticalScroll() or 0) / range or 0;
+	end
+
+	local function DragTo(y)
+		local range = scroll:GetVerticalScrollRange() or 0;
+		local free = max(1, track:GetHeight() - thumb:GetHeight());
+		SetScroll((track:GetTop() - y - track.grab) / free * range);
+	end
+
+	track:SetScript("OnMouseDown", function(self)
+		local _, y = NoggitUI_CursorIn(self);
+		local offset = self:GetTop() - y - ThumbTop();
+
+		if ( offset >= 0 and offset <= thumb:GetHeight() ) then
+			self.grab = offset;
+		else
+			self.grab = thumb:GetHeight() / 2;
+			DragTo(y);
+		end
+
+		self.dragging = true;
+	end);
+	track:SetScript("OnMouseUp", function(self) self.dragging = false; end);
+	track:SetScript("OnHide", function(self) self.dragging = false; end);
 	track:SetScript("OnUpdate", function(self)
 		if ( not self.dragging ) then
 			return;
 		end
 
-		if ( not IsMouseButtonDown("LeftButton") ) then
+		if ( not EditorIsMouseButtonDown() ) then
 			self.dragging = false;
 			return;
 		end
 
 		local _, y = NoggitUI_CursorIn(self);
-		local fraction = (self:GetTop() - y) / max(1, self:GetHeight());
-		SetScroll(fraction * (scroll:GetVerticalScrollRange() or 0));
+		DragTo(y);
 	end);
 
 	return scroll, child;
