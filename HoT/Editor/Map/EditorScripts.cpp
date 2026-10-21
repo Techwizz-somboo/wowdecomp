@@ -481,7 +481,13 @@ static int32_t Script_EditorApplyBrush(lua_State* L) {
 }
 
 static int32_t Script_EditorIsMouseButtonDown(lua_State* L) {
-    lua_pushboolean(L, Mode::IsMouseButtonDown(MOUSE_BUTTON_LEFT) || Mode::IsMouseButtonDown(MOUSE_BUTTON_RIGHT) || Mode::IsMouseButtonDown(MOUSE_BUTTON_MIDDLE));
+    bool down = false;
+
+    for (MOUSEBUTTON button : { MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE }) {
+        down = down || Mode::IsMouseButtonDown(button) || Mode::IsMouseButtonHeld(button);
+    }
+
+    lua_pushboolean(L, down);
     return 1;
 }
 

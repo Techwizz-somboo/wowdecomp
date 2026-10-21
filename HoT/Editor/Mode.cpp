@@ -59,6 +59,7 @@ struct ModeState {
     std::vector<Handler*> m_handlers;
 
     uint32_t m_buttonsDown = 0;
+    uint32_t m_buttonsHeld = 0;
     Handler* m_buttonOwner[16] = {};
 
     bool m_haveLastTick = false;
@@ -309,6 +310,10 @@ bool IsMouseButtonDown(MOUSEBUTTON button) {
     return (s_state.m_buttonsDown & static_cast<uint32_t>(button)) != 0;
 }
 
+bool IsMouseButtonHeld(MOUSEBUTTON button) {
+    return (s_state.m_buttonsHeld & static_cast<uint32_t>(button)) != 0;
+}
+
 bool GetMouseRay(C3Vector& start, C3Vector& end) {
     CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
 
@@ -453,6 +458,14 @@ bool OnWorldMouseWheel(int32_t delta, uint32_t metaKeys) {
     return true;
 }
 
+static int32_t OnRawMouseDown(const void* data, void* param) {
+    if (data) {
+        s_state.m_buttonsHeld |= static_cast<uint32_t>(static_cast<const EVENT_DATA_MOUSE*>(data)->m_button);
+    }
+
+    return 1;
+}
+
 static int32_t OnRawMouseUp(const void* data, void* param) {
     if (!data) {
         return 1;
@@ -460,6 +473,7 @@ static int32_t OnRawMouseUp(const void* data, void* param) {
 
     const EVENT_DATA_MOUSE* mouse = static_cast<const EVENT_DATA_MOUSE*>(data);
     uint32_t bit = static_cast<uint32_t>(mouse->m_button);
+    s_state.m_buttonsHeld &= ~bit;
 
     if (!(s_state.m_buttonsDown & bit)) {
         return 1;
@@ -609,6 +623,7 @@ void RegisterScripts() {
 
 void OnGameInitialize() {
     if (!s_state.m_eventsRegistered) {
+        EventRegisterEx(EVENT_ID_MOUSEDOWN, OnRawMouseDown, nullptr, 10.0f);
         EventRegisterEx(EVENT_ID_MOUSEUP, OnRawMouseUp, nullptr, 10.0f);
         s_state.m_eventsRegistered = true;
     }
@@ -628,6 +643,7 @@ void OnScriptsReloaded() {
     s_state.m_uiLoaded = false;
     s_state.m_hidUIParent = false;
     s_state.m_buttonsDown = 0;
+    s_state.m_buttonsHeld = 0;
 
     for (Handler*& owner : s_state.m_buttonOwner) {
         owner = nullptr;
@@ -651,6 +667,7 @@ void OnGameDestroy() {
     OnWorldUnloaded();
 
     if (s_state.m_eventsRegistered) {
+        EventUnregister(EVENT_ID_MOUSEDOWN, OnRawMouseDown);
         EventUnregister(EVENT_ID_MOUSEUP, OnRawMouseUp);
         s_state.m_eventsRegistered = false;
     }

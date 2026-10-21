@@ -53,6 +53,8 @@ bool ToolHasPrefix(const char* prefix);
 void GetMouse(float& x, float& y);
 bool IsMouseOverWorld();
 bool IsMouseButtonDown(MOUSEBUTTON button);
+// Raw button state, also counts presses that landed on UI frames.
+bool IsMouseButtonHeld(MOUSEBUTTON button);
 
 // World ray under the mouse, false when there is no world camera.
 bool GetMouseRay(C3Vector& start, C3Vector& end);
