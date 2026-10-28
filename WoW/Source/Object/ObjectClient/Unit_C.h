@@ -1150,6 +1150,7 @@ float CalculateFacingTo(const C3Vector* from, const C3Vector* to);
 void WeaponTrailsInitialize();
 
 const char* GetObjectNameFromGuid(const WOWGUID& guid);
+WOWGUID FriendlyTargetAttackTarget(const CGUnit_C* attacker, const WOWGUID& selected);
 void WriteMovementPacket(CGUnit_C* unit, uint32_t msgId, CDataStore* msg, int32_t include);
 
 int32_t CreatureSoundDataGetFidgetSound(const CreatureSoundDataRec* rec, uint32_t index);

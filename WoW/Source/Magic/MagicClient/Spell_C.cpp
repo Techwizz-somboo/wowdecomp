@@ -8315,6 +8315,20 @@ bool Spell_C_CastSpell(CGUnit_C* caster, int32_t spellId, const CGItem_C* item, 
         return false;
     }
 
+    if ((!target || target == CGGameUI::m_lockedTarget) && unit->IsActivePlayer()) {
+        bool enemyUnitSpell = (spell.m_targets & 0x80) != 0;
+
+        for (uint32_t i = 0; i < 3 && !enemyUnitSpell; i++) {
+            enemyUnitSpell = spell.m_implicitTargetA[i] == 6 || spell.m_implicitTargetA[i] == 53 || spell.m_implicitTargetB[i] == 6 || spell.m_implicitTargetB[i] == 53;
+        }
+
+        WOWGUID implied = enemyUnitSpell ? FriendlyTargetAttackTarget(unit, CGGameUI::m_lockedTarget) : WOWGUID();
+
+        if (implied) {
+            target = implied;
+        }
+    }
+
     if (!cast) {
         cast = CreatePendingSpellCast(true);
         cast->m_data.m_spellId = spellId;

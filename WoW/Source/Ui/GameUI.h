@@ -48,6 +48,7 @@ extern CVar* g_autoClearAFKCVar;
 extern CVar* g_showLootSpamCVar;
 extern CImVector s_deadSelectionColor;
 extern CVar* g_assistAttackCVar;
+extern CVar* g_attackFriendlyTargetCVar;
 extern CVar* g_questPOICVar;
 extern CVar* g_trackerSortingCVar;
 extern CVar* s_cvShowToastFriendRequest;

@@ -1774,6 +1774,27 @@ void CGGameUI::InitializeFrameXML() {
         CGUIBindings::s_bindings->Load("Interface\\FrameXML\\Bindings.xml", &md5, &status);
     }
 
+    FrameScript_Execute(
+        "local panel = InterfaceOptionsCombatPanel\n"
+        "local above = InterfaceOptionsCombatPanelStopAutoAttack\n"
+        "local below = InterfaceOptionsCombatPanelNameplateClassColors\n"
+        "if panel and above and below and CombatPanelOptions then\n"
+        "  CombatPanelOptions.attackFriendlyTarget = {\n"
+        "    text = \"Attack Target of Friendly Target\",\n"
+        "    tooltip = \"When your target is friendly, attacking attacks their target instead and keeps them selected.\",\n"
+        "  }\n"
+        "  local check = CreateFrame(\"CheckButton\", \"InterfaceOptionsCombatPanelAttackFriendlyTarget\", panel, \"InterfaceOptionsCheckButtonTemplate\")\n"
+        "  check:SetPoint(\"TOPLEFT\", above, \"BOTTOMLEFT\", 0, -8)\n"
+        "  below:ClearAllPoints()\n"
+        "  below:SetPoint(\"TOPLEFT\", check, \"BOTTOMLEFT\", 0, -8)\n"
+        "  check.type = CONTROLTYPE_CHECKBOX\n"
+        "  check.cvar = \"attackFriendlyTarget\"\n"
+        "  BlizzardOptionsPanel_RegisterControl(check, panel)\n"
+        "end\n",
+        "AttackFriendlyTarget",
+        nullptr
+    );
+
     uint8_t digest[16];
     MD5Final(digest, &md5);
 
@@ -2857,7 +2878,17 @@ void CGGameUI::Target(WOWGUID guid) {
             Spell_C_CancelAutoRepeat(true);
         }
     } else if (inMelee) {
-        player->CombatModeEnter(CGGameUI::m_lockedTarget, 0, 0);
+        CGUnit_C* selected = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(CGGameUI::m_lockedTarget, TYPEMASK_UNIT, __FILE__, __LINE__));
+
+        if (g_attackFriendlyTargetCVar->m_intValue && selected && selected != player && !player->CanAttack(selected)) {
+            WOWGUID implied = FriendlyTargetAttackTarget(player, CGGameUI::m_lockedTarget);
+
+            if (implied) {
+                player->CombatModeEnter(implied, 0, 0);
+            }
+        } else {
+            player->CombatModeEnter(CGGameUI::m_lockedTarget, 0, 0);
+        }
     }
 }
 

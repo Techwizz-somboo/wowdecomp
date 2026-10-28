@@ -69,6 +69,8 @@ CVar* g_assistAttackCVar;
 // STATIC: 0x00BD091C
 CVar* s_cvAutoRangedCombat;
 
+CVar* g_attackFriendlyTargetCVar;
+
 // STATIC: 0x00BD0920
 CVar* g_autoSelfCastCVar;
 
@@ -467,6 +469,7 @@ void CGGameUI::RegisterGameCVars() {
     CVar::Register("alwaysCompareItems", "Always show item comparison tooltips", 0x10, "0", nullptr, CATEGORY_GAME, false, nullptr, false);
     CVar::Register("equipmentManager", "Enables the equipment management UI", 0x20, "0", nullptr, CATEGORY_GAME, false, nullptr, false);
     g_assistAttackCVar = CVar::Register("assistAttack", "Whether to start attacking after an assist", 0x20, "0", nullptr, CATEGORY_GAME, false, nullptr, false);
+    g_attackFriendlyTargetCVar = CVar::Register("attackFriendlyTarget", "Whether attacking a friendly target attacks that target's target instead", 0x20, "0", nullptr, CATEGORY_GAME, false, nullptr, false);
     s_cvAutoRangedCombat = CVar::Register("autoRangedCombat", "Whether your character will automatically switch between auto attack and auto shot", 0x10, "1", nullptr, CATEGORY_GAME, false, nullptr, false);
     g_autoSelfCastCVar = CVar::Register("autoSelfCast", "Whether spells should automatically be cast on you if you don't have a valid target", 0x20, "1", nullptr, CATEGORY_GAME, false, nullptr, false);
     g_stopAutoAttackOnTargetChangeCVar = CVar::Register("stopAutoAttackOnTargetChange", "Whether to stop attacking when changing targets", 0x20, "0", nullptr, CATEGORY_GAME, false, nullptr, false);

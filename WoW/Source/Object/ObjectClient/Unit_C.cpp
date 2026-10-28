@@ -18361,12 +18361,24 @@ int32_t CGUnit_C::VerifyAttackIconPressed(WOWGUID* target, int32_t useGiven, int
         }
     }
 
+    bool impliedTarget = false;
+
     if (!useGiven) {
         bool haveTarget = true;
 
         if (!*target) {
             *target = CGGameUI::m_lockedTarget;
             haveTarget = static_cast<bool>(*target);
+        }
+
+        if (haveTarget && this->IsActivePlayer()) {
+            WOWGUID implied = FriendlyTargetAttackTarget(this, *target);
+
+            if (implied) {
+                *target = implied;
+                impliedTarget = true;
+                goto checkTarget;
+            }
         }
 
         if (haveTarget) {
@@ -18397,7 +18409,7 @@ checkTarget:
         return 0;
     }
 
-    if (this->IsActivePlayer()) {
+    if (this->IsActivePlayer() && !impliedTarget) {
         CGGameUI::Target(*target);
     }
 
@@ -25746,4 +25758,38 @@ void CGUnit_C::PlayRangedItemPull() {
     sequence.Clear();
     this->unk_0B40->GetSequenceInfo(160, 0, sequence);
     this->unk_0B40->SetBoneSequence(0xFFFFFFFF, 160, 0, 0, static_cast<float>(static_cast<int32_t>(sequence.m_duration)) / remaining, 1, 1);
+}
+
+WOWGUID FriendlyTargetAttackTarget(const CGUnit_C* attacker, const WOWGUID& selected) {
+    if (!g_attackFriendlyTargetCVar || !g_attackFriendlyTargetCVar->m_intValue || !attacker || !selected) {
+        return WOWGUID();
+    }
+
+    CGUnit_C* friendly = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(selected, TYPEMASK_UNIT, __FILE__, __LINE__));
+
+    if (!friendly || friendly == attacker || attacker->CanAttack(friendly)) {
+        return WOWGUID();
+    }
+
+    WOWGUID victimGuid;
+
+    if (selected == CGGameUI::m_lockedTarget) {
+        if (!Script_GetGUIDFromToken("targettarget", victimGuid, false)) {
+            return WOWGUID();
+        }
+    } else {
+        victimGuid = friendly->m_unit->m_unitFieldTarget;
+    }
+
+    if (!victimGuid || victimGuid == attacker->m_obj->m_guid) {
+        return WOWGUID();
+    }
+
+    CGUnit_C* victim = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(victimGuid, TYPEMASK_UNIT, __FILE__, __LINE__));
+
+    if (!victim || !attacker->CanAttack(victim)) {
+        return WOWGUID();
+    }
+
+    return victimGuid;
 }

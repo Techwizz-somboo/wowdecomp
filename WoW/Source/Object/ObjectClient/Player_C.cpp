@@ -2399,6 +2399,9 @@ uint32_t FindEmptySwapIndex() {
         s_itemSwaps.SetCount(s_itemSwaps.m_count + 1);
     }
 
+    s_itemSwaps.m_data[index].m_dstContainer = WOWGUID();
+    s_itemSwaps.m_data[index].m_item = nullptr;
+
     return index;
 }
 
@@ -8303,7 +8306,10 @@ void CGPlayer_C::MeleeModeEnter(const WOWGUID& target) {
         this->ChangeStandState(0);
     }
 
-    CGGameUI::Target(unit->m_obj->m_guid);
+    if (FriendlyTargetAttackTarget(this, CGGameUI::m_lockedTarget) != unit->m_obj->m_guid) {
+        CGGameUI::Target(unit->m_obj->m_guid);
+    }
+
     WOWGUID self = this->m_obj->m_guid;
 
     if (Spell_C_IsCastingInterruptedByCombat(self) && !this->m_combat.m_attacking) {
@@ -8336,7 +8342,13 @@ int32_t CGPlayer_C::AutoCombatModeEventHandler(const void* data, void* param) {
         return 1;
     }
 
-    CGUnit_C* target = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(CGGameUI::m_lockedTarget, TYPEMASK_UNIT, __FILE__, __LINE__));
+    WOWGUID targetGuid = FriendlyTargetAttackTarget(player, CGGameUI::m_lockedTarget);
+
+    if (!targetGuid) {
+        targetGuid = CGGameUI::m_lockedTarget;
+    }
+
+    CGUnit_C* target = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(targetGuid, TYPEMASK_UNIT, __FILE__, __LINE__));
 
     if (!target) {
         return 1;
